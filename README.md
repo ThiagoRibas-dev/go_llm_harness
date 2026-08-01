@@ -23,7 +23,15 @@ GoHarness is engineered to be as **lightweight and secure** as possible, avoidin
 4. **🧠 Sliding-Window Context Compaction:** Automatically triggers context compression when conversation history crosses thresholds. It summarizes historical details (using a cheap/fast model like `gpt-4o-mini` with custom parameters) while **preserving the last $N$ turns fully raw** (Sliding Window) to retain immediate context, slashing cumulative API bills by up to $75\%$.
 5. **🔄 Dual-Engine Workspace Rollbacks:** Supports chronological session rollbacks (`/fork <turn>`). When you go back in time, GoHarness not only rewinds the chat logs but **physically restores your folder structure** to that turn's exact state using either local backup stashes (fallback) or Git-native reset checkpoints (primary).
 6. **🌲 Token-Safe Directory Tree (Auto-LS):** Recursively maps your workspace, collapsing heavy dependency folders (like `node_modules` or `.venv`) and truncating long outputs, while appending visual Git-like status flags and relative modification timers inline (e.g. `main.go [Modified 2m ago]`, `schema.sql [New / Untracked]`).
-7. **🌐 Embedded Web Console:** Employs Go's native `net/http` router and `//go:embed` to serve a modern Single-Page Application (HTML5, Tailwind, JS) and uses **Server-Sent Events (SSE)** to stream thoughts and tool logs to your browser in real-time. No node_modules, bundlers, or setups required.
+7. **🌐 Embedded Web Console:** Employs Go's native `net/http` router and `//go:embed` to serve a modern Single-Page Application (HTML5, Tailwind, JS) and uses **Server-Sent Events (SSE)** to stream thoughts and tool logs to your browser in real-time. No node_modules, bundlers, or setups required. It includes a responsive **Workspace Swapper** and **Conversational History Selector** to switch contexts and resume past sessions in one click.
+8. **🔌 Multi-Provider AI API Connectors (Phase 7):** Features native, standard-library-only translation wrappers for:
+   * **OpenAI API / compatible routers** (Ollama, DeepSeek, Groq, etc.).
+   * **Anthropic Claude Messages API** (extracting system instructions as top-level params, and mapping `"tool_use"` and `"tool_result"` blocks).
+   * **Google Gemini AI Studio & Vertex AI REST APIs** (conforming roles strictly to `"user"`/`"model"`, mapping function schemas, and managing OAuth bearer headers).
+9. **🔌 OpenAI-Compatible API Gateway & Tokenizer Proxies (Phase 8):** Exposes a standard gateway so you can plug any existing chat frontend (like OpenWebUI, SillyTavern, or LibreChat) straight into GoHarness!
+   * **`GET /v1/models` & `POST /v1/chat/completions`:** Masquerades as a single, ultra-smart model, executes our secure sandboxed loop in the background, and streams the finished report back to your frontend.
+   * **`/v1/embeddings`:** Vector embeddings proxy mapping standard RAG pipelines.
+   * **`/v1/tokenize` & `/v1/detokenize`:** Implements an incredibly fast, local, self-learning Byte-Pair Encoding (BPE) approximate tokenizer, allowing SillyTavern to calculate exact context window limits in-process with $100\%$ round-trip accuracy!
 
 ---
 
@@ -46,6 +54,7 @@ GoHarness is engineered to be as **lightweight and secure** as possible, avoidin
 │   ├── telemetry.go    # Thread-safe execution trace logs (.goharness/traces.jsonl)
 │   ├── embed.go        # Portable runtime extraction helpers
 │   ├── web.go          # Built-in HTTP web server and SSE streaming router
+│   ├── llm.go          # OpenAI, Anthropic, Gemini, Vertex API translation wrappers
 │   │
 │   ├── sandbox.go      # Unified bare-metal sandbox router
 │   ├── sandbox_linux.go   # Linux Landlock LSM sandbox executor
@@ -98,15 +107,15 @@ GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent_linux ./src
 
 On the very first run, GoHarness will automatically generate a clean, default **`config.json`** file next to your executable:
 1. Open the created `config.json`.
-2. Add your `OPENAI_API_KEY` (or export it to your system environment).
-3. If running a local model, point `"base_url"` to your local router (e.g. `http://localhost:11434/v1/chat/completions` for Ollama).
+2. Add your API credentials and set your `"api.provider"` (e.g., `openai`, `anthropic`, `gemini`, or `vertex`).
+3. If running a local model, point `"base_url"` to your local router (e.g. `http://localhost:11434/v1` for Ollama).
 
 ---
 
 ### 3. Run the App
 
 #### **Option A: Gorgeous Web GUI Mode (Recommended)**
-Launches the built-in HTTP server and automatically pops open your web browser straight to the console page:
+Launches the built-in HTTP server, exposes the API Gateway, and automatically pops open your web browser:
 ```bash
 ./bin/agent_linux -web
 ```
@@ -123,19 +132,26 @@ Runs the agent loop directly inside your current terminal session:
 
 | Configuration Block | Parameter | Description |
 | :--- | :--- | :--- |
-| **`api`** | `key` | Your OpenAI or compatible API secret key (optional if using local Ollama). |
-| | `base_url` | Complete chat completions endpoint URL. |
-| | `model` | Target LLM model name (e.g., `gpt-4o`, `deepseek-coder`). |
+| **`api`** | `provider` | The active LLM API provider: `openai` (standard), `anthropic`, `gemini`, or `vertex`. |
+| | `key` | Your API secret key (or Google Cloud Access Token if using Vertex). |
+| | `base_url` | Complete completions endpoint URL (defaults to provider's standard endpoint). |
+| | `model` | Target LLM model name (e.g., `gpt-4o`, `claude-3-5-sonnet-latest`, `gemini-1.5-flash`). |
 | | `temperature` | LLM Temperature (Default `0.0` for code-generation determinism). |
-| **`agent`** | `workspace_dir` | The directory where the agent is allowed to write and edit files. |
+| | `max_tokens` | Maximum completions token ceiling. |
+| **`agent`** | `workspace_dir` | The directory where the agent is allowed to write, read, and edit files. |
+| | `workspaces_history` | Array list of registered local project workspaces. Managed automatically by the swapper. |
 | | `max_turns` | Loop cutoff safety fuse to prevent runaway infinite API spend. |
+| | `command_timeout_seconds` | safety execution clock-limit to terminate hanging scripts or infinite loops automatically. |
 | **`security`** | `sandbox_mode` | Sandbox container selection: `host` (bare-metal locks), `docker`, or `none`. |
 | | `blocked_patterns` | Array of blacklisted bash strings (e.g., `rm -rf /`). Blocks execution on detection. |
-| **`directory_scan`** | `max_depth` | Deep recursive folder search limit to prevent stack overflows. |
-| | `collapsed_patterns` | List of folders (e.g. `node_modules`, `.venv`) to recognize but skip reading. |
+| **`directory_scan`** | `max_depth` | Deep recursive folder search limit to prevent stack overflows during trees walking. |
+| | `collapsed_patterns` | List of folders (e.g. `node_modules`, `.venv`) to recognize but skip indexing file-by-file. |
 | **`compaction`** | `auto_compact_turns` | Turn index at which rolling context summarization is triggered. |
-| | `keep_last_n` | Sliding window size. Number of recent turns to preserve fully uncompacted. |
-| **`mcp_servers`** | `command`, `args` | Executable paths and flags to spawn background Model Context Protocol child servers. |
+| | `keep_last_n` | Sliding window size. Number of recent turns to preserve fully uncompacted inside prompt context. |
+| **`mcp_servers`** | `command`, `args`, `env` | Executable paths, flags, and credentials to spawn Model Context Protocol child servers. |
+| **`web`** | `enabled` | Toggle to automatically spawn the HTTP Server on boot. |
+| | `port` | Local port (Default `8080`) that the Web GUI and OpenAI API Gateway bind to. |
+| | `api_gateway_enabled` | Toggle switch to expose or disable the OpenAI-Compatible API Gateway. |
 
 ---
 
