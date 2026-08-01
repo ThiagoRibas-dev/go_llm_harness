@@ -186,9 +186,7 @@ func executeSlidingWindowCompaction(history []Message) {
 		Temperature: activeConfig.Compaction.Temperature,
 	}
 
-	jsonBytes, _ := json.Marshal(reqBody)
-
-	respMsg, err := sendLLMRequest(jsonBytes)
+	respMsg, err := SendMultiProviderRequest(reqBody.Messages, nil)
 	if err != nil {
 		fmt.Printf("%s[WARNING] Context Compaction API call failed: %v. Skipping compaction.%s\n", ColorYellow, err, ColorReset)
 		return

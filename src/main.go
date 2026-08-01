@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +20,7 @@ func main() {
 	// 1. Set default config values
 	defaultCfg := Config{
 		API: APIConfig{
+			Provider:    "openai",
 			Key:         "",
 			BaseURL:     "https://api.openai.com/v1/chat/completions",
 			Model:       "gpt-4o",
@@ -76,6 +76,7 @@ func main() {
 	// 3. Command Line Flags (Overriding config values)
 	var webMode bool
 	flag.BoolVar(&webMode, "web", false, "Start GoHarness in Web GUI mode on port 8080")
+	flag.StringVar(&activeConfig.API.Provider, "provider", activeConfig.API.Provider, "LLM provider: 'openai', 'anthropic', 'gemini' or 'vertex'")
 	flag.StringVar(&activeConfig.API.Key, "api-key", activeConfig.API.Key, "OpenAI API Key (or env OPENAI_API_KEY)")
 	flag.StringVar(&activeConfig.API.BaseURL, "url", activeConfig.API.BaseURL, "API endpoint base url")
 	flag.StringVar(&activeConfig.API.Model, "model", activeConfig.API.Model, "Model target name")
@@ -162,7 +163,7 @@ func printBanner() {
 	fmt.Printf("%s   🤖 GOLANG LOCAL AGENT HARNESS (PHASE 5) 🤖       %s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("%s=======================================================%s\n", ColorBlue, ColorReset)
 	fmt.Printf("  Runtime OS   : %s (%s)\n", runtimeOS(), "amd64")
-	fmt.Printf("  Model Target : %s (Temp: %.1f)\n", activeConfig.API.Model, activeConfig.API.Temperature)
+	fmt.Printf("  Model Target : %s (%s, Temp: %.1f)\n", activeConfig.API.Model, activeConfig.API.Provider, activeConfig.API.Temperature)
 	fmt.Printf("  Sandbox Mode : %s\n", activeConfig.Security.SandboxMode)
 	fmt.Printf("  Workspace Dir: %s\n", activeConfig.Agent.WorkspaceDir)
 	fmt.Printf("  Session ID   : %s\n", activeSessionID)
@@ -304,29 +305,17 @@ func runAgentLoop(userPrompt string) {
 	for turn := 1; turn <= maxTurns; turn++ {
 		fmt.Printf("\n%s--- TURN LOOP (%d / %d) ---%s\n", ColorBold+ColorWhite, turn, maxTurns, ColorReset)
 
-		reqBody := ChatCompletionRequest{
-			Model:       activeConfig.API.Model,
-			Messages:    requestMessages,
-			Tools:       agentTools,
-			Temperature: activeConfig.API.Temperature,
-		}
-
-		jsonBytes, err := json.Marshal(reqBody)
-		if err != nil {
-			fmt.Printf("%s[ERROR] Failed to marshal request: %v%s\n", ColorRed, err, ColorReset)
-			return
-		}
-
 		fmt.Printf("%s[LLM] Thinking...%s\n", ColorYellow, ColorReset)
 		
+		// Telemetry Hook: LLM Thinking process (Phase 5.3) using SendMultiProviderRequest! (Phase 7)
 		startTime := time.Now()
-		responseMsg, err := sendLLMRequest(jsonBytes)
+		responseMsg, err := SendMultiProviderRequest(requestMessages, agentTools)
 		if err != nil {
 			LogExecutionTrace(turn, "llm_completion", startTime, "failed", map[string]interface{}{"error": err.Error()})
 			fmt.Printf("%s[ERROR] LLM API Call Failed: %v%s\n", ColorRed, err, ColorReset)
 			return
 		}
-		LogExecutionTrace(turn, "llm_completion", startTime, "success", map[string]interface{}{"model": activeConfig.API.Model})
+		LogExecutionTrace(turn, "llm_completion", startTime, "success", map[string]interface{}{"model": activeConfig.API.Model, "provider": activeConfig.API.Provider})
 
 		saveMessageTurn(*responseMsg)
 		requestMessages = append(requestMessages, *responseMsg)
@@ -423,49 +412,6 @@ func runAgentLoop(userPrompt string) {
 			requestMessages = append(requestMessages, toolResponseMsg)
 		}
 	}
-}
-
-func sendLLMRequest(payload []byte) (*Message, error) {
-	req, err := http.NewRequest("POST", activeConfig.API.BaseURL, bytes.NewBuffer(payload))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	if activeConfig.API.Key != "" {
-		req.Header.Set("Authorization", "Bearer "+activeConfig.API.Key)
-	}
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d. Response: %s", resp.StatusCode, string(body))
-	}
-
-	var chatResp ChatCompletionResponse
-	if err := json.Unmarshal(body, &chatResp); err != nil {
-		return nil, err
-	}
-
-	if len(chatResp.Choices) == 0 {
-		return nil, fmt.Errorf("API response contained zero choices")
-	}
-
-	BroadcastSSE("cost_update", map[string]interface{}{
-		"cost": 0.0005,
-	})
-
-	return &chatResp.Choices[0].Message, nil
 }
 
 func executeWriteFile(path, content string) string {

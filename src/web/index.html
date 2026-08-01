@@ -185,17 +185,28 @@
                     <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">API Configuration</div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-slate-300 font-bold mb-1.5">OpenAI API Key</label>
-                            <input type="password" id="input-api-key" placeholder="sk-proj-..." class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-mono">
+                            <label class="block text-slate-300 font-bold mb-1.5">API Provider</label>
+                            <select id="input-provider" onchange="suggestBaseURL(this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500">
+                                <option value="openai">OpenAI (OpenAI, DeepSeek, Groq, Ollama)</option>
+                                <option value="anthropic">Anthropic (Claude API)</option>
+                                <option value="gemini">Google Gemini (AI Studio)</option>
+                                <option value="vertex">Google Gemini (Vertex AI OAuth)</option>
+                            </select>
                         </div>
                         <div>
                             <label class="block text-slate-300 font-bold mb-1.5">Model Target</label>
                             <input type="text" id="input-model" placeholder="gpt-4o" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
                         </div>
                     </div>
-                    <div>
-                        <label class="block text-slate-300 font-bold mb-1.5">Base Endpoint URL</label>
-                        <input type="text" id="input-base-url" placeholder="https://api.openai.com/v1/chat/completions" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">API Key / Access Token</label>
+                            <input type="password" id="input-api-key" placeholder="sk-proj-..." class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Base Endpoint URL</label>
+                            <input type="text" id="input-base-url" placeholder="https://api.openai.com/v1/chat/completions" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
                     </div>
                 </div>
 
@@ -321,7 +332,7 @@
             }
         }
 
-        // Switch Left Panel Sidebar tabs (Files vs Sessions)
+        // Switch Left Panel Sidebar tabs
         function switchSidebarTab(tabName) {
             const filesTab = document.getElementById("tab-files");
             const sessionsTab = document.getElementById("tab-sessions");
@@ -343,7 +354,26 @@
             }
         }
 
-        // WORKSPACE MANAGEMENT (Phase 6.3 workspaces engine)
+        // Suggest Base URL based on provider selection
+        function suggestBaseURL(provider) {
+            const urlInput = document.getElementById("input-base-url");
+            const modelInput = document.getElementById("input-model");
+            if (provider === "anthropic") {
+                urlInput.value = "https://api.anthropic.com/v1/messages";
+                modelInput.value = "claude-3-5-sonnet-latest";
+            } else if (provider === "gemini") {
+                urlInput.value = "https://generativelanguage.googleapis.com/v1beta/models/";
+                modelInput.value = "gemini-1.5-flash";
+            } else if (provider === "vertex") {
+                urlInput.value = "https://us-central1-aiplatform.googleapis.com/v1/projects/YOUR_PROJECT_ID/locations/us-central1/publishers/google/models/";
+                modelInput.value = "gemini-1.5-flash";
+            } else {
+                urlInput.value = "https://api.openai.com/v1/chat/completions";
+                modelInput.value = "gpt-4o";
+            }
+        }
+
+        // WORKSPACE MANAGEMENT
         function fetchWorkspaces() {
             fetch("/api/workspaces")
                 .then(res => res.json())
@@ -388,7 +418,7 @@
             input.value = "";
         }
 
-        // SESSIONS MANAGEMENT (Phase 6.3 conversation indexing)
+        // SESSIONS MANAGEMENT
         function fetchSessions() {
             fetch("/api/sessions")
                 .then(res => res.json())
@@ -401,7 +431,6 @@
                         return;
                     }
 
-                    // Sort sessions by date/time descending (newest on top)
                     data.sessions.sort((a, b) => b.created_at.localeCompare(a.created_at));
 
                     data.sessions.forEach(sess => {
@@ -439,7 +468,6 @@
                 refreshWorkspaceTree();
                 fetchSessions();
                 
-                // Redraw chat log entirely
                 const chatContainer = document.getElementById("chat-messages");
                 chatContainer.innerHTML = "";
                 appendGreeting();
@@ -452,14 +480,13 @@
             .catch(err => alert("Failed to switch session: " + err));
         }
 
-        // TIMELINE FORK / BRANCHING OVERLAYS (Phase 6.3 non-destructive branching)
+        // TIMELINE FORK / BRANCHING OVERLAYS
         function triggerFork(turn) {
             selectedForkTurn = turn;
             document.getElementById("fork-turn-display").innerText = turn;
             const subs = document.getElementsByClassName("fork-turn-sub");
             for (let s of subs) s.innerText = turn;
             
-            // Set default branch naming
             document.getElementById("input-branch-name").value = `Branch_from_Turn_${turn}`;
             document.getElementById("fork-modal").classList.remove("hidden");
         }
@@ -481,7 +508,6 @@
             const isBranch = document.getElementById("fork-type-branch").checked;
             
             if (isBranch) {
-                // Non-destructive fork branching
                 const branchName = document.getElementById("input-branch-name").value.trim() || `Branch Turn ${selectedForkTurn}`;
                 const payload = {
                     parent_session_id: document.getElementById("session-id").innerText.replace("Session: ", "").trim(),
@@ -510,11 +536,10 @@
                         appendTurnToChat(turn);
                     });
                     turnCounter = selectedForkTurn;
-                    switchSidebarTab("sessions"); // switch tab to show the new session card!
+                    switchSidebarTab("sessions");
                 })
                 .catch(err => alert("Failed to create branch: " + err));
             } else {
-                // Truncate & overwrite (Destructive)
                 const payload = { turn: selectedForkTurn };
                 fetch("/api/fork", {
                     method: "POST",
@@ -546,6 +571,7 @@
             fetch("/api/config")
                 .then(res => res.json())
                 .then(cfg => {
+                    document.getElementById("input-provider").value = cfg.api.provider || "openai";
                     document.getElementById("input-api-key").value = cfg.api.key || "";
                     document.getElementById("input-model").value = cfg.api.model || "gpt-4o";
                     document.getElementById("input-base-url").value = cfg.api.base_url || "https://api.openai.com/v1/chat/completions";
@@ -562,10 +588,12 @@
             document.getElementById("settings-modal").classList.add("hidden");
         }
 
+        // Save Settings (Phase 7 API settings mapping)
         function saveSettings(e) {
             e.preventDefault();
             
             const payload = {
+                provider: document.getElementById("input-provider").value,
                 api_key: document.getElementById("input-api-key").value.trim(),
                 model: document.getElementById("input-model").value.trim(),
                 base_url: document.getElementById("input-base-url").value.trim(),
@@ -586,7 +614,7 @@
             .then(data => {
                 closeSettingsModal();
                 fetchConfig();
-                appendSystemAlert("System Settings Saved", "Configurations successfully updated on host disk (config.json) and memory. All future turns will operate under these settings.", "fa-check-double text-green-400");
+                appendSystemAlert("System Settings Saved", `Configurations successfully updated. Now running on provider '${payload.provider.toUpperCase()}' using model '${payload.model}'.`, "fa-check-double text-green-400");
                 refreshWorkspaceTree();
                 fetchWorkspaces();
             })
@@ -600,7 +628,7 @@
             fetch("/api/config")
                 .then(res => res.json())
                 .then(cfg => {
-                    document.getElementById("model-name").innerText = cfg.api.model;
+                    document.getElementById("model-name").innerText = cfg.api.model + " (" + (cfg.api.provider || "openai").toUpperCase() + ")";
                     document.getElementById("workspace-path").innerText = "Path: " + cfg.agent.workspace_dir;
                     document.getElementById("session-id").innerText = "Session: " + cfg.session_id;
                 })
@@ -723,7 +751,6 @@
 
             const messageId = `turn-${turn.turn_number}`;
             
-            // Prevent duplicated turns (if user optimistic append already rendered it)
             if (document.getElementById(messageId)) return;
 
             const msgDiv = document.createElement("div");
@@ -837,7 +864,6 @@
                 });
         }
 
-        // Auto text expander
         function handleInputKeydown(e) {
             const input = document.getElementById("prompt-input");
             if (e.key === "Enter" && !e.shiftKey) {

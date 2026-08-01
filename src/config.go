@@ -29,6 +29,7 @@ type Config struct {
 }
 
 type APIConfig struct {
+	Provider    string  `json:"provider"` // "openai", "anthropic", "gemini", "vertex" (Phase 7)
 	Key         string  `json:"key"`
 	BaseURL     string  `json:"base_url"`
 	Model       string  `json:"model"`

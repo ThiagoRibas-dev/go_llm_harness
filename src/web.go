@@ -147,6 +147,7 @@ func StartWebGUI(port int) {
 		}
 
 		var req struct {
+			Provider     string `json:"provider"` // Phase 7
 			APIKey       string `json:"api_key"`
 			Model        string `json:"model"`
 			BaseURL      string `json:"base_url"`
@@ -161,6 +162,7 @@ func StartWebGUI(port int) {
 		}
 
 		// Update global memory settings immediately
+		activeConfig.API.Provider = req.Provider
 		activeConfig.API.Key = req.APIKey
 		activeConfig.API.Model = req.Model
 		activeConfig.API.BaseURL = req.BaseURL
