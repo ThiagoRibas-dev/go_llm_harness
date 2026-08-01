@@ -23,7 +23,6 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #64748b;
         }
-        /* Custom modal animation */
         @keyframes fadeIn {
             from { opacity: 0; transform: scale(0.95); }
             to { opacity: 1; transform: scale(1); }
@@ -38,7 +37,6 @@
     <!-- ================= HEADER / TOP STATUS BAR ================= -->
     <header class="bg-[#1e293b] border-b border-[#334155] px-6 py-3 flex items-center justify-between shadow-md shrink-0 z-10">
         <div class="flex items-center space-x-3">
-            <!-- Sidebar toggle button -->
             <button onclick="toggleSidebar()" class="text-slate-400 hover:text-white transition p-1 rounded hover:bg-slate-800" title="Toggle Sidebar">
                 <i class="fa-solid fa-bars text-sm"></i>
             </button>
@@ -63,7 +61,7 @@
                 <span class="font-mono font-bold text-sm" id="session-cost">$0.0000</span>
             </div>
 
-            <!-- Settings Trigger Button (Phase 6.3 Configuration Modal) -->
+            <!-- Settings Trigger Button -->
             <button onclick="openSettingsModal()" class="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition px-3 py-1.5 rounded-md border border-[#334155] text-xs font-bold flex items-center space-x-1.5" title="Configure goharness settings">
                 <i class="fa-solid fa-gear"></i> <span>Settings</span>
             </button>
@@ -79,36 +77,66 @@
     <!-- ================= MAIN WORKSPACE PANEL ================= -->
     <div class="flex flex-1 overflow-hidden min-h-0 relative">
 
-        <!-- 🌲 LEFT PANEL: Workspace Directory Tree & Settings (Collapsible) -->
+        <!-- 🌲 LEFT PANEL: Workspace Explorer, Sessions, & Tree -->
         <aside id="sidebar" class="w-80 bg-[#0f172a] border-r border-[#334155] flex flex-col shrink-0 transition-all duration-200 ease-in-out">
-            <!-- Panel Header -->
-            <div class="px-4 py-3 border-b border-[#334155] flex items-center justify-between bg-slate-900/50">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    <i class="fa-solid fa-folder-tree mr-1.5 text-blue-500"></i> Workspace Explorer
-                </span>
-                <div class="flex items-center space-x-2">
-                    <button onclick="refreshWorkspaceTree()" class="text-slate-400 hover:text-white transition duration-150 p-1 rounded hover:bg-slate-800" title="Refresh folder structure">
-                        <i class="fa-solid fa-rotate-right text-xs"></i>
-                    </button>
-                    <button onclick="toggleSidebar()" class="text-slate-400 hover:text-white transition duration-150 p-1 rounded hover:bg-slate-800" title="Collapse Sidebar">
-                        <i class="fa-solid fa-chevron-left text-xs"></i>
-                    </button>
+            
+            <!-- Panel Selector Tabs -->
+            <div class="flex border-b border-[#334155] text-xs bg-slate-900/30">
+                <button onclick="switchSidebarTab('files')" id="tab-files-btn" class="flex-1 py-3 text-center border-b-2 border-blue-500 font-bold text-white transition">
+                    <i class="fa-solid fa-folder-tree mr-1"></i> Files
+                </button>
+                <button onclick="switchSidebarTab('sessions')" id="tab-sessions-btn" class="flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+                    <i class="fa-solid fa-comments mr-1"></i> Sessions
+                </button>
+            </div>
+
+            <!-- TAB 1: FILE EXPLORER -->
+            <div id="tab-files" class="flex-1 flex flex-col overflow-hidden">
+                <!-- Pre-defined workspace path banner -->
+                <div class="px-4 py-2 bg-slate-900/20 text-[11px] font-mono text-slate-400 border-b border-[#334155]/60 truncate" id="workspace-path">
+                    Path: ./workspace
+                </div>
+                <!-- Tree View Container -->
+                <div class="flex-1 overflow-y-auto p-4 font-mono text-xs text-slate-300 leading-relaxed" id="workspace-tree">
+                    <div class="text-slate-500 italic">No files detected yet...</div>
                 </div>
             </div>
 
-            <!-- Pre-defined workspace path banner -->
-            <div class="px-4 py-2 bg-slate-900/20 text-[11px] font-mono text-slate-400 border-b border-[#334155]/60 truncate" id="workspace-path">
-                Path: ./workspace
-            </div>
+            <!-- TAB 2: SESSIONS & WORKSPACES MANAGER -->
+            <div id="tab-sessions" class="hidden flex-1 flex flex-col overflow-hidden p-4 space-y-4">
+                
+                <!-- WORKSPACE MANAGEMENT SECTION -->
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active Workspace</label>
+                    <div class="flex space-x-2">
+                        <!-- Selector dropdown -->
+                        <select id="workspace-history-select" onchange="changeWorkspaceFromSelector(this.value)" class="flex-1 bg-[#1e293b] border border-[#334155] text-xs text-slate-200 px-2 py-1.5 rounded outline-none focus:border-blue-500 font-mono">
+                            <option value="">Loading workspaces...</option>
+                        </select>
+                    </div>
+                    <!-- Create New Workspace input -->
+                    <div class="flex space-x-2">
+                        <input type="text" id="new-workspace-input" placeholder="Add new workspace path..." class="flex-1 bg-[#1e293b] border border-[#334155] text-xs px-2 py-1 rounded outline-none focus:border-blue-500 font-mono">
+                        <button onclick="addNewWorkspace()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs transition">
+                            Add
+                        </button>
+                    </div>
+                </div>
 
-            <!-- Tree View Container -->
-            <div class="flex-1 overflow-y-auto p-4 font-mono text-xs text-slate-300 leading-relaxed" id="workspace-tree">
-                <div class="text-slate-500 italic">No files detected yet...</div>
+                <!-- CONVERSATIONS / SESSIONS LOG LIST -->
+                <div class="flex-1 flex flex-col overflow-hidden min-h-0 pt-2 border-t border-[#334155]/60">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Conversation Sessions</label>
+                    
+                    <div class="flex-1 overflow-y-auto space-y-1.5 pr-1 font-mono text-xs" id="sessions-list">
+                        <!-- Active list of session meta cards -->
+                        <div class="text-slate-500 italic">Loading sessions...</div>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Quick Action controls -->
-            <div class="p-4 border-t border-[#334155] bg-slate-900/30 space-y-2 text-xs">
-                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Quick Actions</div>
+            <div class="p-4 border-t border-[#334155] bg-slate-900/30 space-y-2 text-xs shrink-0">
                 <button onclick="triggerCompaction()" class="w-full py-1.5 px-3 bg-indigo-950/40 text-indigo-400 border border-indigo-900 rounded hover:bg-indigo-900 hover:text-white transition duration-150 flex items-center justify-center">
                     <i class="fa-solid fa-compress mr-1.5"></i> Manual Context Compact
                 </button>
@@ -117,30 +145,13 @@
 
         <!-- 💬 CENTER PANEL: Interactive Chat Console -->
         <main class="flex-1 flex flex-col min-w-0 bg-[#0b0f19]">
-            
             <!-- Turn Streams Display Container -->
             <div class="flex-1 overflow-y-auto px-8 py-6 space-y-6" id="chat-messages">
-                
-                <!-- System Greeting / Welcome banner -->
-                <div class="flex space-x-4 items-start max-w-4xl">
-                    <div class="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-md">
-                        H
-                    </div>
-                    <div class="space-y-1">
-                        <div class="flex items-center space-x-2">
-                            <span class="font-bold text-slate-200 text-sm">GoHarness System</span>
-                            <span class="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded font-mono">system</span>
-                        </div>
-                        <p class="text-slate-300 text-sm leading-relaxed font-sans">
-                            Welcome to the **GoHarness Embedded Web Console**! I am your sandboxed AI agent harness. Ask me to write scripts, patch programs, run compilations, or configure local systems. Any files I edit or commands I run will stream here in real-time.
-                        </p>
-                    </div>
-                </div>
-
+                <!-- Greeting will be appended on boot -->
             </div>
 
             <!-- ⌨️ INPUT CONTROL PANEL -->
-            <div class="p-6 border-t border-[#334155] bg-[#0f172a]/50">
+            <div class="p-6 border-t border-[#334155] bg-[#0f172a]/50 shrink-0">
                 <form id="prompt-form" onsubmit="submitPrompt(event)" class="relative max-w-4xl mx-auto flex items-center bg-[#1e293b] rounded-lg border border-[#334155] shadow-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition duration-150">
                     <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')..." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36" onkeydown="handleInputKeydown(event)"></textarea>
                     
@@ -160,7 +171,6 @@
     <!-- ================= 🛠️ SETTINGS CONFIGURATION MODAL ================= -->
     <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
         <div class="bg-[#1e293b] border border-[#334155] w-full max-w-xl rounded-xl shadow-2xl overflow-hidden modal-animate">
-            <!-- Modal Header -->
             <div class="px-6 py-4 border-b border-[#334155] flex items-center justify-between bg-slate-900/40">
                 <h3 class="font-bold text-slate-100 flex items-center text-sm uppercase tracking-wider">
                     <i class="fa-solid fa-sliders mr-2 text-blue-500"></i> Configure config.json Settings
@@ -170,9 +180,7 @@
                 </button>
             </div>
 
-            <!-- Modal Form Body -->
             <form id="settings-form" onsubmit="saveSettings(event)" class="p-6 space-y-4 text-xs">
-                <!-- API Section -->
                 <div class="space-y-3">
                     <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">API Configuration</div>
                     <div class="grid grid-cols-2 gap-4">
@@ -191,7 +199,6 @@
                     </div>
                 </div>
 
-                <!-- Runner & Sandbox Section -->
                 <div class="space-y-3 pt-2">
                     <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">Runtime &amp; Safety</div>
                     <div class="grid grid-cols-2 gap-4">
@@ -214,7 +221,6 @@
                     </div>
                 </div>
 
-                <!-- Modal Footer Actions -->
                 <div class="pt-4 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/20 -mx-6 -mb-6 p-4">
                     <button type="button" onclick="closeSettingsModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
                         Cancel
@@ -227,14 +233,78 @@
         </div>
     </div>
 
+    <!-- ================= 🌿 FORK & TIMELINE BRANCH MODAL ================= -->
+    <div id="fork-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div class="bg-[#1e293b] border border-[#334155] w-full max-w-md rounded-xl shadow-2xl overflow-hidden modal-animate">
+            <div class="px-6 py-4 border-b border-[#334155] flex items-center justify-between bg-slate-900/40">
+                <h3 class="font-bold text-slate-100 flex items-center text-sm uppercase tracking-wider">
+                    <i class="fa-solid fa-code-fork mr-2 text-cyan-400"></i> Rewind or Branch Timeline
+                </h3>
+                <button onclick="closeForkModal()" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4 text-xs">
+                <p class="text-slate-400">You are rewinding the conversation back to **Turn <span id="fork-turn-display" class="font-bold text-white"></span>**. Select your timeline management strategy below:</p>
+
+                <!-- Branching Strategy Form (Non-Destructive) -->
+                <div class="bg-slate-900/40 border border-[#334155] rounded-lg p-4 space-y-3">
+                    <div class="flex items-start space-x-2">
+                        <input type="radio" id="fork-type-branch" name="fork-type" value="branch" checked onchange="toggleForkFields('branch')" class="mt-1 accent-blue-500 h-4 w-4">
+                        <label for="fork-type-branch" class="block cursor-pointer">
+                            <span class="block font-bold text-slate-200">1. Create Parallel Branch (Recommended)</span>
+                            <span class="block text-[11px] text-slate-400 mt-0.5">Clones the timeline up to Turn <span class="fork-turn-sub"></span> into a brand-new, isolated session. The original thread remains completely untouched on disk!</span>
+                        </label>
+                    </div>
+                    <div id="branch-fields" class="pl-6">
+                        <label class="block text-slate-300 font-bold mb-1">New Branch Name</label>
+                        <input type="text" id="input-branch-name" placeholder="Feature Experiment A..." class="w-full bg-[#0f172a] border border-[#334155] rounded px-2.5 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
+                    </div>
+                </div>
+
+                <!-- Destructive Rollback Strategy -->
+                <div class="bg-red-950/10 border border-red-900/40 rounded-lg p-4">
+                    <div class="flex items-start space-x-2">
+                        <input type="radio" id="fork-type-truncate" name="fork-type" value="truncate" onchange="toggleForkFields('truncate')" class="mt-1 accent-red-500 h-4 w-4">
+                        <label for="fork-type-truncate" class="block cursor-pointer">
+                            <span class="block font-bold text-red-400"><i class="fa-solid fa-triangle-exclamation mr-1"></i> 2. Truncate &amp; Overwrite (Destructive)</span>
+                            <span class="block text-[11px] text-slate-400 mt-0.5">Permanently deletes all future turns greater than <span class="fork-turn-sub"></span> and overwrites files on disk. There is no way to undo this action.</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="pt-4 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/20 -mx-6 -mb-6 p-4">
+                    <button onclick="closeForkModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
+                        Cancel
+                    </button>
+                    <button onclick="executeForkAction()" class="px-5 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-white transition font-bold shadow-md">
+                        Execute Rollback
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ================= CLIENT JAVASCRIPT REAL-TIME FLOWS ================= -->
     <script>
         let sseSource = null;
         let activeCost = 0.0;
         let turnCounter = 0;
         let isSidebarCollapsed = false;
+        let selectedForkTurn = 0;
 
-        // Toggle Workspace Explorer Sidebar (Phase 6.3)
+        window.addEventListener("DOMContentLoaded", () => {
+            fetchConfig();
+            refreshWorkspaceTree();
+            fetchWorkspaces();
+            fetchSessions();
+            connectSSE();
+            appendGreeting();
+        });
+
+        // Toggle Workspace Explorer Sidebar
         function toggleSidebar() {
             const sidebar = document.getElementById("sidebar");
             isSidebarCollapsed = !isSidebarCollapsed;
@@ -251,9 +321,228 @@
             }
         }
 
-        // Settings Modal controls (Phase 6.3 settings overlay)
+        // Switch Left Panel Sidebar tabs (Files vs Sessions)
+        function switchSidebarTab(tabName) {
+            const filesTab = document.getElementById("tab-files");
+            const sessionsTab = document.getElementById("tab-sessions");
+            const filesBtn = document.getElementById("tab-files-btn");
+            const sessionsBtn = document.getElementById("tab-sessions-btn");
+
+            if (tabName === "files") {
+                filesTab.classList.remove("hidden");
+                sessionsTab.classList.add("hidden");
+                filesBtn.className = "flex-1 py-3 text-center border-b-2 border-blue-500 font-bold text-white transition";
+                sessionsBtn.className = "flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition";
+            } else {
+                filesTab.classList.add("hidden");
+                sessionsTab.classList.remove("hidden");
+                filesBtn.className = "flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition";
+                sessionsBtn.className = "flex-1 py-3 text-center border-b-2 border-blue-500 font-bold text-white transition";
+                fetchSessions();
+                fetchWorkspaces();
+            }
+        }
+
+        // WORKSPACE MANAGEMENT (Phase 6.3 workspaces engine)
+        function fetchWorkspaces() {
+            fetch("/api/workspaces")
+                .then(res => res.json())
+                .then(data => {
+                    const select = document.getElementById("workspace-history-select");
+                    let html = "";
+                    data.workspaces.forEach(ws => {
+                        const selected = ws === data.active ? "selected" : "";
+                        html += `<option value="${ws}" ${selected}>${ws}</option>`;
+                    });
+                    select.innerHTML = html;
+                })
+                .catch(err => console.error("Error loading workspaces:", err));
+        }
+
+        function changeWorkspaceFromSelector(path) {
+            if (!path) return;
+            fetch("/api/workspaces/select", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: path })
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchConfig();
+                refreshWorkspaceTree();
+                fetchSessions();
+                const chatContainer = document.getElementById("chat-messages");
+                chatContainer.innerHTML = "";
+                appendGreeting();
+                appendSystemAlert("Switched Workspace", `Active directory is now: ${path}. Spun up a new session to record changes.`, "fa-folder-open text-cyan-400");
+                turnCounter = 0;
+            });
+        }
+
+        function addNewWorkspace() {
+            const input = document.getElementById("new-workspace-input");
+            const path = input.value.trim();
+            if (!path) return;
+
+            changeWorkspaceFromSelector(path);
+            input.value = "";
+        }
+
+        // SESSIONS MANAGEMENT (Phase 6.3 conversation indexing)
+        function fetchSessions() {
+            fetch("/api/sessions")
+                .then(res => res.json())
+                .then(data => {
+                    const listContainer = document.getElementById("sessions-list");
+                    let html = "";
+                    
+                    if (!data.sessions || data.sessions.length === 0) {
+                        listContainer.innerHTML = '<div class="text-slate-500 italic">No recorded sessions.</div>';
+                        return;
+                    }
+
+                    // Sort sessions by date/time descending (newest on top)
+                    data.sessions.sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+                    data.sessions.forEach(sess => {
+                        const isActive = sess.session_id === document.getElementById("session-id").innerText.replace("Session: ", "").trim();
+                        const activeClass = isActive 
+                            ? "bg-slate-800 border-blue-500/80 text-white font-bold" 
+                            : "bg-slate-900/30 border-transparent text-slate-400 hover:bg-slate-800/40 hover:text-slate-200";
+                        
+                        const date = new Date(sess.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+                        html += `
+                            <div onclick="selectSession('${sess.session_id}')" class="p-2.5 rounded-lg border-l-4 cursor-pointer transition flex flex-col justify-between space-y-1 ${activeClass}">
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <span class="truncate pr-2">${sess.name}</span>
+                                    <span class="text-[10px] text-slate-500 shrink-0 font-mono">${date}</span>
+                                </div>
+                                <div class="text-[10px] text-slate-500 truncate font-mono">Dir: ${sess.workspace_dir}</div>
+                            </div>
+                        `;
+                    });
+                    listContainer.innerHTML = html;
+                })
+                .catch(err => console.error("Error loading sessions:", err));
+        }
+
+        function selectSession(id) {
+            fetch("/api/sessions/select", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchConfig();
+                refreshWorkspaceTree();
+                fetchSessions();
+                
+                // Redraw chat log entirely
+                const chatContainer = document.getElementById("chat-messages");
+                chatContainer.innerHTML = "";
+                appendGreeting();
+                
+                data.history.forEach(turn => {
+                    appendTurnToChat(turn);
+                });
+                turnCounter = data.history.length;
+            })
+            .catch(err => alert("Failed to switch session: " + err));
+        }
+
+        // TIMELINE FORK / BRANCHING OVERLAYS (Phase 6.3 non-destructive branching)
+        function triggerFork(turn) {
+            selectedForkTurn = turn;
+            document.getElementById("fork-turn-display").innerText = turn;
+            const subs = document.getElementsByClassName("fork-turn-sub");
+            for (let s of subs) s.innerText = turn;
+            
+            // Set default branch naming
+            document.getElementById("input-branch-name").value = `Branch_from_Turn_${turn}`;
+            document.getElementById("fork-modal").classList.remove("hidden");
+        }
+
+        function closeForkModal() {
+            document.getElementById("fork-modal").classList.add("hidden");
+        }
+
+        function toggleForkFields(type) {
+            const bFields = document.getElementById("branch-fields");
+            if (type === "branch") {
+                bFields.classList.remove("hidden");
+            } else {
+                bFields.classList.add("hidden");
+            }
+        }
+
+        function executeForkAction() {
+            const isBranch = document.getElementById("fork-type-branch").checked;
+            
+            if (isBranch) {
+                // Non-destructive fork branching
+                const branchName = document.getElementById("input-branch-name").value.trim() || `Branch Turn ${selectedForkTurn}`;
+                const payload = {
+                    parent_session_id: document.getElementById("session-id").innerText.replace("Session: ", "").trim(),
+                    turn: selectedForkTurn,
+                    branch_name: branchName
+                };
+
+                fetch("/api/sessions/branch", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                })
+                .then(res => res.json())
+                .then(data => {
+                    closeForkModal();
+                    fetchConfig();
+                    refreshWorkspaceTree();
+                    fetchSessions();
+
+                    const chatContainer = document.getElementById("chat-messages");
+                    chatContainer.innerHTML = "";
+                    appendGreeting();
+                    appendSystemAlert("New Timeline Created", `Spun up parallel timeline branch '${branchName}' from Turn ${selectedForkTurn}. The original timeline is completely preserved.`, "fa-code-branch text-green-400");
+                    
+                    data.history.forEach(turn => {
+                        appendTurnToChat(turn);
+                    });
+                    turnCounter = selectedForkTurn;
+                    switchSidebarTab("sessions"); // switch tab to show the new session card!
+                })
+                .catch(err => alert("Failed to create branch: " + err));
+            } else {
+                // Truncate & overwrite (Destructive)
+                const payload = { turn: selectedForkTurn };
+                fetch("/api/fork", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                })
+                .then(res => res.json())
+                .then(data => {
+                    closeForkModal();
+                    refreshWorkspaceTree();
+                    fetchSessions();
+
+                    const chatContainer = document.getElementById("chat-messages");
+                    chatContainer.innerHTML = "";
+                    appendGreeting();
+                    appendSystemAlert("Session Truncated", `Timeline rolled back to Turn ${selectedForkTurn}. All future turn files deleted.`, "fa-scissors text-amber-400");
+                    
+                    data.history.forEach(turn => {
+                        appendTurnToChat(turn);
+                    });
+                    turnCounter = selectedForkTurn;
+                })
+                .catch(err => alert("Fork failed: " + err));
+            }
+        }
+
+        // Settings Modal controls
         function openSettingsModal() {
-            // Fetch latest active configurations from memory
             fetch("/api/config")
                 .then(res => res.json())
                 .then(cfg => {
@@ -291,14 +580,15 @@
                 body: JSON.stringify(payload)
             })
             .then(res => {
-                if (!res.ok) throw new Error("Failed to save config on server");
+                if (!res.ok) throw new Error("Failed to save config");
                 return res.json();
             })
             .then(data => {
                 closeSettingsModal();
-                fetchConfig(); // Reload header indicators
+                fetchConfig();
                 appendSystemAlert("System Settings Saved", "Configurations successfully updated on host disk (config.json) and memory. All future turns will operate under these settings.", "fa-check-double text-green-400");
                 refreshWorkspaceTree();
+                fetchWorkspaces();
             })
             .catch(err => {
                 alert("Error saving settings: " + err);
@@ -387,6 +677,27 @@
             }
         }
 
+        function appendGreeting() {
+            const chatContainer = document.getElementById("chat-messages");
+            const msgDiv = document.createElement("div");
+            msgDiv.className = "flex space-x-4 items-start p-4 rounded-lg bg-[#0b0f19]";
+            msgDiv.innerHTML = `
+                <div class="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-md">
+                    H
+                </div>
+                <div class="space-y-1 flex-1 min-w-0">
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold text-slate-200 text-sm">GoHarness System</span>
+                        <span class="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded font-mono">system</span>
+                    </div>
+                    <p class="text-slate-300 text-sm leading-relaxed font-sans">
+                        Welcome to the **GoHarness Embedded Web Console**! I am your sandboxed AI agent harness. Ask me to write scripts, patch programs, run compilations, or configure local systems. Any files I edit or commands I run will stream here in real-time.
+                    </p>
+                </div>
+            `;
+            chatContainer.appendChild(msgDiv);
+        }
+
         function appendTurnToChat(turn) {
             const chatContainer = document.getElementById("chat-messages");
             
@@ -411,6 +722,10 @@
             }
 
             const messageId = `turn-${turn.turn_number}`;
+            
+            // Prevent duplicated turns (if user optimistic append already rendered it)
+            if (document.getElementById(messageId)) return;
+
             const msgDiv = document.createElement("div");
             msgDiv.id = messageId;
             msgDiv.className = `flex space-x-4 items-start p-4 rounded-lg transition duration-150 group ${cardBg} ${borderStyle}`;
@@ -419,7 +734,7 @@
             if (turn.turn_number > 0) {
                 rollbackButton = `
                     <button onclick="triggerFork(${turn.turn_number})" class="opacity-0 group-hover:opacity-100 text-[10px] bg-red-950/40 hover:bg-red-900 border border-red-800 text-red-400 font-mono px-2 py-0.5 rounded transition duration-150">
-                        <i class="fa-solid fa-arrows-spin mr-1"></i> Fork Here (Turn ${turn.turn_number})
+                        <i class="fa-solid fa-code-fork mr-1"></i> Rollback / Branch (Turn ${turn.turn_number})
                     </button>
                 `;
             }
@@ -515,35 +830,6 @@
             });
         }
 
-        function triggerFork(targetTurn) {
-            if (!confirm(`Are you sure you want to rollback to Turn ${targetTurn}? This will delete newer turn logs and restore files on disk!`)) {
-                return;
-            }
-
-            fetch("/api/fork", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ turn: targetTurn })
-            })
-            .then(res => res.json())
-            .then(data => {
-                const chatContainer = document.getElementById("chat-messages");
-                chatContainer.innerHTML = "";
-                
-                appendSystemAlert("Session Forked", `State successfully rewound to Turn ${targetTurn}. You can resume executing commands from this timeline.`, "fa-arrows-spin text-green-400");
-                
-                data.history.forEach(turn => {
-                    appendTurnToChat(turn);
-                });
-                
-                turnCounter = targetTurn;
-                refreshWorkspaceTree();
-            })
-            .catch(err => {
-                alert("Fork failed: " + err);
-            });
-        }
-
         function triggerCompaction() {
             fetch("/api/compact", { method: "POST" })
                 .then(res => {
@@ -551,6 +837,7 @@
                 });
         }
 
+        // Auto text expander
         function handleInputKeydown(e) {
             const input = document.getElementById("prompt-input");
             if (e.key === "Enter" && !e.shiftKey) {

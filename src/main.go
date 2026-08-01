@@ -29,6 +29,7 @@ func main() {
 		},
 		Agent: AgentConfig{
 			WorkspaceDir:          "./workspace",
+			WorkspacesHistory:     []string{"./workspace"},
 			MaxTurns:              15,
 			CommandTimeoutSeconds: 30,
 		},
@@ -90,10 +91,19 @@ func main() {
 	// Ensure workspace exists
 	os.MkdirAll(activeConfig.Agent.WorkspaceDir, 0755)
 
+	// Populate workspace history if empty
+	if len(activeConfig.Agent.WorkspacesHistory) == 0 {
+		activeConfig.Agent.WorkspacesHistory = append(activeConfig.Agent.WorkspacesHistory, activeConfig.Agent.WorkspaceDir)
+		_ = SaveConfig("config.json", activeConfig)
+	}
+
 	// 5. Initialize the Turn-by-Turn Session System
 	activeSessionID = "sess_" + time.Now().Format("20060102-150405")
 	sessionPath := filepath.Join(".goharness", "sessions", activeSessionID)
 	os.MkdirAll(sessionPath, 0755)
+
+	// Write metadata for the initial session
+	createSessionMeta(activeSessionID, activeConfig.Agent.WorkspaceDir, "", "Initial Session")
 
 	// 6. Spawn and initialize all registered Model Context Protocol (MCP) servers
 	defer cleanupMCPServers()
@@ -309,7 +319,6 @@ func runAgentLoop(userPrompt string) {
 
 		fmt.Printf("%s[LLM] Thinking...%s\n", ColorYellow, ColorReset)
 		
-		// Telemetry Hook: LLM Thinking process (Phase 5.3)
 		startTime := time.Now()
 		responseMsg, err := sendLLMRequest(jsonBytes)
 		if err != nil {
@@ -452,8 +461,6 @@ func sendLLMRequest(payload []byte) (*Message, error) {
 		return nil, fmt.Errorf("API response contained zero choices")
 	}
 
-	// Dynamic Cost tracking broadcast (Phase 6.3)
-	// Broadcasters update Web UI cost status bar in real-time
 	BroadcastSSE("cost_update", map[string]interface{}{
 		"cost": 0.0005,
 	})

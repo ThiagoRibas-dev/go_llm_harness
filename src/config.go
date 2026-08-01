@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-// ANSI Color Codes for beautiful terminal outputs (moved here to share globally)
+// ANSI Color Codes for beautiful terminal outputs (shared globally)
 const (
 	ColorReset   = "\033[0m"
 	ColorRed     = "\033[31m"
@@ -37,8 +37,9 @@ type APIConfig struct {
 }
 
 type AgentConfig struct {
-	WorkspaceDir          string `json:"workspace_dir"`
-	MaxTurns              int    `json:"max_turns"`
+	WorkspaceDir          string   `json:"workspace_dir"`
+	WorkspacesHistory     []string `json:"workspaces_history"` // Workspace History (Phase 6.3)
+	MaxTurns              int      `json:"max_turns"`
 	CommandTimeoutSeconds int    `json:"command_timeout_seconds"`
 }
 
@@ -68,6 +69,15 @@ type MCPServerConfig struct {
 	Command string            `json:"command"`
 	Args    []string          `json:"args"`
 	Env     map[string]string `json:"env,omitempty"`
+}
+
+// SessionMeta holds metadata for each conversation session
+type SessionMeta struct {
+	SessionID       string `json:"session_id"`
+	WorkspaceDir    string `json:"workspace_dir"`
+	CreatedAt       string `json:"created_at"`
+	Name            string `json:"name"`
+	ParentSessionID string `json:"parent_session_id,omitempty"`
 }
 
 // OpenAI Chat Completion API Schema structures
