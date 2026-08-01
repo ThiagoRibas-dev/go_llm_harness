@@ -154,13 +154,13 @@ func main() {
 		}
 
 		// Execute the Agent Loop for this user request
-		runAgentLoop(prompt)
+		_ = runAgentLoop(prompt)
 	}
 }
 
 func printBanner() {
 	fmt.Printf("%s=======================================================%s\n", ColorBlue, ColorReset)
-	fmt.Printf("%s   🤖 GOLANG LOCAL AGENT HARNESS (PHASE 5) 🤖       %s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("%s   🤖 GOLANG LOCAL AGENT HARNESS (PHASE 8) 🤖       %s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("%s=======================================================%s\n", ColorBlue, ColorReset)
 	fmt.Printf("  Runtime OS   : %s (%s)\n", runtimeOS(), "amd64")
 	fmt.Printf("  Model Target : %s (%s, Temp: %.1f)\n", activeConfig.API.Model, activeConfig.API.Provider, activeConfig.API.Temperature)
@@ -172,7 +172,8 @@ func printBanner() {
 	fmt.Printf("%s=======================================================%s\n\n", ColorBlue, ColorReset)
 }
 
-func runAgentLoop(userPrompt string) {
+// runAgentLoop executes the core agent loop and returns the final assistant response text (Phase 8)
+func runAgentLoop(userPrompt string) string {
 	agentTools := []Tool{
 		{
 			Type: "function",
@@ -301,19 +302,19 @@ func runAgentLoop(userPrompt string) {
 
 	requestMessages = append(requestMessages, filteredHistory...)
 
+	var lastTextAnswer string
 	maxTurns := activeConfig.Agent.MaxTurns
 	for turn := 1; turn <= maxTurns; turn++ {
 		fmt.Printf("\n%s--- TURN LOOP (%d / %d) ---%s\n", ColorBold+ColorWhite, turn, maxTurns, ColorReset)
 
 		fmt.Printf("%s[LLM] Thinking...%s\n", ColorYellow, ColorReset)
 		
-		// Telemetry Hook: LLM Thinking process (Phase 5.3) using SendMultiProviderRequest! (Phase 7)
 		startTime := time.Now()
 		responseMsg, err := SendMultiProviderRequest(requestMessages, agentTools)
 		if err != nil {
 			LogExecutionTrace(turn, "llm_completion", startTime, "failed", map[string]interface{}{"error": err.Error()})
 			fmt.Printf("%s[ERROR] LLM API Call Failed: %v%s\n", ColorRed, err, ColorReset)
-			return
+			return "Error: LLM API Call Failed."
 		}
 		LogExecutionTrace(turn, "llm_completion", startTime, "success", map[string]interface{}{"model": activeConfig.API.Model, "provider": activeConfig.API.Provider})
 
@@ -322,11 +323,12 @@ func runAgentLoop(userPrompt string) {
 
 		if responseMsg.Content != "" {
 			fmt.Printf("\n%s🤖 Assistant:%s\n%s\n", ColorBold+ColorYellow, ColorReset, responseMsg.Content)
+			lastTextAnswer = responseMsg.Content
 		}
 
 		if len(responseMsg.ToolCalls) == 0 {
 			fmt.Printf("\n%s[SUCCESS] Task complete. No more tools requested by the LLM.%s\n", ColorBold+ColorGreen, ColorReset)
-			break
+			return lastTextAnswer
 		}
 
 		for _, toolCall := range responseMsg.ToolCalls {
@@ -412,6 +414,7 @@ func runAgentLoop(userPrompt string) {
 			requestMessages = append(requestMessages, toolResponseMsg)
 		}
 	}
+	return lastTextAnswer
 }
 
 func executeWriteFile(path, content string) string {

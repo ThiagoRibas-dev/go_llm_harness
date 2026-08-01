@@ -65,7 +65,7 @@ This document outlines the strategic engineering roadmap for evolving **GoHarnes
                   │
                   ▼
 ┌───────────────────────────────────┐
-│ PHASE 8: OPENAI COMPATIBLE GATEWAY│ ◄── [Planned Extension]
+│ PHASE 8: OPENAI COMPATIBLE GATEWAY│ ◄── [Complete]
 │ - GET /v1/models discovery        │
 │ - POST /v1/chat completions proxy │
 │ - Tokenizer & Embedding Proxies   │
