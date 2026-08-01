@@ -143,6 +143,14 @@ func StartWebGUI(port int) {
 	mux.HandleFunc("/v1/models", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
+		
+		// Guard: If API Gateway is disabled, return 404 (Phase 8.4)
+		if !activeConfig.Web.APIGatewayEnabled {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error": "OpenAI API Gateway is disabled in config.json"}`))
+			return
+		}
+
 		resp := map[string]interface{}{
 			"object": "list",
 			"data": []map[string]interface{}{
@@ -164,11 +172,17 @@ func StartWebGUI(port int) {
 	})
 
 	// POST /v1/chat/completions: The Agentic Completions Gateway (Phase 8.1)
-	// Triggers our complete sandboxed reasoning loop in background and returns the solved output
 	mux.HandleFunc("/v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		if r.Method == "OPTIONS" {
+			return
+		}
+
+		// Guard: Check Gateway status
+		if !activeConfig.Web.APIGatewayEnabled {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error": "OpenAI API Gateway is disabled in config.json"}`))
 			return
 		}
 
@@ -183,7 +197,6 @@ func StartWebGUI(port int) {
 			return
 		}
 
-		// Extract the latest user prompt from the messages slice
 		if len(req.Messages) == 0 {
 			http.Error(w, "Message history cannot be empty", http.StatusBadRequest)
 			return
@@ -192,10 +205,8 @@ func StartWebGUI(port int) {
 
 		fmt.Printf("\n%s⚡ [GATEWAY] Received external prompt: '%s'. Triggering agent loop...%s\n", ColorBold+ColorCyan, userPrompt, ColorReset)
 
-		// Programmatically execute our entire multi-turn tool-calling sandbox loop!
 		finalAgentAnswer := runAgentLoop(userPrompt)
 
-		// Package the solved answer inside standard OpenAI Chat Completions layout
 		resp := ChatCompletionResponse{
 			Choices: []Choice{
 				{
@@ -218,9 +229,16 @@ func StartWebGUI(port int) {
 			return
 		}
 
+		// Guard: Check Gateway status
+		if !activeConfig.Web.APIGatewayEnabled {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error": "OpenAI API Gateway is disabled in config.json"}`))
+			return
+		}
+
 		var req struct {
 			Model string      `json:"model"`
-			Input interface{} `json:"input"` // Can be a string or a slice of strings
+			Input interface{} `json:"input"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -228,10 +246,8 @@ func StartWebGUI(port int) {
 			return
 		}
 
-		// Generate a standard, clean mock vector array fallback (Phase 8.2)
-		// This handles local-RAG indexers securely without requiring a dedicated premium embeddings endpoint.
 		var mockVector []float64
-		for i := 0; i < 1536; i++ { // Standard OpenAI Ada-002 dimensions (1536 dimensions)
+		for i := 0; i < 1536; i++ {
 			mockVector = append(mockVector, 0.0123)
 		}
 
@@ -262,6 +278,13 @@ func StartWebGUI(port int) {
 			return
 		}
 
+		// Guard: Check Gateway status
+		if !activeConfig.Web.APIGatewayEnabled {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error": "OpenAI API Gateway is disabled in config.json"}`))
+			return
+		}
+
 		var req struct {
 			Text    string `json:"text"`
 			Content string `json:"content"`
@@ -277,7 +300,6 @@ func StartWebGUI(port int) {
 			textToTokenize = req.Content
 		}
 
-		// Execute our self-learning BPE-approximate tokenizer (Phase 8.3)
 		tokens := tokenizeString(textToTokenize)
 
 		resp := map[string]interface{}{
@@ -297,6 +319,13 @@ func StartWebGUI(port int) {
 			return
 		}
 
+		// Guard: Check Gateway status
+		if !activeConfig.Web.APIGatewayEnabled {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error": "OpenAI API Gateway is disabled in config.json"}`))
+			return
+		}
+
 		var req struct {
 			Tokens []int `json:"tokens"`
 		}
@@ -306,7 +335,6 @@ func StartWebGUI(port int) {
 			return
 		}
 
-		// Reconstruct string
 		text := detokenizeSlice(req.Tokens)
 
 		resp := map[string]interface{}{
@@ -340,7 +368,7 @@ func StartWebGUI(port int) {
 		}
 
 		var req struct {
-			Provider     string `json:"provider"` // Phase 7
+			Provider     string `json:"provider"`
 			APIKey       string `json:"api_key"`
 			Model        string `json:"model"`
 			BaseURL      string `json:"base_url"`
@@ -360,7 +388,7 @@ func StartWebGUI(port int) {
 		activeConfig.API.BaseURL = req.BaseURL
 		activeConfig.Security.SandboxMode = req.SandboxMode
 		activeConfig.Agent.MaxTurns = req.MaxTurns
-		
+
 		if activeConfig.Agent.WorkspaceDir != req.WorkspaceDir {
 			selectWorkspace(req.WorkspaceDir)
 		}
@@ -378,7 +406,7 @@ func StartWebGUI(port int) {
 	mux.HandleFunc("/api/workspaces", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"active":    activeConfig.Agent.WorkspaceDir,
+			"active":     activeConfig.Agent.WorkspaceDir,
 			"workspaces": activeConfig.Agent.WorkspacesHistory,
 		})
 	})
@@ -614,11 +642,21 @@ func StartWebGUI(port int) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// 4. Start Server
+	// 4. Start Server and print beautiful UX logs (Phase 8.4)
 	serverAddr := fmt.Sprintf("127.0.0.1:%d", port)
-	fmt.Printf("\n%s🚀 [WEB GUI] Server starting on http://%s/ %s\n", ColorBold+ColorGreen, serverAddr, ColorReset)
+	
+	fmt.Printf("\n%s=======================================================%s\n", ColorBlue, ColorReset)
+	fmt.Printf("%s   🚀 GOHARNESS WEB & GATEWAY SERVICES ACTIVE 🚀       %s\n", ColorBold+ColorGreen, ColorReset)
+	fmt.Printf("%s=======================================================%s\n", ColorBlue, ColorReset)
+	fmt.Printf("  💻 Web GUI Console:    %shttp://%s/%s\n", ColorBold+ColorCyan, serverAddr, ColorReset)
+	if activeConfig.Web.APIGatewayEnabled {
+		fmt.Printf("  🔌 OpenAI API Gateway: %shttp://%s/v1%s\n", ColorBold+ColorCyan, serverAddr, ColorReset)
+	} else {
+		fmt.Printf("  🔌 OpenAI API Gateway: %sDisabled in config.json%s\n", ColorRed, ColorReset)
+	}
+	fmt.Printf("%s=======================================================%s\n\n", ColorBlue, ColorReset)
 
-	// 5. Auto-Launch browser in background
+	// 5. Auto-Launch browser in background if Web GUI is active
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		launchBrowser(fmt.Sprintf("http://%s/", serverAddr))
@@ -740,7 +778,6 @@ func tokenizeString(text string) []int {
 	defer tokenMutex.Unlock()
 
 	var tokens []int
-	// Standard Field split representing words and punctuations
 	words := strings.Fields(text)
 	for _, word := range words {
 		id, exists := wordToToken[word]

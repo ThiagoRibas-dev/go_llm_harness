@@ -26,6 +26,7 @@ type Config struct {
 	DirectoryScan DirectoryScanConfig        `json:"directory_scan"`
 	Compaction    CompactionConfig           `json:"compaction"`
 	MCPServers    map[string]MCPServerConfig `json:"mcp_servers"`
+	Web           WebConfig                  `json:"web"` // Web & Gateway Configs (Phase 8.4)
 }
 
 type APIConfig struct {
@@ -41,7 +42,7 @@ type AgentConfig struct {
 	WorkspaceDir          string   `json:"workspace_dir"`
 	WorkspacesHistory     []string `json:"workspaces_history"` // Workspace History (Phase 6.3)
 	MaxTurns              int      `json:"max_turns"`
-	CommandTimeoutSeconds int    `json:"command_timeout_seconds"`
+	CommandTimeoutSeconds int      `json:"command_timeout_seconds"`
 }
 
 type SecurityConfig struct {
@@ -70,6 +71,12 @@ type MCPServerConfig struct {
 	Command string            `json:"command"`
 	Args    []string          `json:"args"`
 	Env     map[string]string `json:"env,omitempty"`
+}
+
+type WebConfig struct {
+	Enabled           bool `json:"enabled"`             // Auto-start Web server on boot
+	Port              int  `json:"port"`                // Port to bind Web GUI and Gateway
+	APIGatewayEnabled bool `json:"api_gateway_enabled"` // Toggle OpenAI API Gateway endpoints
 }
 
 // SessionMeta holds metadata for each conversation session

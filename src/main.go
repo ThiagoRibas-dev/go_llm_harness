@@ -58,6 +58,11 @@ func main() {
 				Args:    []string{"mcp-server-sqlite", "--db-path", "./workspace/dev.db"},
 			},
 		},
+		Web: WebConfig{
+			Enabled:           false,
+			Port:              8080,
+			APIGatewayEnabled: true,
+		},
 	}
 
 	// 2. Try to load config.json, or create a default one if it doesn't exist
@@ -75,7 +80,8 @@ func main() {
 
 	// 3. Command Line Flags (Overriding config values)
 	var webMode bool
-	flag.BoolVar(&webMode, "web", false, "Start GoHarness in Web GUI mode on port 8080")
+	flag.BoolVar(&webMode, "web", activeConfig.Web.Enabled, "Start GoHarness in Web GUI & API Gateway mode")
+	flag.IntVar(&activeConfig.Web.Port, "port", activeConfig.Web.Port, "Port to run the Web GUI & API Gateway on")
 	flag.StringVar(&activeConfig.API.Provider, "provider", activeConfig.API.Provider, "LLM provider: 'openai', 'anthropic', 'gemini' or 'vertex'")
 	flag.StringVar(&activeConfig.API.Key, "api-key", activeConfig.API.Key, "OpenAI API Key (or env OPENAI_API_KEY)")
 	flag.StringVar(&activeConfig.API.BaseURL, "url", activeConfig.API.BaseURL, "API endpoint base url")
@@ -110,9 +116,9 @@ func main() {
 	defer cleanupMCPServers()
 	bootstrapMCPServers()
 
-	// 7. If -web mode is enabled, block and start the embedded Web GUI! (Phase 6)
+	// 7. If -web mode is enabled (or active in config), block and start the embedded Web GUI! (Phase 6 & 8)
 	if webMode {
-		StartWebGUI(8080)
+		StartWebGUI(activeConfig.Web.Port)
 		return
 	}
 
@@ -172,7 +178,6 @@ func printBanner() {
 	fmt.Printf("%s=======================================================%s\n\n", ColorBlue, ColorReset)
 }
 
-// runAgentLoop executes the core agent loop and returns the final assistant response text (Phase 8)
 func runAgentLoop(userPrompt string) string {
 	agentTools := []Tool{
 		{

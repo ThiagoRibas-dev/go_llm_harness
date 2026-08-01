@@ -18,6 +18,7 @@ config.json
 Thumbs.db
 .DS_Store
 go/
+uploads/
 
 # Go specific
 go.sum
