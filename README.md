@@ -36,21 +36,25 @@ GoHarness is engineered to be as **lightweight and secure** as possible, avoidin
 ├── README.md           # This documentation guide
 ├── config.json         # Active runtime config (created automatically)
 ├── config.example.json # Public version-controlled configuration template
-│
 ├── go.mod              # Go package descriptor (standard library only)
-├── main.go             # CLI shell, flag parser, and loop coordinator
-├── config.go           # Configuration structures and load/save helpers
-├── agent.go            # Directory walking, prompt loading, and compaction
-├── mcp.go              # Model Context Protocol Client (JSON-RPC 2.0 stdio)
-├── telemetry.go        # Thread-safe execution trace logs (.goharness/traces.jsonl)
-├── embed.go            # Portable runtime extraction helpers
-├── web.go              # Built-in HTTP web server and SSE streaming router
 │
-├── sandbox.go          # Unified bare-metal sandbox router
-├── sandbox_linux.go    # Linux Landlock LSM sandbox executor
-├── sandbox_darwin.go   # macOS Apple sandbox-exec SBPL profile executor
-├── sandbox_windows.go  # Windows Job Object & restricted low-integrity token spawner
-├── sandbox_fallback.go # Fallback executor for other unmapped OSes
+├── src/                # All Go Source Files & Embedded Web Assets
+│   ├── main.go         # CLI shell, flag parser, and loop coordinator
+│   ├── config.go       # Configuration structures and load/save helpers
+│   ├── agent.go        # Directory walking, prompt loading, and compaction
+│   ├── mcp.go          # Model Context Protocol Client (JSON-RPC 2.0 stdio)
+│   ├── telemetry.go    # Thread-safe execution trace logs (.goharness/traces.jsonl)
+│   ├── embed.go        # Portable runtime extraction helpers
+│   ├── web.go          # Built-in HTTP web server and SSE streaming router
+│   │
+│   ├── sandbox.go      # Unified bare-metal sandbox router
+│   ├── sandbox_linux.go   # Linux Landlock LSM sandbox executor
+│   ├── sandbox_darwin.go  # macOS Apple sandbox-exec SBPL profile executor
+│   ├── sandbox_windows.go # Windows Job Object & restricted low-integrity token spawner
+│   ├── sandbox_fallback.go# Fallback executor for other unmapped OSes
+│   │
+│   └── web/
+│       └── index.html  # Responsive Single-Page App assets (fully embedded)
 │
 ├── bin/                # Compiled production static binaries (cross-compiled)
 │   ├── agent.exe       # Windows static executable (~6.5 MB)
@@ -58,12 +62,9 @@ GoHarness is engineered to be as **lightweight and secure** as possible, avoidin
 │   ├── agent_mac_arm64 # macOS Apple Silicon static executable (~6.1 MB)
 │   └── agent_mac_amd64 # macOS Intel static executable (~6.5 MB)
 │
-├── web/
-│   └── index.html      # Responsive Single-Page App assets (fully embedded)
-│
 └── docs/
     ├── ROADMAP.md      # Multi-phase strategic engineering plan
-    └── assets/         # Unified system architecture & visual comparison assets
+    └── assets/         # Project diagrams (harness_architecture, scale_comparison)
 ```
 
 ---
@@ -73,22 +74,22 @@ GoHarness is engineered to be as **lightweight and secure** as possible, avoidin
 ### 1. Build the Binary
 To compile the static executable from source on your current machine:
 ```bash
-go build -o bin/agent .
+go build -o bin/agent ./src
 ```
 
 To cross-compile for all targets:
 ```bash
 # Windows
-GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent.exe .
+GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent.exe ./src
 
 # macOS Apple Silicon
-GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o bin/agent_mac_arm64 .
+GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o bin/agent_mac_arm64 ./src
 
 # macOS Intel
-GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent_mac_amd64 .
+GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent_mac_amd64 ./src
 
 # Linux
-GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent_linux .
+GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent_linux ./src
 ```
 
 ---
