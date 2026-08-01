@@ -34,7 +34,6 @@ GoHarness is engineered to be as **lightweight and secure** as possible, avoidin
 ├── .git/               # Git version-control database
 ├── .gitignore          # Version-control exclusions
 ├── README.md           # This documentation guide
-├── ROADMAP.md          # Multi-phase strategic engineering plan
 ├── config.json         # Active runtime config (created automatically)
 ├── config.example.json # Public version-controlled configuration template
 │
@@ -63,6 +62,7 @@ GoHarness is engineered to be as **lightweight and secure** as possible, avoidin
 │   └── index.html      # Responsive Single-Page App assets (fully embedded)
 │
 └── docs/
+    ├── ROADMAP.md      # Multi-phase strategic engineering plan
     └── assets/         # Unified system architecture & visual comparison assets
 ```
 
