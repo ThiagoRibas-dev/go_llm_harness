@@ -26,16 +26,21 @@ type Config struct {
 	DirectoryScan DirectoryScanConfig        `json:"directory_scan"`
 	Compaction    CompactionConfig           `json:"compaction"`
 	MCPServers    map[string]MCPServerConfig `json:"mcp_servers"`
-	Web           WebConfig                  `json:"web"` // Web & Gateway Configs (Phase 8.4)
+	Web           WebConfig                  `json:"web"`
 }
 
 type APIConfig struct {
-	Provider    string  `json:"provider"` // "openai", "anthropic", "gemini", "vertex" (Phase 7)
-	Key         string  `json:"key"`
-	BaseURL     string  `json:"base_url"`
-	Model       string  `json:"model"`
-	Temperature float64 `json:"temperature"`
-	MaxTokens   int     `json:"max_tokens"`
+	Provider      string  `json:"provider"`       // "openai", "anthropic", "gemini", "vertex"
+	Key           string  `json:"key"`            // API Key or Access Token
+	BaseURL       string  `json:"base_url"`       // Manual Override URL (if non-empty)
+	Model         string  `json:"model"`          // Target model name
+	Temperature   float64 `json:"temperature"`     // LLM Temperature
+	MaxTokens     int     `json:"max_tokens"`      // Maximum output token ceiling
+	TopP          float64 `json:"top_p"`          // Top-P sampling (Phase 8.6)
+	TopK          int     `json:"top_k"`          // Top-K sampling (Phase 8.6)
+	ThinkingLevel string  `json:"thinking_level"` // Thinking / Reasoning level: "off", "low", "medium", "high" (Phase 8.6)
+	ProjectID     string  `json:"project_id"`     // GCP Project ID for Vertex AI (Phase 8.6)
+	Region        string  `json:"region"`         // GCP Region for Vertex AI (Phase 8.6)
 }
 
 type AgentConfig struct {
@@ -98,9 +103,10 @@ type Message struct {
 }
 
 type ToolCall struct {
-	ID       string       `json:"id"`
-	Type     string       `json:"type"`
-	Function ToolFunction `json:"function"`
+	ID               string       `json:"id"`
+	Type             string       `json:"type"`
+	Function         ToolFunction `json:"function"`
+	ThoughtSignature string       `json:"thought_signature,omitempty"` // Google Gemini reasoning trace (Phase 8.6)
 }
 
 type ToolFunction struct {
@@ -127,11 +133,18 @@ type ChatCompletionRequest struct {
 }
 
 type ChatCompletionResponse struct {
-	Choices []Choice `json:"choices"`
+	Choices []Choice    `json:"choices"`
+	Usage   OpenAIUsage `json:"usage,omitempty"` // Captured for real-time tracking (Phase 8.6)
 }
 
 type Choice struct {
 	Message Message `json:"message"`
+}
+
+type OpenAIUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
 }
 
 // Global runtime variables

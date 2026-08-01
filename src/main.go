@@ -116,7 +116,7 @@ func main() {
 	defer cleanupMCPServers()
 	bootstrapMCPServers()
 
-	// 7. If -web mode is enabled (or active in config), block and start the embedded Web GUI! (Phase 6 & 8)
+	// 7. If -web mode is enabled, block and start the embedded Web GUI! (Phase 6)
 	if webMode {
 		StartWebGUI(activeConfig.Web.Port)
 		return
@@ -500,4 +500,94 @@ func executeTerminalCommand(command string) string {
 		return fmt.Sprintf("Sandbox Execution Error: %v", err)
 	}
 	return result
+}
+
+// backupWorkspaceFile stashes a file before we overwrite or patch it.
+// If the file doesn't exist, we write an empty ".untracked_new" marker so that the rollback engine knows to delete it! (Phase 8.5)
+func backupWorkspaceFile(relativePath string) {
+	srcPath := filepath.Join(activeConfig.Agent.WorkspaceDir, relativePath)
+
+	content, err := os.ReadFile(srcPath)
+	if err != nil {
+		// File does not exist yet. Create a ".untracked_new" marker file (Phase 8.5)
+		markerDir := filepath.Join(".goharness", "sessions", activeSessionID, "backups", fmt.Sprintf("turn-%d", currentTurnNumber+1))
+		os.MkdirAll(markerDir, 0755)
+		markerPath := filepath.Join(markerDir, relativePath+".untracked_new")
+		os.MkdirAll(filepath.Dir(markerPath), 0755)
+		_ = os.WriteFile(markerPath, []byte(""), 0644)
+		return
+	}
+
+	backupDir := filepath.Join(".goharness", "sessions", activeSessionID, "backups", fmt.Sprintf("turn-%d", currentTurnNumber+1))
+	os.MkdirAll(backupDir, 0755)
+
+	destPath := filepath.Join(backupDir, relativePath)
+	os.MkdirAll(filepath.Dir(destPath), 0755)
+
+	_ = os.WriteFile(destPath, content, 0644)
+}
+
+// restoreWorkspaceBackups restores modified files and physically deletes newly created files on rollbacks (Phase 8.5)
+func restoreWorkspaceBackups(targetTurn int) {
+	backupRoot := filepath.Join(".goharness", "sessions", activeSessionID, "backups")
+
+	// 1. Restore original contents of modified files
+	targetBackupFolder := filepath.Join(backupRoot, fmt.Sprintf("turn-%d", targetTurn+1))
+	if _, err := os.Stat(targetBackupFolder); err == nil {
+		fmt.Printf("%s  ↳ Restoring original file contents from backup: turn-%d...%s\n", ColorMagenta, targetTurn+1, ColorReset)
+		filepath.Walk(targetBackupFolder, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() || strings.HasSuffix(info.Name(), ".untracked_new") {
+				return nil
+			}
+			rel, _ := filepath.Rel(targetBackupFolder, path)
+			destPath := filepath.Join(activeConfig.Agent.WorkspaceDir, rel)
+
+			content, err := os.ReadFile(path)
+			if err == nil {
+				_ = os.WriteFile(destPath, content, 0644)
+				fmt.Printf("    - Restored: %s\n", rel)
+			}
+			return nil
+		})
+	}
+
+	// 2. Physically delete newly created files that did not exist at the target turn (Phase 8.5)
+	entries, err := os.ReadDir(backupRoot)
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() && strings.HasPrefix(entry.Name(), "turn-") {
+				turnNumStr := strings.TrimPrefix(entry.Name(), "turn-")
+				turnNum, err := strconv.Atoi(turnNumStr)
+				// If this backup was created in a turn higher than our rollback target (e.g. turn 4, 5, etc.)
+				if err == nil && turnNum > targetTurn {
+					turnFolder := filepath.Join(backupRoot, entry.Name())
+					filepath.Walk(turnFolder, func(path string, info os.FileInfo, err error) error {
+						if err == nil && !info.IsDir() && strings.HasSuffix(info.Name(), ".untracked_new") {
+							rel, _ := filepath.Rel(turnFolder, path)
+							relClean := strings.TrimSuffix(rel, ".untracked_new")
+							destPath := filepath.Join(activeConfig.Agent.WorkspaceDir, relClean)
+							
+							// Physically delete the untracked file to completely restore state!
+							_ = os.Remove(destPath)
+							fmt.Printf("    - Deleted newly created file: %s\n", relClean)
+						}
+						return nil
+					})
+				}
+			}
+		}
+	}
+
+	// 3. Clean up backup folders higher than the targetTurn
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() && strings.HasPrefix(entry.Name(), "turn-") {
+				turnNumStr := strings.TrimPrefix(entry.Name(), "turn-")
+				turnNum, err := strconv.Atoi(turnNumStr)
+				if err == nil && turnNum > targetTurn+1 {
+					_ = os.RemoveAll(filepath.Join(backupRoot, entry.Name()))
+				}
+			}
+		}
+	}
 }

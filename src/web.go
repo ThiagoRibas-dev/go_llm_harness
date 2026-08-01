@@ -197,6 +197,7 @@ func StartWebGUI(port int) {
 			return
 		}
 
+		// Extract the latest user prompt from the messages slice
 		if len(req.Messages) == 0 {
 			http.Error(w, "Message history cannot be empty", http.StatusBadRequest)
 			return
@@ -360,7 +361,7 @@ func StartWebGUI(port int) {
 		_ = json.NewEncoder(w).Encode(resp)
 	})
 
-	// Save modified configurations from Settings Modal directly to disk and reload (Phase 6.3)
+	// Save modified configurations from Settings Modal directly to disk and reload (Phase 6.3 & 8.6)
 	mux.HandleFunc("/api/config/save", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
@@ -368,13 +369,19 @@ func StartWebGUI(port int) {
 		}
 
 		var req struct {
-			Provider     string `json:"provider"`
-			APIKey       string `json:"api_key"`
-			Model        string `json:"model"`
-			BaseURL      string `json:"base_url"`
-			SandboxMode  string `json:"sandbox_mode"`
-			MaxTurns     int    `json:"max_turns"`
-			WorkspaceDir string `json:"workspace_dir"`
+			Provider      string  `json:"provider"`       // Phase 7
+			APIKey        string  `json:"api_key"`
+			Model         string  `json:"model"`
+			BaseURL       string  `json:"base_url"`
+			SandboxMode   string  `json:"sandbox_mode"`
+			MaxTurns      int     `json:"max_turns"`
+			WorkspaceDir  string  `json:"workspace_dir"`
+			Temperature   float64 `json:"temperature"`     // Phase 8.6
+			TopP          float64 `json:"top_p"`           // Phase 8.6
+			TopK          int     `json:"top_k"`           // Phase 8.6
+			ThinkingLevel string  `json:"thinking_level"`  // Phase 8.6
+			ProjectID     string  `json:"project_id"`      // Phase 8.6
+			Region        string  `json:"region"`          // Phase 8.6
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -382,10 +389,18 @@ func StartWebGUI(port int) {
 			return
 		}
 
+		// Update global memory settings immediately
 		activeConfig.API.Provider = req.Provider
 		activeConfig.API.Key = req.APIKey
 		activeConfig.API.Model = req.Model
 		activeConfig.API.BaseURL = req.BaseURL
+		activeConfig.API.Temperature = req.Temperature
+		activeConfig.API.TopP = req.TopP
+		activeConfig.API.TopK = req.TopK
+		activeConfig.API.ThinkingLevel = req.ThinkingLevel
+		activeConfig.API.ProjectID = req.ProjectID
+		activeConfig.API.Region = req.Region
+		
 		activeConfig.Security.SandboxMode = req.SandboxMode
 		activeConfig.Agent.MaxTurns = req.MaxTurns
 
@@ -406,7 +421,7 @@ func StartWebGUI(port int) {
 	mux.HandleFunc("/api/workspaces", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"active":     activeConfig.Agent.WorkspaceDir,
+			"active":    activeConfig.Agent.WorkspaceDir,
 			"workspaces": activeConfig.Agent.WorkspacesHistory,
 		})
 	})
@@ -500,6 +515,54 @@ func StartWebGUI(port int) {
 			"session_id": activeSessionID,
 			"workspace":  activeConfig.Agent.WorkspaceDir,
 			"history":    history,
+		})
+	})
+
+	// POST /api/sessions/create: Creates a brand-new, clean session inside a given workspace (Phase 8.4)
+	mux.HandleFunc("/api/sessions/create", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			WorkspaceDir string `json:"workspace_dir"`
+			Name         string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.WorkspaceDir == "" {
+			req.WorkspaceDir = activeConfig.Agent.WorkspaceDir
+		} else {
+			req.WorkspaceDir = filepath.Clean(req.WorkspaceDir)
+		}
+
+		os.MkdirAll(req.WorkspaceDir, 0755)
+
+		activeSessionID = "sess_" + time.Now().Format("20060102-150405")
+		sessionPath := filepath.Join(".goharness", "sessions", activeSessionID)
+		os.MkdirAll(sessionPath, 0755)
+
+		if req.Name == "" {
+			req.Name = "Session in " + filepath.Base(req.WorkspaceDir)
+		}
+
+		createSessionMeta(activeSessionID, req.WorkspaceDir, "", req.Name)
+		currentTurnNumber = 0
+
+		activeConfig.Agent.WorkspaceDir = req.WorkspaceDir
+		_ = SaveConfig("config.json", activeConfig)
+
+		BroadcastSSE("session_init", map[string]interface{}{"session_id": activeSessionID})
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":     "success",
+			"session_id": activeSessionID,
+			"workspace":  req.WorkspaceDir,
+			"name":       req.Name,
 		})
 	})
 

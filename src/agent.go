@@ -93,61 +93,6 @@ func executeSessionRollback(targetTurn int) {
 	fmt.Printf("%s✅ [SUCCESS] Deleted %d newer turn log(s). Workspace files rolled back. Ready at Turn %d.%s\n", ColorGreen, deletedTurnsCount, targetTurn, ColorReset)
 }
 
-// backupWorkspaceFile stashes a file before we overwrite or patch it
-func backupWorkspaceFile(relativePath string) {
-	srcPath := filepath.Join(activeConfig.Agent.WorkspaceDir, relativePath)
-	
-	content, err := os.ReadFile(srcPath)
-	if err != nil {
-		return // File doesn't exist yet, nothing to back up
-	}
-
-	backupDir := filepath.Join(".goharness", "sessions", activeSessionID, "backups", fmt.Sprintf("turn-%d", currentTurnNumber+1))
-	os.MkdirAll(backupDir, 0755)
-
-	destPath := filepath.Join(backupDir, relativePath)
-	os.MkdirAll(filepath.Dir(destPath), 0755)
-
-	_ = os.WriteFile(destPath, content, 0644)
-}
-
-// restoreWorkspaceBackups restores files to their Turn-specific states on fork rollbacks
-func restoreWorkspaceBackups(targetTurn int) {
-	backupRoot := filepath.Join(".goharness", "sessions", activeSessionID, "backups")
-	
-	targetBackupFolder := filepath.Join(backupRoot, fmt.Sprintf("turn-%d", targetTurn+1))
-	if _, err := os.Stat(targetBackupFolder); err == nil {
-		fmt.Printf("%s  ↳ Restoring original file contents from backup: turn-%d...%s\n", ColorMagenta, targetTurn+1, ColorReset)
-		filepath.Walk(targetBackupFolder, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return nil
-			}
-			rel, _ := filepath.Rel(targetBackupFolder, path)
-			destPath := filepath.Join(activeConfig.Agent.WorkspaceDir, rel)
-			
-			content, err := os.ReadFile(path)
-			if err == nil {
-				_ = os.WriteFile(destPath, content, 0644)
-				fmt.Printf("    - Restored: %s\n", rel)
-			}
-			return nil
-		})
-	}
-
-	entries, err := os.ReadDir(backupRoot)
-	if err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() && strings.HasPrefix(entry.Name(), "turn-") {
-				turnNumStr := strings.TrimPrefix(entry.Name(), "turn-")
-				turnNum, err := strconv.Atoi(turnNumStr)
-				if err == nil && turnNum > targetTurn+1 {
-					_ = os.RemoveAll(filepath.Join(backupRoot, entry.Name()))
-				}
-			}
-		}
-	}
-}
-
 // executeSlidingWindowCompaction triggers a background LLM call to compress history.
 func executeSlidingWindowCompaction(history []Message) {
 	limit := activeConfig.Compaction.AutoCompactTurns

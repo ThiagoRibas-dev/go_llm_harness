@@ -14,7 +14,8 @@ import (
 // 🔌 UNIFIED MULTI-PROVIDER DISPATCHER
 // =================================================================
 
-// SendMultiProviderRequest detects the configured provider and routes the request
+// SendMultiProviderRequest detects the configured provider and routes the request.
+// It also parses usage statistics and broadcasts real-time financial tracking to the UI.
 func SendMultiProviderRequest(messages []Message, tools []Tool) (*Message, error) {
 	provider := strings.ToLower(activeConfig.API.Provider)
 	if provider == "" {
@@ -24,24 +25,100 @@ func SendMultiProviderRequest(messages []Message, tools []Tool) (*Message, error
 	var respMsg *Message
 	var err error
 
-	switch provider {
-	case "anthropic":
-		respMsg, err = sendAnthropicRequest(messages, tools)
-	case "gemini", "vertex":
-		respMsg, err = sendGeminiRequest(messages, tools, provider == "vertex")
-	default:
-		// Default to OpenAI-compatible payload
-		respMsg, err = sendOpenAIRequest(messages, tools)
+	// Track cumulative character count of all raw content (as a backup metric if tokenizers are missing)
+	var charCount int
+	for _, m := range messages {
+		charCount += len(m.Content)
 	}
 
-	// Trigger real-time visual cost trackers and logs (Phase 6.3)
+	var promptTokens, completionTokens, totalTokens int
+
+	switch provider {
+	case "anthropic":
+		// Custom Anthropic request
+		var antResp AnthropicResponse
+		respMsg, antResp, err = sendAnthropicRequestWithUsage(messages, tools)
+		if err == nil {
+			promptTokens = antResp.Usage.InputTokens
+			completionTokens = antResp.Usage.OutputTokens
+			totalTokens = promptTokens + completionTokens
+		}
+	case "gemini", "vertex":
+		// Custom Gemini/Vertex request
+		var gemResp GeminiResponse
+		respMsg, gemResp, err = sendGeminiRequestWithUsage(messages, tools, provider == "vertex")
+		if err == nil {
+			promptTokens = gemResp.UsageMetadata.PromptTokenCount
+			completionTokens = gemResp.UsageMetadata.CandidatesTokenCount
+			totalTokens = gemResp.UsageMetadata.TotalTokenCount
+		}
+	default:
+		// Default OpenAI compatible request
+		var oaiResp ChatCompletionResponse
+		respMsg, oaiResp, err = sendOpenAIRequestWithUsage(messages, tools)
+		if err == nil {
+			promptTokens = oaiResp.Usage.PromptTokens
+			completionTokens = oaiResp.Usage.CompletionTokens
+			totalTokens = oaiResp.Usage.TotalTokens
+		}
+	}
+
+	// Calculate and broadcast real-time cost and token diagnostics (Phase 8.6)
 	if err == nil {
+		charCount += len(respMsg.Content)
+		cost := calculateActiveCost(activeConfig.API.Model, promptTokens, completionTokens)
+		
+		// Broadcast metrics to the Web Console SSE channel
 		BroadcastSSE("cost_update", map[string]interface{}{
-			"cost": 0.0005, // Simulated cost increment per turn
+			"cost":              cost,
+			"prompt_tokens":     promptTokens,
+			"completion_tokens": completionTokens,
+			"total_tokens":      totalTokens,
+			"char_count":        charCount,
 		})
 	}
 
 	return respMsg, err
+}
+
+// =================================================================
+// 💰 DYNAMIC MONETARY PRICING ENGINE
+// =================================================================
+
+func calculateActiveCost(model string, promptTokens, completionTokens int) float64 {
+	model = strings.ToLower(model)
+	baseURL := strings.ToLower(activeConfig.API.BaseURL)
+
+	// If running fully locally via Ollama / llama-server, cost is ABSOLUTELY FREE ($0.00)!
+	if strings.Contains(baseURL, "localhost") || strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "11434") {
+		return 0.0
+	}
+
+	// Default Fallback Rates: highly affordable gpt-4o-mini style rates
+	inputRate := 0.15 / 1000000.0  // $0.15 per Million tokens
+	outputRate := 0.60 / 1000000.0 // $0.60 per Million tokens
+
+	if strings.Contains(model, "gpt-4o-mini") {
+		inputRate = 0.15 / 1000000.0
+		outputRate = 0.60 / 1000000.0
+	} else if strings.Contains(model, "gpt-4o") {
+		inputRate = 2.50 / 1000000.0
+		outputRate = 10.00 / 1000000.0
+	} else if strings.Contains(model, "claude-3-5-sonnet") {
+		inputRate = 3.00 / 1000000.0
+		outputRate = 15.00 / 1000000.0
+	} else if strings.Contains(model, "claude-3-5-haiku") {
+		inputRate = 0.80 / 1000000.0
+		outputRate = 4.00 / 1000000.0
+	} else if strings.Contains(model, "gemini-1.5-flash") || strings.Contains(model, "gemini-3.1-flash") {
+		inputRate = 0.075 / 1000000.0
+		outputRate = 0.30 / 1000000.0
+	} else if strings.Contains(model, "gemini-1.5-pro") || strings.Contains(model, "gemini-3.1-pro") {
+		inputRate = 1.25 / 1000000.0
+		outputRate = 5.00 / 1000000.0
+	}
+
+	return (float64(promptTokens) * inputRate) + (float64(completionTokens) * outputRate)
 }
 
 // =================================================================
@@ -81,13 +158,19 @@ type AnthropicTool struct {
 type AnthropicResponse struct {
 	Content []AnthropicContent `json:"content"`
 	Role    string             `json:"role"`
+	Usage   AnthropicUsage     `json:"usage,omitempty"` // Captured for real-time tracking
 	Error   *struct {
 		Type    string `json:"type"`
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
 }
 
-func sendAnthropicRequest(messages []Message, tools []Tool) (*Message, error) {
+type AnthropicUsage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+}
+
+func sendAnthropicRequestWithUsage(messages []Message, tools []Tool) (*Message, AnthropicResponse, error) {
 	var antReq AnthropicRequest
 	antReq.Model = activeConfig.API.Model
 	antReq.MaxTokens = activeConfig.API.MaxTokens
@@ -112,7 +195,6 @@ func sendAnthropicRequest(messages []Message, tools []Tool) (*Message, error) {
 		var antMsg AnthropicMessage
 		antMsg.Role = m.Role
 
-		// Anthropic roles mapping: 'tool' becomes 'user' with a 'tool_result' block type
 		if m.Role == "tool" {
 			antMsg.Role = "user"
 			antMsg.Content = append(antMsg.Content, AnthropicContent{
@@ -121,7 +203,6 @@ func sendAnthropicRequest(messages []Message, tools []Tool) (*Message, error) {
 				Content:    m.Content,
 			})
 		} else if m.Role == "assistant" && len(m.ToolCalls) > 0 {
-			// Assistant response calling tools
 			if m.Content != "" {
 				antMsg.Content = append(antMsg.Content, AnthropicContent{
 					Type: "text",
@@ -138,7 +219,6 @@ func sendAnthropicRequest(messages []Message, tools []Tool) (*Message, error) {
 				})
 			}
 		} else {
-			// Standard User or Assistant Text Message
 			antMsg.Content = append(antMsg.Content, AnthropicContent{
 				Type: "text",
 				Text: m.Content,
@@ -158,18 +238,18 @@ func sendAnthropicRequest(messages []Message, tools []Tool) (*Message, error) {
 
 	payload, err := json.Marshal(antReq)
 	if err != nil {
-		return nil, err
+		return nil, AnthropicResponse{}, err
 	}
 
 	// 4. Dispatch HTTP Call
 	url := activeConfig.API.BaseURL
 	if url == "" || strings.Contains(url, "api.openai.com") {
-		url = "https://api.anthropic.com/v1/messages" // Fallback to official endpoint
+		url = "https://api.anthropic.com/v1/messages"
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
-		return nil, err
+		return nil, AnthropicResponse{}, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -179,22 +259,22 @@ func sendAnthropicRequest(messages []Message, tools []Tool) (*Message, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, AnthropicResponse{}, err
 	}
 	defer resp.Body.Close()
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("anthropic returned status %d. Response: %s", resp.StatusCode, string(bodyBytes))
+		return nil, AnthropicResponse{}, fmt.Errorf("anthropic returned status %d. Response: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var antResp AnthropicResponse
 	if err := json.Unmarshal(bodyBytes, &antResp); err != nil {
-		return nil, err
+		return nil, AnthropicResponse{}, err
 	}
 
 	if antResp.Error != nil {
-		return nil, fmt.Errorf("anthropic error: %s (%s)", antResp.Error.Message, antResp.Error.Type)
+		return nil, AnthropicResponse{}, fmt.Errorf("anthropic error: %s (%s)", antResp.Error.Message, antResp.Error.Type)
 	}
 
 	// 5. Translate Anthropic Response back to standard message
@@ -217,7 +297,7 @@ func sendAnthropicRequest(messages []Message, tools []Tool) (*Message, error) {
 		}
 	}
 
-	return &result, nil
+	return &result, antResp, nil
 }
 
 // =================================================================
@@ -240,14 +320,15 @@ type GeminiContent struct {
 }
 
 type GeminiPart struct {
-	Text             string                 `json:"text,omitempty"`
-	FunctionCall     *GeminiFunctionCall    `json:"functionCall,omitempty"`
+	Text             string                  `json:"text,omitempty"`
+	FunctionCall     *GeminiFunctionCall     `json:"functionCall,omitempty"`
 	FunctionResponse *GeminiFunctionResponse `json:"functionResponse,omitempty"`
 }
 
 type GeminiFunctionCall struct {
-	Name string          `json:"name"`
-	Args json.RawMessage `json:"args"`
+	Name             string          `json:"name"`
+	Args             json.RawMessage `json:"args"`
+	ThoughtSignature string          `json:"thoughtSignature,omitempty"`
 }
 
 type GeminiFunctionResponse struct {
@@ -272,9 +353,16 @@ type GeminiResponse struct {
 			Role  string       `json:"role"`
 		} `json:"content"`
 	} `json:"candidates"`
+	UsageMetadata GeminiUsage `json:"usageMetadata,omitempty"` // Captured for real-time tracking
 }
 
-func sendGeminiRequest(messages []Message, tools []Tool, isVertex bool) (*Message, error) {
+type GeminiUsage struct {
+	PromptTokenCount     int `json:"promptTokenCount"`
+	CandidatesTokenCount int `json:"candidatesTokenCount"`
+	TotalTokenCount      int `json:"totalTokenCount"`
+}
+
+func sendGeminiRequestWithUsage(messages []Message, tools []Tool, isVertex bool) (*Message, GeminiResponse, error) {
 	var gemReq GeminiRequest
 
 	// 1. Separate System instruction
@@ -290,11 +378,10 @@ func sendGeminiRequest(messages []Message, tools []Tool, isVertex bool) (*Messag
 	// 2. Translate conversation contents
 	for _, m := range messages {
 		if m.Role == "system" {
-			continue // Already separated
+			continue
 		}
 
 		var gemContent GeminiContent
-		// Gemini Roles: 'user' or 'model' (for assistant)
 		if m.Role == "user" {
 			gemContent.Role = "user"
 			gemContent.Parts = append(gemContent.Parts, GeminiPart{Text: m.Content})
@@ -306,15 +393,14 @@ func sendGeminiRequest(messages []Message, tools []Tool, isVertex bool) (*Messag
 			for _, tc := range m.ToolCalls {
 				gemContent.Parts = append(gemContent.Parts, GeminiPart{
 					FunctionCall: &GeminiFunctionCall{
-						Name: tc.Function.Name,
-						Args: json.RawMessage(tc.Function.Arguments),
+						Name:             tc.Function.Name,
+						Args:             json.RawMessage(tc.Function.Arguments),
+						ThoughtSignature: tc.ThoughtSignature,
 					},
 				})
 			}
 		} else if m.Role == "tool" {
-			// Tool output maps back to role 'user' with a functionResponse part
 			gemContent.Role = "user"
-			// Gemini expects function response wrapped inside a JSON object wrapper
 			gemContent.Parts = append(gemContent.Parts, GeminiPart{
 				FunctionResponse: &GeminiFunctionResponse{
 					Name: m.Name,
@@ -342,55 +428,66 @@ func sendGeminiRequest(messages []Message, tools []Tool, isVertex bool) (*Messag
 
 	payload, err := json.Marshal(gemReq)
 	if err != nil {
-		return nil, err
+		return nil, GeminiResponse{}, err
 	}
 
 	// 4. Construct API Endpoint URL
 	url := activeConfig.API.BaseURL
 	if isVertex {
-		// Vertex AI utilizes Bearer OAuth tokens and a Google Cloud REST endpoint
 		if url == "" || strings.Contains(url, "googleapis.com") {
-			// Fallback placeholder structure
-			url = fmt.Sprintf("https://us-central1-aiplatform.googleapis.com/v1/projects/YOUR_PROJECT_ID/locations/us-central1/publishers/google/models/%s:generateContent", activeConfig.API.Model)
+			endpoint := "aiplatform.googleapis.com"
+			if activeConfig.API.Region != "" {
+				endpoint = fmt.Sprintf("%s-aiplatform.googleapis.com", activeConfig.API.Region)
+			}
+
+			if activeConfig.API.ProjectID != "" && activeConfig.API.Region != "" {
+				url = fmt.Sprintf("https://%s/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent?key=%s", 
+					endpoint, activeConfig.API.ProjectID, activeConfig.API.Region, activeConfig.API.Model, activeConfig.API.Key)
+			} else {
+				url = fmt.Sprintf("https://%s/v1/publishers/google/models/%s:generateContent?key=%s", 
+					endpoint, activeConfig.API.Model, activeConfig.API.Key)
+			}
+		} else if !strings.Contains(url, "?key=") && activeConfig.API.Key != "" {
+			url = fmt.Sprintf("%s?key=%s", strings.TrimSuffix(url, "/"), activeConfig.API.Key)
 		}
 	} else {
-		// Google AI Studio uses standard API key in query parameters
 		if url == "" || strings.Contains(url, "api.openai.com") {
 			url = fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", activeConfig.API.Model, activeConfig.API.Key)
-		} else if !strings.Contains(url, "?key=") {
+		} else if !strings.Contains(url, "?key=") && activeConfig.API.Key != "" {
 			url = fmt.Sprintf("%s?key=%s", strings.TrimSuffix(url, "/"), activeConfig.API.Key)
 		}
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
-		return nil, err
+		return nil, GeminiResponse{}, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if isVertex {
+	
+	if isVertex && !strings.Contains(url, "?key=") {
 		req.Header.Set("Authorization", "Bearer "+activeConfig.API.Key)
 	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, GeminiResponse{}, err
 	}
 	defer resp.Body.Close()
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("gemini returned status %d. Response: %s", resp.StatusCode, string(bodyBytes))
+		return nil, GeminiResponse{}, fmt.Errorf("gemini returned status %d. Response: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var gemResp GeminiResponse
 	if err := json.Unmarshal(bodyBytes, &gemResp); err != nil {
-		return nil, err
+		return nil, GeminiResponse{}, err
 	}
 
 	if len(gemResp.Candidates) == 0 {
-		return nil, fmt.Errorf("gemini returned zero content candidates")
+		return nil, GeminiResponse{}, fmt.Errorf("gemini returned zero content candidates")
 	}
 
 	// 5. Translate Gemini response back to standard Message
@@ -402,7 +499,6 @@ func sendGeminiRequest(messages []Message, tools []Tool, isVertex bool) (*Messag
 			result.Content = part.Text
 		}
 		if part.FunctionCall != nil {
-			// Generate a unique tool ID
 			toolID := fmt.Sprintf("call_%d", time.Now().UnixNano())
 			argsBytes, _ := json.Marshal(part.FunctionCall.Args)
 			result.ToolCalls = append(result.ToolCalls, ToolCall{
@@ -412,18 +508,19 @@ func sendGeminiRequest(messages []Message, tools []Tool, isVertex bool) (*Messag
 					Name:      part.FunctionCall.Name,
 					Arguments: string(argsBytes),
 				},
+				ThoughtSignature: part.FunctionCall.ThoughtSignature,
 			})
 		}
 	}
 
-	return &result, nil
+	return &result, gemResp, nil
 }
 
 // =================================================================
 // 🌐 STANDARD OPENAI (OPENAI-COMPATIBLE API) CONNECTOR
 // =================================================================
 
-func sendOpenAIRequest(messages []Message, tools []Tool) (*Message, error) {
+func sendOpenAIRequestWithUsage(messages []Message, tools []Tool) (*Message, ChatCompletionResponse, error) {
 	reqBody := ChatCompletionRequest{
 		Model:       activeConfig.API.Model,
 		Messages:    messages,
@@ -433,12 +530,12 @@ func sendOpenAIRequest(messages []Message, tools []Tool) (*Message, error) {
 
 	jsonBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, err
+		return nil, ChatCompletionResponse{}, err
 	}
 
 	req, err := http.NewRequest("POST", activeConfig.API.BaseURL, bytes.NewBuffer(jsonBytes))
 	if err != nil {
-		return nil, err
+		return nil, ChatCompletionResponse{}, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -449,27 +546,27 @@ func sendOpenAIRequest(messages []Message, tools []Tool) (*Message, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, ChatCompletionResponse{}, err
 	}
 	defer resp.Body.Close()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, ChatCompletionResponse{}, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("api returned status %d. Response: %s", resp.StatusCode, string(bodyBytes))
+		return nil, ChatCompletionResponse{}, fmt.Errorf("api returned status %d. Response: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var chatResp ChatCompletionResponse
 	if err := json.Unmarshal(bodyBytes, &chatResp); err != nil {
-		return nil, err
+		return nil, ChatCompletionResponse{}, err
 	}
 
 	if len(chatResp.Choices) == 0 {
-		return nil, fmt.Errorf("api response contained zero completion choices")
+		return nil, ChatCompletionResponse{}, fmt.Errorf("api response contained zero completion choices")
 	}
 
-	return &chatResp.Choices[0].Message, nil
+	return &chatResp.Choices[0].Message, chatResp, nil
 }

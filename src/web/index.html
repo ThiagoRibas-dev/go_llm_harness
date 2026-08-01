@@ -54,6 +54,14 @@
                 <span class="text-cyan-400 font-mono font-bold" id="model-name">gpt-4o</span>
             </div>
 
+            <!-- Token / Character Indicator Card (Phase 8.6) -->
+            <div class="flex items-center space-x-2 text-xs bg-cyan-950/40 text-cyan-400 border border-cyan-800 px-3 py-1.5 rounded-md shadow-inner">
+                <i class="fa-solid fa-calculator"></i>
+                <span class="font-bold">Tokens:</span>
+                <span class="font-mono font-bold text-sm" id="session-tokens">0</span>
+                <span class="text-slate-400 font-mono text-[10px]" id="session-chars">(0 chars)</span>
+            </div>
+
             <!-- Cost Indicator Dial -->
             <div class="flex items-center space-x-2 text-xs bg-emerald-950/40 text-emerald-400 border border-emerald-800 px-3 py-1.5 rounded-md shadow-inner">
                 <i class="fa-solid fa-dollar-sign"></i>
@@ -124,8 +132,13 @@
                 </div>
 
                 <!-- CONVERSATIONS / SESSIONS LOG LIST -->
-                <div class="flex-1 flex flex-col overflow-hidden min-h-0 pt-2 border-t border-[#334155]/60">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Conversation Sessions</label>
+                <div class="flex-1 flex flex-col overflow-hidden min-h-0 pt-2 border-t border-[#334155]/60 relative">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Conversation Sessions</label>
+                        <button onclick="triggerNewSession()" class="text-slate-400 hover:text-white transition" title="Start New Session">
+                            <i class="fa-solid fa-plus-circle text-sm"></i>
+                        </button>
+                    </div>
                     
                     <div class="flex-1 overflow-y-auto space-y-1.5 pr-1 font-mono text-xs" id="sessions-list">
                         <!-- Active list of session meta cards -->
@@ -169,8 +182,8 @@
     </div>
 
     <!-- ================= 🛠️ SETTINGS CONFIGURATION MODAL ================= -->
-    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div class="bg-[#1e293b] border border-[#334155] w-full max-w-xl rounded-xl shadow-2xl overflow-hidden modal-animate">
+    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+        <div class="bg-[#1e293b] border border-[#334155] w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden modal-animate my-8">
             <div class="px-6 py-4 border-b border-[#334155] flex items-center justify-between bg-slate-900/40">
                 <h3 class="font-bold text-slate-100 flex items-center text-sm uppercase tracking-wider">
                     <i class="fa-solid fa-sliders mr-2 text-blue-500"></i> Configure config.json Settings
@@ -180,9 +193,11 @@
                 </button>
             </div>
 
-            <form id="settings-form" onsubmit="saveSettings(event)" class="p-6 space-y-4 text-xs">
+            <form id="settings-form" onsubmit="saveSettings(event)" class="p-6 space-y-5 text-xs max-h-[75vh] overflow-y-auto">
+                
+                <!-- API Provider Settings -->
                 <div class="space-y-3">
-                    <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">API Configuration</div>
+                    <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">API Provider Configurations</div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-slate-300 font-bold mb-1.5">API Provider</label>
@@ -190,7 +205,7 @@
                                 <option value="openai">OpenAI (OpenAI, DeepSeek, Groq, Ollama)</option>
                                 <option value="anthropic">Anthropic (Claude API)</option>
                                 <option value="gemini">Google Gemini (AI Studio)</option>
-                                <option value="vertex">Google Gemini (Vertex AI OAuth)</option>
+                                <option value="vertex">Google Gemini (Vertex AI Key)</option>
                             </select>
                         </div>
                         <div>
@@ -198,19 +213,61 @@
                             <input type="text" id="input-model" placeholder="gpt-4o" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
                         </div>
                     </div>
+
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-slate-300 font-bold mb-1.5">API Key / Access Token</label>
                             <input type="password" id="input-api-key" placeholder="sk-proj-..." class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-mono">
                         </div>
                         <div>
-                            <label class="block text-slate-300 font-bold mb-1.5">Base Endpoint URL</label>
+                            <label class="block text-slate-300 font-bold mb-1.5">Base Endpoint URL (Manual Override)</label>
                             <input type="text" id="input-base-url" placeholder="https://api.openai.com/v1/chat/completions" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                    </div>
+
+                    <!-- GCP Vertex Specific Fields (Dynamically revealed) -->
+                    <div id="vertex-fields" class="hidden grid grid-cols-2 gap-4 bg-slate-900/40 p-3 rounded border border-[#334155]/50">
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">GCP Project ID</label>
+                            <input type="text" id="input-project-id" placeholder="my-gcp-project" class="w-full bg-[#0f172a] border border-[#334155] rounded px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">GCP Region (optional)</label>
+                            <input type="text" id="input-region" placeholder="us-central1" class="w-full bg-[#0f172a] border border-[#334155] rounded px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
                         </div>
                     </div>
                 </div>
 
-                <div class="space-y-3 pt-2">
+                <!-- Advanced Model Sampling Parameters (Phase 8.6) -->
+                <div class="space-y-3">
+                    <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">Advanced Model Tuning (Sampling)</div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Temperature</label>
+                            <input type="number" id="input-temperature" min="0" max="2" step="0.1" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Top-P</label>
+                            <input type="number" id="input-top-p" min="0" max="1" step="0.05" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Top-K</label>
+                            <input type="number" id="input-top-k" min="0" max="100" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-bold mb-1.5">Gemini Reasoning/Thinking Level</label>
+                        <select id="input-thinking" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500">
+                            <option value="off">Off (Standard Fast Output)</option>
+                            <option value="low">Minimal (Low Reasoning)</option>
+                            <option value="medium">Medium (Standard Reasoning)</option>
+                            <option value="high">High (Extensive Thinking Budget)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Runner & Sandbox Section -->
+                <div class="space-y-3">
                     <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">Runtime &amp; Safety</div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
@@ -232,6 +289,7 @@
                     </div>
                 </div>
 
+                <!-- Modal Footer Actions -->
                 <div class="pt-4 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/20 -mx-6 -mb-6 p-4">
                     <button type="button" onclick="closeSettingsModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
                         Cancel
@@ -259,7 +317,6 @@
             <div class="p-6 space-y-4 text-xs">
                 <p class="text-slate-400">You are rewinding the conversation back to **Turn <span id="fork-turn-display" class="font-bold text-white"></span>**. Select your timeline management strategy below:</p>
 
-                <!-- Branching Strategy Form (Non-Destructive) -->
                 <div class="bg-slate-900/40 border border-[#334155] rounded-lg p-4 space-y-3">
                     <div class="flex items-start space-x-2">
                         <input type="radio" id="fork-type-branch" name="fork-type" value="branch" checked onchange="toggleForkFields('branch')" class="mt-1 accent-blue-500 h-4 w-4">
@@ -274,7 +331,6 @@
                     </div>
                 </div>
 
-                <!-- Destructive Rollback Strategy -->
                 <div class="bg-red-950/10 border border-red-900/40 rounded-lg p-4">
                     <div class="flex items-start space-x-2">
                         <input type="radio" id="fork-type-truncate" name="fork-type" value="truncate" onchange="toggleForkFields('truncate')" class="mt-1 accent-red-500 h-4 w-4">
@@ -285,7 +341,6 @@
                     </div>
                 </div>
 
-                <!-- Footer Actions -->
                 <div class="pt-4 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/20 -mx-6 -mb-6 p-4">
                     <button onclick="closeForkModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
                         Cancel
@@ -358,18 +413,24 @@
         function suggestBaseURL(provider) {
             const urlInput = document.getElementById("input-base-url");
             const modelInput = document.getElementById("input-model");
-            if (provider === "anthropic") {
-                urlInput.value = "https://api.anthropic.com/v1/messages";
-                modelInput.value = "claude-3-5-sonnet-latest";
-            } else if (provider === "gemini") {
-                urlInput.value = "https://generativelanguage.googleapis.com/v1beta/models/";
-                modelInput.value = "gemini-1.5-flash";
-            } else if (provider === "vertex") {
-                urlInput.value = "https://us-central1-aiplatform.googleapis.com/v1/projects/YOUR_PROJECT_ID/locations/us-central1/publishers/google/models/";
-                modelInput.value = "gemini-1.5-flash";
+            const vFields = document.getElementById("vertex-fields");
+
+            if (provider === "vertex") {
+                vFields.classList.remove("hidden");
+                urlInput.value = ""; // Clear manual override URL for auto-build
+                modelInput.value = "gemini-3.1-flash-lite";
             } else {
-                urlInput.value = "https://api.openai.com/v1/chat/completions";
-                modelInput.value = "gpt-4o";
+                vFields.classList.add("hidden");
+                if (provider === "anthropic") {
+                    urlInput.value = "https://api.anthropic.com/v1/messages";
+                    modelInput.value = "claude-3-5-sonnet-latest";
+                } else if (provider === "gemini") {
+                    urlInput.value = ""; // Let backend build URL automatically!
+                    modelInput.value = "gemini-1.5-flash";
+                } else {
+                    urlInput.value = "https://api.openai.com/v1/chat/completions";
+                    modelInput.value = "gpt-4o";
+                }
             }
         }
 
@@ -404,18 +465,9 @@
                 const chatContainer = document.getElementById("chat-messages");
                 chatContainer.innerHTML = "";
                 appendGreeting();
-                appendSystemAlert("Switched Workspace", `Active directory is now: ${path}. Spun up a new session to record changes.`, "fa-folder-open text-cyan-400");
+                appendSystemAlert("Workspace Swapped", `Active directory is now aligned to: ${path}. Spun up a new thread.`, "fa-folder-open text-cyan-400");
                 turnCounter = 0;
             });
-        }
-
-        function addNewWorkspace() {
-            const input = document.getElementById("new-workspace-input");
-            const path = input.value.trim();
-            if (!path) return;
-
-            changeWorkspaceFromSelector(path);
-            input.value = "";
         }
 
         // SESSIONS MANAGEMENT
@@ -478,6 +530,33 @@
                 turnCounter = data.history.length;
             })
             .catch(err => alert("Failed to switch session: " + err));
+        }
+
+        function triggerNewSession() {
+            const name = prompt("Enter a name for this new conversation thread (optional):", `New Session`);
+            if (name === null) return;
+
+            fetch("/api/sessions/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    workspace_dir: document.getElementById("workspace-history-select").value,
+                    name: name.trim() || "New Session"
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchConfig();
+                fetchSessions();
+                refreshWorkspaceTree();
+                
+                const chatContainer = document.getElementById("chat-messages");
+                chatContainer.innerHTML = "";
+                appendGreeting();
+                appendSystemAlert("New Session Started", `Spun up a fresh, clean conversation thread '${data.name}' inside your active workspace.`, "fa-comment-medical text-green-400");
+                turnCounter = 0;
+            })
+            .catch(err => alert("Failed to start session: " + err));
         }
 
         // TIMELINE FORK / BRANCHING OVERLAYS
@@ -571,13 +650,30 @@
             fetch("/api/config")
                 .then(res => res.json())
                 .then(cfg => {
-                    document.getElementById("input-provider").value = cfg.api.provider || "openai";
+                    const provider = cfg.api.provider || "openai";
+                    document.getElementById("input-provider").value = provider;
                     document.getElementById("input-api-key").value = cfg.api.key || "";
                     document.getElementById("input-model").value = cfg.api.model || "gpt-4o";
-                    document.getElementById("input-base-url").value = cfg.api.base_url || "https://api.openai.com/v1/chat/completions";
+                    document.getElementById("input-base-url").value = cfg.api.base_url || "";
                     document.getElementById("input-sandbox-mode").value = cfg.security.sandbox_mode || "host";
                     document.getElementById("input-max-turns").value = cfg.agent.max_turns || 15;
                     document.getElementById("input-workspace-dir").value = cfg.agent.workspace_dir || "./workspace";
+                    
+                    // Advanced parameters (Phase 8.6)
+                    document.getElementById("input-temperature").value = cfg.api.temperature !== undefined ? cfg.api.temperature : 0.0;
+                    document.getElementById("input-top-p").value = cfg.api.top_p !== undefined ? cfg.api.top_p : 0.95;
+                    document.getElementById("input-top-k").value = cfg.api.top_k !== undefined ? cfg.api.top_k : 40;
+                    document.getElementById("input-thinking").value = cfg.api.thinking_level || "off";
+                    document.getElementById("input-project-id").value = cfg.api.project_id || "";
+                    document.getElementById("input-region").value = cfg.api.region || "";
+
+                    // Toggle fields based on active provider
+                    const vFields = document.getElementById("vertex-fields");
+                    if (provider === "vertex") {
+                        vFields.classList.remove("hidden");
+                    } else {
+                        vFields.classList.add("hidden");
+                    }
                     
                     document.getElementById("settings-modal").classList.remove("hidden");
                 })
@@ -588,7 +684,7 @@
             document.getElementById("settings-modal").classList.add("hidden");
         }
 
-        // Save Settings (Phase 7 API settings mapping)
+        // Save Settings
         function saveSettings(e) {
             e.preventDefault();
             
@@ -599,7 +695,15 @@
                 base_url: document.getElementById("input-base-url").value.trim(),
                 sandbox_mode: document.getElementById("input-sandbox-mode").value,
                 max_turns: parseInt(document.getElementById("input-max-turns").value) || 15,
-                workspace_dir: document.getElementById("input-workspace-dir").value.trim()
+                workspace_dir: document.getElementById("input-workspace-dir").value.trim(),
+                
+                // Advanced params (Phase 8.6)
+                temperature: parseFloat(document.getElementById("input-temperature").value) || 0.0,
+                top_p: parseFloat(document.getElementById("input-top-p").value) || 0.95,
+                top_k: parseInt(document.getElementById("input-top-k").value) || 40,
+                thinking_level: document.getElementById("input-thinking").value,
+                project_id: document.getElementById("input-project-id").value.trim(),
+                region: document.getElementById("input-region").value.trim()
             };
 
             fetch("/api/config/save", {
@@ -700,8 +804,17 @@
             }
 
             if (packet.event === "cost_update") {
+                // Update spent cost (Phase 8.6)
                 activeCost += parseFloat(packet.data.cost);
                 document.getElementById("session-cost").innerText = "$" + activeCost.toFixed(4);
+
+                // Increment and update cumulative tokens indicator (Phase 8.6)
+                let currentTokens = parseInt(document.getElementById("session-tokens").innerText) || 0;
+                currentTokens += packet.data.total_tokens || 0;
+                document.getElementById("session-tokens").innerText = currentTokens;
+
+                // Update cumulative character count indicator (Phase 8.6)
+                document.getElementById("session-chars").innerText = `(${packet.data.char_count} chars)`;
             }
         }
 
@@ -864,6 +977,7 @@
                 });
         }
 
+        // Auto text expander
         function handleInputKeydown(e) {
             const input = document.getElementById("prompt-input");
             if (e.key === "Enter" && !e.shiftKey) {
