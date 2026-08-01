@@ -1,0 +1,23 @@
+# Compiled binaries
+bin/
+agent.exe
+agent_linux
+agent_mac_arm64
+agent_mac_amd64
+sandbox_poc_bin
+
+# Runtime directories and systemic files
+.goharness/
+workspace/
+config.json
+
+# Caches and OS files
+.cache/
+.config/
+.sudo_as_admin_successful
+Thumbs.db
+.DS_Store
+go/
+
+# Go specific
+go.sum

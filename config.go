@@ -1,0 +1,148 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+)
+
+// ANSI Color Codes for beautiful terminal outputs (moved here to share globally)
+const (
+	ColorReset   = "\033[0m"
+	ColorRed     = "\033[31m"
+	ColorGreen   = "\033[32m"
+	ColorYellow  = "\033[33m"
+	ColorBlue    = "\033[34m"
+	ColorMagenta = "\033[35m"
+	ColorCyan    = "\033[36m"
+	ColorWhite   = "\033[37m"
+	ColorBold    = "\033[1m"
+)
+
+// Config holds the complete GoHarness configuration layout
+type Config struct {
+	API           APIConfig                  `json:"api"`
+	Agent         AgentConfig                `json:"agent"`
+	Security      SecurityConfig             `json:"security"`
+	DirectoryScan DirectoryScanConfig        `json:"directory_scan"`
+	Compaction    CompactionConfig           `json:"compaction"`
+	MCPServers    map[string]MCPServerConfig `json:"mcp_servers"`
+}
+
+type APIConfig struct {
+	Key         string  `json:"key"`
+	BaseURL     string  `json:"base_url"`
+	Model       string  `json:"model"`
+	Temperature float64 `json:"temperature"`
+	MaxTokens   int     `json:"max_tokens"`
+}
+
+type AgentConfig struct {
+	WorkspaceDir          string `json:"workspace_dir"`
+	MaxTurns              int    `json:"max_turns"`
+	CommandTimeoutSeconds int    `json:"command_timeout_seconds"`
+}
+
+type SecurityConfig struct {
+	SandboxMode     string   `json:"sandbox_mode"`
+	DockerContainer string   `json:"docker_container"`
+	AllowedTools    []string `json:"allowed_tools"`
+	BlockedPatterns []string `json:"blocked_patterns"`
+}
+
+type DirectoryScanConfig struct {
+	MaxDepth             int      `json:"max_depth"`
+	MaxFilesPerDirectory int      `json:"max_files_per_directory"`
+	IgnoredPatterns      []string `json:"ignored_patterns"`
+	CollapsedPatterns    []string `json:"collapsed_patterns"`
+}
+
+type CompactionConfig struct {
+	AutoCompactTurns int     `json:"auto_compact_turns"`
+	KeepLastN        int     `json:"keep_last_n"`
+	Model            string  `json:"model"`
+	Temperature      float64 `json:"temperature"`
+	SystemPrompt     string  `json:"system_prompt"`
+}
+
+type MCPServerConfig struct {
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env,omitempty"`
+}
+
+// OpenAI Chat Completion API Schema structures
+type Message struct {
+	Role       string     `json:"role"`
+	Content    string     `json:"content,omitempty"`
+	Name       string     `json:"name,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+}
+
+type ToolCall struct {
+	ID       string       `json:"id"`
+	Type     string       `json:"type"`
+	Function ToolFunction `json:"function"`
+}
+
+type ToolFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+type Tool struct {
+	Type     string             `json:"type"`
+	Function FunctionDescriptor `json:"function"`
+}
+
+type FunctionDescriptor struct {
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Parameters  interface{} `json:"parameters"`
+}
+
+type ChatCompletionRequest struct {
+	Model       string    `json:"model"`
+	Messages    []Message `json:"messages"`
+	Tools       []Tool    `json:"tools,omitempty"`
+	Temperature float64   `json:"temperature"`
+}
+
+type ChatCompletionResponse struct {
+	Choices []Choice `json:"choices"`
+}
+
+type Choice struct {
+	Message Message `json:"message"`
+}
+
+// Global runtime variables
+var (
+	activeConfig      *Config
+	activeSessionID   string
+	currentTurnNumber int
+	mcpToolsMap       map[string]string // Maps ToolName ➔ MCPServerName
+)
+
+// LoadConfig reads and parses the config.json file
+func LoadConfig(filename string) (*Config, error) {
+	fileBytes, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	var config Config
+	err = json.Unmarshal(fileBytes, &config)
+	if err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
+
+// SaveConfig serializes our configuration to a formatted JSON file
+func SaveConfig(filename string, config *Config) error {
+	jsonBytes, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filename, jsonBytes, 0644)
+}

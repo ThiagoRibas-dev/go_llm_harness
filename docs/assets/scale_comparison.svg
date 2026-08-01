@@ -1,0 +1,270 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 800" width="100%" height="100%" style="background-color: #f8fafc; font-family: 'DejaVu Sans', 'Segoe UI', sans-serif;">
+<defs>
+  <linearGradient id="bladeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%" stop-color="#b8c5d6" />
+    <stop offset="35%" stop-color="#e2e8f0" />
+    <stop offset="50%" stop-color="#ffffff" />
+    <stop offset="65%" stop-color="#cbd5e1" />
+    <stop offset="100%" stop-color="#94a3b8" />
+  </linearGradient>
+  <linearGradient id="gripGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%" stop-color="#451a03" />
+    <stop offset="50%" stop-color="#78350f" />
+    <stop offset="100%" stop-color="#451a03" />
+  </linearGradient>
+  <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#d97706" />
+    <stop offset="30%" stop-color="#fbbf24" />
+    <stop offset="70%" stop-color="#f59e0b" />
+    <stop offset="100%" stop-color="#b45309" />
+  </linearGradient>
+  <linearGradient id="humanGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" stop-color="#475569" stop-opacity="0.85" />
+    <stop offset="100%" stop-color="#334155" stop-opacity="0.95" />
+  </linearGradient>
+  <filter id="textGlow" x="-20%" y="-20%" width="140%" height="140%">
+    <feGaussianBlur stdDeviation="2" result="blur" />
+    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+  </filter>
+  <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
+  </marker>
+  <marker id="arrow-blue" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb" />
+  </marker>
+</defs>
+<!-- Header Title -->
+<rect x="0" y="0" width="1000" height="85" fill="#1e293b" />
+<text x="30" y="38" font-size="22" font-weight="bold" fill="#f8fafc" letter-spacing="1">SWORD &amp; HUMAN SCALE COMPARISON</text>
+<text x="30" y="62" font-size="13" fill="#94a3b8">Visualizing a 42-inch (106.7 cm) medieval sword next to a 1.8-meter (5'11") person</text>
+<line x1="0" y1="85" x2="1000" y2="85" stroke="#f59e0b" stroke-width="3" />
+<!-- Grid lines -->
+  <line x1="60" y1="642.5" x2="940" y2="642.5" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5" />
+  <line x1="60" y1="555.0" x2="940" y2="555.0" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5" />
+  <line x1="60" y1="467.5" x2="940" y2="467.5" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5" />
+  <line x1="60" y1="380.0" x2="940" y2="380.0" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5" />
+  <line x1="60" y1="292.5" x2="940" y2="292.5" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5" />
+  <line x1="60" y1="205.0" x2="940" y2="205.0" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5" />
+  <line x1="60" y1="117.5" x2="940" y2="117.5" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5" />
+  <line x1="60" y1="30.0" x2="940" y2="30.0" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5" />
+<!-- Ground Line -->
+  <line x1="50" y1="730" x2="950" y2="730" stroke="#475569" stroke-width="3" />
+  <rect x="50" y="731" width="900" height="20" fill="#cbd5e1" opacity="0.3" />
+<!-- Scale Ruler -->
+  <g id="ruler">
+    <line x1="80" y1="30" x2="80" y2="730" stroke="#334155" stroke-width="2" />
+    <!-- Metric Scale (Left) -->
+    <line x1="65" y1="730.0" x2="80" y2="730.0" stroke="#334155" stroke-width="2" />
+    <text x="60" y="734.0" font-size="11" font-weight="bold" fill="#334155" text-anchor="end">0</text>
+    <line x1="72" y1="695.0" x2="80" y2="695.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="698.0" font-size="9" fill="#64748b" text-anchor="end">10 cm</text>
+    <line x1="72" y1="660.0" x2="80" y2="660.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="663.0" font-size="9" fill="#64748b" text-anchor="end">20 cm</text>
+    <line x1="72" y1="625.0" x2="80" y2="625.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="628.0" font-size="9" fill="#64748b" text-anchor="end">30 cm</text>
+    <line x1="72" y1="590.0" x2="80" y2="590.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="593.0" font-size="9" fill="#64748b" text-anchor="end">40 cm</text>
+    <line x1="65" y1="555.0" x2="80" y2="555.0" stroke="#334155" stroke-width="2" />
+    <text x="60" y="559.0" font-size="11" font-weight="bold" fill="#334155" text-anchor="end">0.5 m</text>
+    <line x1="72" y1="520.0" x2="80" y2="520.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="523.0" font-size="9" fill="#64748b" text-anchor="end">60 cm</text>
+    <line x1="72" y1="485.0" x2="80" y2="485.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="488.0" font-size="9" fill="#64748b" text-anchor="end">70 cm</text>
+    <line x1="72" y1="450.0" x2="80" y2="450.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="453.0" font-size="9" fill="#64748b" text-anchor="end">80 cm</text>
+    <line x1="72" y1="415.0" x2="80" y2="415.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="418.0" font-size="9" fill="#64748b" text-anchor="end">90 cm</text>
+    <line x1="65" y1="380.0" x2="80" y2="380.0" stroke="#334155" stroke-width="2" />
+    <text x="60" y="384.0" font-size="11" font-weight="bold" fill="#334155" text-anchor="end">1.0 m</text>
+    <line x1="72" y1="345.0" x2="80" y2="345.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="348.0" font-size="9" fill="#64748b" text-anchor="end">110 cm</text>
+    <line x1="72" y1="310.0" x2="80" y2="310.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="313.0" font-size="9" fill="#64748b" text-anchor="end">120 cm</text>
+    <line x1="72" y1="275.0" x2="80" y2="275.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="278.0" font-size="9" fill="#64748b" text-anchor="end">130 cm</text>
+    <line x1="72" y1="240.0" x2="80" y2="240.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="243.0" font-size="9" fill="#64748b" text-anchor="end">140 cm</text>
+    <line x1="65" y1="205.0" x2="80" y2="205.0" stroke="#334155" stroke-width="2" />
+    <text x="60" y="209.0" font-size="11" font-weight="bold" fill="#334155" text-anchor="end">1.5 m</text>
+    <line x1="72" y1="170.0" x2="80" y2="170.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="173.0" font-size="9" fill="#64748b" text-anchor="end">160 cm</text>
+    <line x1="72" y1="135.0" x2="80" y2="135.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="138.0" font-size="9" fill="#64748b" text-anchor="end">170 cm</text>
+    <line x1="72" y1="100.0" x2="80" y2="100.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="103.0" font-size="9" fill="#64748b" text-anchor="end">180 cm</text>
+    <line x1="72" y1="65.0" x2="80" y2="65.0" stroke="#475569" stroke-width="1" />
+    <text x="68" y="68.0" font-size="9" fill="#64748b" text-anchor="end">190 cm</text>
+    <line x1="65" y1="30.0" x2="80" y2="30.0" stroke="#334155" stroke-width="2" />
+    <text x="60" y="34.0" font-size="11" font-weight="bold" fill="#334155" text-anchor="end">2.0 m</text>
+    <!-- Imperial Scale (Right) -->
+    <line x1="80" y1="730.0" x2="95" y2="730.0" stroke="#334155" stroke-width="2" />
+    <text x="100" y="734.0" font-size="11" font-weight="bold" fill="#334155" text-anchor="start">0</text>
+    <line x1="80" y1="703.33" x2="86" y2="703.33" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="676.66" x2="90" y2="676.66" stroke="#475569" stroke-width="1.5" />
+    <text x="93" y="679.66" font-size="8" fill="#64748b" text-anchor="start">6"</text>
+    <line x1="80" y1="649.99" x2="86" y2="649.99" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="623.3199999999999" x2="95" y2="623.3199999999999" stroke="#334155" stroke-width="2" />
+    <text x="100" y="627.3199999999999" font-size="11" font-weight="bold" fill="#334155" text-anchor="start">1 ft</text>
+    <line x1="80" y1="596.65" x2="86" y2="596.65" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="569.98" x2="90" y2="569.98" stroke="#475569" stroke-width="1.5" />
+    <text x="93" y="572.98" font-size="8" fill="#64748b" text-anchor="start">6"</text>
+    <line x1="80" y1="543.31" x2="86" y2="543.31" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="516.64" x2="95" y2="516.64" stroke="#334155" stroke-width="2" />
+    <text x="100" y="520.64" font-size="11" font-weight="bold" fill="#334155" text-anchor="start">2 ft</text>
+    <line x1="80" y1="489.97" x2="86" y2="489.97" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="463.3" x2="90" y2="463.3" stroke="#475569" stroke-width="1.5" />
+    <text x="93" y="466.3" font-size="8" fill="#64748b" text-anchor="start">6"</text>
+    <line x1="80" y1="436.63" x2="86" y2="436.63" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="409.96000000000004" x2="95" y2="409.96000000000004" stroke="#334155" stroke-width="2" />
+    <text x="100" y="413.96000000000004" font-size="11" font-weight="bold" fill="#334155" text-anchor="start">3 ft</text>
+    <line x1="80" y1="383.28999999999996" x2="86" y2="383.28999999999996" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="356.62" x2="90" y2="356.62" stroke="#475569" stroke-width="1.5" />
+    <text x="93" y="359.62" font-size="8" fill="#64748b" text-anchor="start">6"</text>
+    <line x1="80" y1="329.95" x2="86" y2="329.95" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="303.28" x2="95" y2="303.28" stroke="#334155" stroke-width="2" />
+    <text x="100" y="307.28" font-size="11" font-weight="bold" fill="#334155" text-anchor="start">4 ft</text>
+    <line x1="80" y1="276.61" x2="86" y2="276.61" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="249.94" x2="90" y2="249.94" stroke="#475569" stroke-width="1.5" />
+    <text x="93" y="252.94" font-size="8" fill="#64748b" text-anchor="start">6"</text>
+    <line x1="80" y1="223.26999999999998" x2="86" y2="223.26999999999998" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="196.60000000000002" x2="95" y2="196.60000000000002" stroke="#334155" stroke-width="2" />
+    <text x="100" y="200.60000000000002" font-size="11" font-weight="bold" fill="#334155" text-anchor="start">5 ft</text>
+    <line x1="80" y1="169.92999999999995" x2="86" y2="169.92999999999995" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="143.26" x2="90" y2="143.26" stroke="#475569" stroke-width="1.5" />
+    <text x="93" y="146.26" font-size="8" fill="#64748b" text-anchor="start">6"</text>
+    <line x1="80" y1="116.59000000000003" x2="86" y2="116.59000000000003" stroke="#94a3b8" stroke-width="1" />
+    <line x1="80" y1="89.92000000000007" x2="95" y2="89.92000000000007" stroke="#334155" stroke-width="2" />
+    <text x="100" y="93.92000000000007" font-size="11" font-weight="bold" fill="#334155" text-anchor="start">6 ft</text>
+  </g>
+<!-- Human Silhouette -->
+  <!-- Human Silhouette group -->
+  <g id="human" opacity="1">
+    <ellipse cx="300" cy="139.4" rx="28" ry="39" fill="url(#humanGrad)" />
+    <path d="M 288 178 C 275 185, 250 195, 225 200 C 215 230, 210 280, 215 336 C 210 380, 205 410, 210 440 C 213 445, 218 445, 220 440 C 225 410, 230 380, 235 330 C 240 290, 243 270, 245 257 L 249 336 L 245 415 L 255 572.5 L 265 715 L 245 730 L 285 730 L 287 715 L 287 572.5 L 300 415 L 313 572.5 L 313 715 L 315 730 L 355 730 L 335 715 L 345 572.5 L 351 415 L 347 336 L 355 257 C 357 270, 360 290, 365 330 C 370 380, 375 410, 380 440 C 382 445, 387 445, 390 440 C 395 410, 390 380, 385 336 C 390 280, 385 230, 375 200 C 350 195, 325 185, 312 178 Z" fill="url(#humanGrad)" />
+    <text x="300" y="85" font-size="13" font-weight="bold" fill="#334155" text-anchor="middle">1.8m Human (5'11")</text>
+    <line x1="300" y1="100.4" x2="80" y2="100.4" stroke="#475569" stroke-width="1" stroke-dasharray="3,3" />
+  </g>
+<!-- Sword Diagram -->
+  <g id="sword">
+    <path d="M 540 641.1 L 546.67 365 L 550 356.62 L 553.33 365 L 560 641.1 Z" fill="url(#bladeGrad)" stroke="#64748b" stroke-width="1" />
+    <path d="M 549 630 L 549.5 420 L 550.5 420 L 551 630 Z" fill="#475569" opacity="0.4" />
+    <line x1="550" y1="420" x2="550" y2="358" stroke="#94a3b8" stroke-width="0.8" />
+    <path d="M 515.55 638 Q 550 634, 584.45 638 Q 587 641, 584.45 644 Q 550 647, 515.55 644 Q 513 641, 515.55 638 Z" fill="url(#goldGrad)" stroke="#92400e" stroke-width="1" />
+    <rect x="544" y="635" width="12" height="12" rx="2" fill="#fbbf24" stroke="#d97706" stroke-width="0.7" />
+    <rect x="545" y="647" width="10" height="63" rx="2" fill="url(#gripGrad)" stroke="#451a03" stroke-width="1" />
+    <line x1="545" y1="653" x2="555" y2="653" stroke="#1c0d02" stroke-width="1.5" />
+    <line x1="545" y1="654" x2="555" y2="654" stroke="#f59e0b" stroke-width="0.5" opacity="0.6" />
+    <line x1="545" y1="659" x2="555" y2="659" stroke="#1c0d02" stroke-width="1.5" />
+    <line x1="545" y1="660" x2="555" y2="660" stroke="#f59e0b" stroke-width="0.5" opacity="0.6" />
+    <line x1="545" y1="665" x2="555" y2="665" stroke="#1c0d02" stroke-width="1.5" />
+    <line x1="545" y1="666" x2="555" y2="666" stroke="#f59e0b" stroke-width="0.5" opacity="0.6" />
+    <line x1="545" y1="671" x2="555" y2="671" stroke="#1c0d02" stroke-width="1.5" />
+    <line x1="545" y1="672" x2="555" y2="672" stroke="#f59e0b" stroke-width="0.5" opacity="0.6" />
+    <line x1="545" y1="677" x2="555" y2="677" stroke="#1c0d02" stroke-width="1.5" />
+    <line x1="545" y1="678" x2="555" y2="678" stroke="#f59e0b" stroke-width="0.5" opacity="0.6" />
+    <line x1="545" y1="683" x2="555" y2="683" stroke="#1c0d02" stroke-width="1.5" />
+    <line x1="545" y1="684" x2="555" y2="684" stroke="#f59e0b" stroke-width="0.5" opacity="0.6" />
+    <line x1="545" y1="689" x2="555" y2="689" stroke="#1c0d02" stroke-width="1.5" />
+    <line x1="545" y1="690" x2="555" y2="690" stroke="#f59e0b" stroke-width="0.5" opacity="0.6" />
+    <line x1="545" y1="695" x2="555" y2="695" stroke="#1c0d02" stroke-width="1.5" />
+    <line x1="545" y1="696" x2="555" y2="696" stroke="#f59e0b" stroke-width="0.5" opacity="0.6" />
+    <line x1="545" y1="701" x2="555" y2="701" stroke="#1c0d02" stroke-width="1.5" />
+    <line x1="545" y1="702" x2="555" y2="702" stroke="#f59e0b" stroke-width="0.5" opacity="0.6" />
+    <line x1="545" y1="707" x2="555" y2="707" stroke="#1c0d02" stroke-width="1.5" />
+    <line x1="545" y1="708" x2="555" y2="708" stroke="#f59e0b" stroke-width="0.5" opacity="0.6" />
+    <circle cx="550" cy="718" r="12" fill="url(#goldGrad)" stroke="#92400e" stroke-width="1" />
+    <circle cx="550" cy="718" r="4" fill="#451a03" />
+    <circle cx="550" cy="718" r="2" fill="#fbbf24" />
+    <text x="550" y="85" font-size="13" font-weight="bold" fill="#334155" text-anchor="middle">Medieval Sword (42")</text>
+  </g>
+<!-- Dimension Lines & Callouts -->
+  <g id="dim-overall">
+    <line x1="565" y1="356.62" x2="635" y2="356.62" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,3" />
+    <line x1="565" y1="730" x2="635" y2="730" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,3" />
+    <line x1="620" y1="366.62" x2="620" y2="720" stroke="#dc2626" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+    <rect x="625" y="525" width="185" height="35" rx="4" fill="#ffffff" stroke="#fca5a5" stroke-width="1" opacity="0.95" />
+    <text x="635" y="541" font-size="11" font-weight="bold" fill="#b91c1c">Overall Length: 42&quot;</text>
+    <text x="635" y="555" font-size="10" fill="#475569">(106.7 cm / 1.07 m)</text>
+  </g>
+  <g id="dim-blade-len">
+    <line x1="535" y1="356.62" x2="465" y2="356.62" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,3" />
+    <line x1="510" y1="641.1" x2="465" y2="641.1" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,3" />
+    <line x1="475" y1="366.62" x2="475" y2="631.1" stroke="#dc2626" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+    <rect x="290" y="480" width="175" height="35" rx="4" fill="#ffffff" stroke="#fca5a5" stroke-width="1" opacity="0.95" />
+    <text x="455" y="496" font-size="11" font-weight="bold" fill="#b91c1c" text-anchor="end">Blade Length: 32&quot;</text>
+    <text x="455" y="510" font-size="10" fill="#475569" text-anchor="end">(81.3 cm / 0.81 m)</text>
+  </g>
+  <g id="dim-hilt-len">
+    <line x1="535" y1="730" x2="465" y2="730" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,3" />
+    <line x1="475" y1="651.1" x2="475" y2="720" stroke="#dc2626" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+    <rect x="300" y="665" width="165" height="35" rx="4" fill="#ffffff" stroke="#fca5a5" stroke-width="1" opacity="0.95" />
+    <text x="455" y="681" font-size="11" font-weight="bold" fill="#b91c1c" text-anchor="end">Hilt Length: 10&quot;</text>
+    <text x="455" y="695" font-size="10" fill="#475569" text-anchor="end">(25.4 cm / 0.25 m)</text>
+  </g>
+  <g id="dim-guard-width">
+    <line x1="515.55" y1="635" x2="515.55" y2="610" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,3" />
+    <line x1="584.45" y1="635" x2="584.45" y2="610" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,3" />
+    <line x1="525.55" y1="615" x2="574.45" y2="615" stroke="#dc2626" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+    <rect x="550" y="570" width="170" height="35" rx="4" fill="#ffffff" stroke="#fca5a5" stroke-width="1" opacity="0.95" />
+    <text x="560" y="586" font-size="11" font-weight="bold" fill="#b91c1c">Guard Width: 7 3/4&quot;</text>
+    <text x="560" y="600" font-size="10" fill="#475569">(19.7 cm)</text>
+  </g>
+  <g id="dim-blade-widths">
+    <line x1="540" y1="638" x2="510" y2="628" stroke="#1e293b" stroke-width="0.8" />
+    <circle cx="540" cy="638" r="2.5" fill="#1e293b" />
+    <text x="505" y="629" font-size="10" font-weight="bold" fill="#1e293b" text-anchor="end">Blade Width (Base): 2 1/4&quot; (5.7 cm)</text>
+    <line x1="547" y1="380" x2="515" y2="380" stroke="#1e293b" stroke-width="0.8" />
+    <circle cx="547" cy="380" r="2.5" fill="#1e293b" />
+    <text x="510" y="383" font-size="10" font-weight="bold" fill="#1e293b" text-anchor="end">Blade Width (Tip): 3/4&quot; (1.9 cm)</text>
+  </g>
+<!-- Detailed Inset: Blade Thickness & Profile -->
+  <g id="detail-box">
+    <rect x="715" y="110" width="250" height="235" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
+    <rect x="715" y="110" width="250" height="35" rx="8" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1.5" />
+    <rect x="716" y="130" width="248" height="15" fill="#e2e8f0" />
+    <text x="840" y="132" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">BLADE THICKNESS TAPER</text>
+    <text x="730" y="165" font-size="11" fill="#475569">The blade features a distal taper,</text>
+    <text x="730" y="180" font-size="11" fill="#475569">reducing thickness towards the tip:</text>
+    <g transform="translate(730, 205)">
+      <polygon points="0,9 35,0 70,9 35,18" fill="url(#bladeGrad)" stroke="#64748b" stroke-width="1" />
+      <line x1="35" y1="0" x2="35" y2="18" stroke="#475569" stroke-width="0.8" opacity="0.5" />
+      <text x="80" y="10" font-size="11" font-weight="bold" fill="#1e293b">At Base: 9/32&quot;</text>
+      <text x="80" y="22" font-size="10" fill="#64748b">(7.1 mm / 0.28&quot;)</text>
+    </g>
+    <g transform="translate(730, 260)">
+      <polygon points="15,4 35,0 55,4 35,8" fill="url(#bladeGrad)" stroke="#64748b" stroke-width="0.7" />
+      <line x1="35" y1="0" x2="35" y2="8" stroke="#475569" stroke-width="0.5" opacity="0.5" />
+      <text x="80" y="5" font-size="11" font-weight="bold" fill="#1e293b">Near Tip: 1/8&quot;</text>
+      <text x="80" y="17" font-size="10" fill="#64748b">(3.2 mm / 0.13&quot;)</text>
+    </g>
+    <line x1="740" y1="315" x2="910" y2="315" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)" />
+    <text x="830" y="311" font-size="9" font-weight="bold" fill="#2563eb" text-anchor="middle">DISTAL TAPER DIRECTION</text>
+  </g>
+<!-- Quick Facts Box -->
+  <g id="facts-box">
+    <rect x="715" y="365" width="250" height="345" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
+    <rect x="715" y="365" width="250" height="35" rx="8" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1.5" />
+    <rect x="716" y="385" width="248" height="15" fill="#e2e8f0" />
+    <text x="840" y="387" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">QUICK COMPARISON FACTS</text>
+    <text x="730" y="420" font-size="11" font-weight="bold" fill="#1e293b">Sword-to-Human Height Ratio</text>
+    <text x="730" y="435" font-size="10" fill="#475569">The sword's overall length (42") is of</text>
+    <text x="730" y="448" font-size="10" fill="#475569">exactly 59.2% the human's total height (1.8m / ~71").</text>
+    <text x="730" y="469" font-size="11" font-weight="bold" fill="#1e293b">Reach Comparison</text>
+    <text x="730" y="484" font-size="10" fill="#475569">Standing upright on the floor, the at</text>
+    <text x="730" y="497" font-size="10" fill="#475569">sword's pommel rests the ground, and its tip reaches the lower chest (sternum) of the 1.8m person.</text>
+    <text x="730" y="518" font-size="11" font-weight="bold" fill="#1e293b">Hilt Proportions</text>
+    <text x="730" y="533" font-size="10" fill="#475569">The 10" hilt is 23.8% of the sword's a</text>
+    <text x="730" y="546" font-size="10" fill="#475569">overall length, offering ample room for two-handed use (standard for bastard/longsword).</text>
+    <text x="730" y="567" font-size="11" font-weight="bold" fill="#1e293b">Guard Width</text>
+    <text x="730" y="582" font-size="10" fill="#475569">The 7 3/4" crossguard is wider than</text>
+    <text x="730" y="595" font-size="10" fill="#475569">the human's head (approx. 6"), providing substantial hand protection.</text>
+    <text x="730" y="616" font-size="11" font-weight="bold" fill="#1e293b">Blade Profile</text>
+    <text x="730" y="631" font-size="10" fill="#475569">The blade tapers significantly in both</text>
+    <text x="730" y="644" font-size="10" fill="#475569">width (66% reduction) and thickness (55% reduction) for optimal speed, balance, and thrusting capability.</text>
+  </g>
+<!-- Bottom Footer / Legend -->
+  <rect x="50" y="760" width="900" height="30" rx="4" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1" />
+  <text x="60" y="779" font-size="10" fill="#64748b">• Human height: exactly 1.80m (180 cm / 5'10.8&quot;)</text>
+  <text x="410" y="779" font-size="10" fill="#64748b">• Sword length: exactly 42&quot; (106.68 cm)</text>
+  <text x="705" y="779" font-size="10" fill="#64748b">• Scaled strictly at 3.5 pixels per centimeter</text>
+</svg>

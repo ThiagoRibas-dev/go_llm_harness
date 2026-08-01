@@ -1,0 +1,66 @@
+{
+  "api": {
+    "key": "YOUR_API_KEY_HERE",
+    "base_url": "https://api.openai.com/v1/chat/completions",
+    "model": "gpt-4o",
+    "temperature": 0,
+    "max_tokens": 4096
+  },
+  "agent": {
+    "workspace_dir": "./workspace",
+    "max_turns": 15,
+    "command_timeout_seconds": 30
+  },
+  "security": {
+    "sandbox_mode": "host",
+    "docker_container": "agent-workspace",
+    "allowed_tools": [
+      "write_file",
+      "patch_file",
+      "execute_command"
+    ],
+    "blocked_patterns": [
+      "rm -rf /",
+      "mkfs",
+      "dd if=",
+      "shutdown",
+      "format"
+    ]
+  },
+  "directory_scan": {
+    "max_depth": 4,
+    "max_files_per_directory": 15,
+    "ignored_patterns": [
+      ".git",
+      ".DS_Store",
+      "__pycache__",
+      ".mypy_cache",
+      ".goharness"
+    ],
+    "collapsed_patterns": [
+      "node_modules",
+      "venv",
+      ".venv",
+      "dist",
+      "build",
+      "target"
+    ]
+  },
+  "compaction": {
+    "auto_compact_turns": 6,
+    "keep_last_n": 2,
+    "model": "gpt-4o-mini",
+    "temperature": 0.2,
+    "system_prompt": "You are a rolling context compaction engine. Summarize the files modified, the current bugs resolved, and the active task plan in a highly dense, bulleted summary. Do not lose key context."
+  },
+  "mcp_servers": {
+    "sqlite-demo": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-sqlite",
+        "--db-path",
+        "./workspace/dev.db"
+      ]
+    }
+  }
+}

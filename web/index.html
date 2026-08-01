@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoHarness - Agentic Console</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        /* Custom modal animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal-animate {
+            animation: fadeIn 0.15s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-[#0f172a] text-slate-100 font-sans h-full flex flex-col overflow-hidden">
+
+    <!-- ================= HEADER / TOP STATUS BAR ================= -->
+    <header class="bg-[#1e293b] border-b border-[#334155] px-6 py-3 flex items-center justify-between shadow-md shrink-0 z-10">
+        <div class="flex items-center space-x-3">
+            <!-- Sidebar toggle button -->
+            <button onclick="toggleSidebar()" class="text-slate-400 hover:text-white transition p-1 rounded hover:bg-slate-800" title="Toggle Sidebar">
+                <i class="fa-solid fa-bars text-sm"></i>
+            </button>
+            <div class="bg-blue-600 text-white px-2.5 py-1 rounded text-sm font-bold tracking-wider flex items-center">
+                <i class="fa-solid fa-robot mr-1.5"></i> GOHARNESS
+            </div>
+            <span class="text-slate-400 text-xs">|</span>
+            <span class="text-xs text-slate-300 font-mono" id="session-id">Session: sess_loading...</span>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <!-- Active Model Card -->
+            <div class="flex items-center space-x-2 text-xs bg-slate-800/80 px-3 py-1.5 rounded-md border border-[#334155]">
+                <span class="text-slate-400">Model:</span>
+                <span class="text-cyan-400 font-mono font-bold" id="model-name">gpt-4o</span>
+            </div>
+
+            <!-- Cost Indicator Dial -->
+            <div class="flex items-center space-x-2 text-xs bg-emerald-950/40 text-emerald-400 border border-emerald-800 px-3 py-1.5 rounded-md shadow-inner">
+                <i class="fa-solid fa-dollar-sign"></i>
+                <span class="font-bold">Spent:</span>
+                <span class="font-mono font-bold text-sm" id="session-cost">$0.0000</span>
+            </div>
+
+            <!-- Settings Trigger Button (Phase 6.3 Configuration Modal) -->
+            <button onclick="openSettingsModal()" class="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition px-3 py-1.5 rounded-md border border-[#334155] text-xs font-bold flex items-center space-x-1.5" title="Configure goharness settings">
+                <i class="fa-solid fa-gear"></i> <span>Settings</span>
+            </button>
+
+            <!-- Active Connections Status -->
+            <div class="flex items-center space-x-2 text-xs bg-slate-800/80 px-3 py-1.5 rounded-md border border-[#334155]">
+                <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" id="status-dot"></div>
+                <span id="status-text">Connected</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ================= MAIN WORKSPACE PANEL ================= -->
+    <div class="flex flex-1 overflow-hidden min-h-0 relative">
+
+        <!-- 🌲 LEFT PANEL: Workspace Directory Tree & Settings (Collapsible) -->
+        <aside id="sidebar" class="w-80 bg-[#0f172a] border-r border-[#334155] flex flex-col shrink-0 transition-all duration-200 ease-in-out">
+            <!-- Panel Header -->
+            <div class="px-4 py-3 border-b border-[#334155] flex items-center justify-between bg-slate-900/50">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    <i class="fa-solid fa-folder-tree mr-1.5 text-blue-500"></i> Workspace Explorer
+                </span>
+                <div class="flex items-center space-x-2">
+                    <button onclick="refreshWorkspaceTree()" class="text-slate-400 hover:text-white transition duration-150 p-1 rounded hover:bg-slate-800" title="Refresh folder structure">
+                        <i class="fa-solid fa-rotate-right text-xs"></i>
+                    </button>
+                    <button onclick="toggleSidebar()" class="text-slate-400 hover:text-white transition duration-150 p-1 rounded hover:bg-slate-800" title="Collapse Sidebar">
+                        <i class="fa-solid fa-chevron-left text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Pre-defined workspace path banner -->
+            <div class="px-4 py-2 bg-slate-900/20 text-[11px] font-mono text-slate-400 border-b border-[#334155]/60 truncate" id="workspace-path">
+                Path: ./workspace
+            </div>
+
+            <!-- Tree View Container -->
+            <div class="flex-1 overflow-y-auto p-4 font-mono text-xs text-slate-300 leading-relaxed" id="workspace-tree">
+                <div class="text-slate-500 italic">No files detected yet...</div>
+            </div>
+
+            <!-- Quick Action controls -->
+            <div class="p-4 border-t border-[#334155] bg-slate-900/30 space-y-2 text-xs">
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Quick Actions</div>
+                <button onclick="triggerCompaction()" class="w-full py-1.5 px-3 bg-indigo-950/40 text-indigo-400 border border-indigo-900 rounded hover:bg-indigo-900 hover:text-white transition duration-150 flex items-center justify-center">
+                    <i class="fa-solid fa-compress mr-1.5"></i> Manual Context Compact
+                </button>
+            </div>
+        </aside>
+
+        <!-- 💬 CENTER PANEL: Interactive Chat Console -->
+        <main class="flex-1 flex flex-col min-w-0 bg-[#0b0f19]">
+            
+            <!-- Turn Streams Display Container -->
+            <div class="flex-1 overflow-y-auto px-8 py-6 space-y-6" id="chat-messages">
+                
+                <!-- System Greeting / Welcome banner -->
+                <div class="flex space-x-4 items-start max-w-4xl">
+                    <div class="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-md">
+                        H
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-bold text-slate-200 text-sm">GoHarness System</span>
+                            <span class="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded font-mono">system</span>
+                        </div>
+                        <p class="text-slate-300 text-sm leading-relaxed font-sans">
+                            Welcome to the **GoHarness Embedded Web Console**! I am your sandboxed AI agent harness. Ask me to write scripts, patch programs, run compilations, or configure local systems. Any files I edit or commands I run will stream here in real-time.
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ⌨️ INPUT CONTROL PANEL -->
+            <div class="p-6 border-t border-[#334155] bg-[#0f172a]/50">
+                <form id="prompt-form" onsubmit="submitPrompt(event)" class="relative max-w-4xl mx-auto flex items-center bg-[#1e293b] rounded-lg border border-[#334155] shadow-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition duration-150">
+                    <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')..." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36" onkeydown="handleInputKeydown(event)"></textarea>
+                    
+                    <div class="flex items-center space-x-2 pr-3 shrink-0">
+                        <button type="submit" class="bg-blue-600 text-white hover:bg-blue-500 transition duration-150 px-4 py-2 rounded text-xs font-bold shadow-md flex items-center space-x-1.5">
+                            <span>Execute</span> <i class="fa-solid fa-play"></i>
+                        </button>
+                    </div>
+                </form>
+                <div class="text-[10px] text-slate-500 text-center mt-2 font-mono">
+                    GoHarness Sandbox Mode is active. System write-protection active. Press <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Enter</kbd> to execute, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Shift+Enter</kbd> for new line.
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ================= 🛠️ SETTINGS CONFIGURATION MODAL ================= -->
+    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div class="bg-[#1e293b] border border-[#334155] w-full max-w-xl rounded-xl shadow-2xl overflow-hidden modal-animate">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-[#334155] flex items-center justify-between bg-slate-900/40">
+                <h3 class="font-bold text-slate-100 flex items-center text-sm uppercase tracking-wider">
+                    <i class="fa-solid fa-sliders mr-2 text-blue-500"></i> Configure config.json Settings
+                </h3>
+                <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Modal Form Body -->
+            <form id="settings-form" onsubmit="saveSettings(event)" class="p-6 space-y-4 text-xs">
+                <!-- API Section -->
+                <div class="space-y-3">
+                    <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">API Configuration</div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">OpenAI API Key</label>
+                            <input type="password" id="input-api-key" placeholder="sk-proj-..." class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Model Target</label>
+                            <input type="text" id="input-model" placeholder="gpt-4o" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-bold mb-1.5">Base Endpoint URL</label>
+                        <input type="text" id="input-base-url" placeholder="https://api.openai.com/v1/chat/completions" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                    </div>
+                </div>
+
+                <!-- Runner & Sandbox Section -->
+                <div class="space-y-3 pt-2">
+                    <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">Runtime &amp; Safety</div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Sandbox Mode</label>
+                            <select id="input-sandbox-mode" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500">
+                                <option value="host">Host Bare-Metal (Secured)</option>
+                                <option value="docker">Docker Container</option>
+                                <option value="none">Disabled (Unsafe)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Max Execution Turns</label>
+                            <input type="number" id="input-max-turns" min="1" max="100" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-bold mb-1.5">Workspace Directory Path</label>
+                        <input type="text" id="input-workspace-dir" placeholder="./workspace" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                    </div>
+                </div>
+
+                <!-- Modal Footer Actions -->
+                <div class="pt-4 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/20 -mx-6 -mb-6 p-4">
+                    <button type="button" onclick="closeSettingsModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-5 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white transition font-bold shadow-md">
+                        Save Configurations
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= CLIENT JAVASCRIPT REAL-TIME FLOWS ================= -->
+    <script>
+        let sseSource = null;
+        let activeCost = 0.0;
+        let turnCounter = 0;
+        let isSidebarCollapsed = false;
+
+        // Toggle Workspace Explorer Sidebar (Phase 6.3)
+        function toggleSidebar() {
+            const sidebar = document.getElementById("sidebar");
+            isSidebarCollapsed = !isSidebarCollapsed;
+            if (isSidebarCollapsed) {
+                sidebar.style.width = "0px";
+                sidebar.style.opacity = "0";
+                sidebar.style.pointerEvents = "none";
+                sidebar.style.borderRightWidth = "0px";
+            } else {
+                sidebar.style.width = "320px";
+                sidebar.style.opacity = "1";
+                sidebar.style.pointerEvents = "auto";
+                sidebar.style.borderRightWidth = "1px";
+            }
+        }
+
+        // Settings Modal controls (Phase 6.3 settings overlay)
+        function openSettingsModal() {
+            // Fetch latest active configurations from memory
+            fetch("/api/config")
+                .then(res => res.json())
+                .then(cfg => {
+                    document.getElementById("input-api-key").value = cfg.api.key || "";
+                    document.getElementById("input-model").value = cfg.api.model || "gpt-4o";
+                    document.getElementById("input-base-url").value = cfg.api.base_url || "https://api.openai.com/v1/chat/completions";
+                    document.getElementById("input-sandbox-mode").value = cfg.security.sandbox_mode || "host";
+                    document.getElementById("input-max-turns").value = cfg.agent.max_turns || 15;
+                    document.getElementById("input-workspace-dir").value = cfg.agent.workspace_dir || "./workspace";
+                    
+                    document.getElementById("settings-modal").classList.remove("hidden");
+                })
+                .catch(err => alert("Failed to fetch settings: " + err));
+        }
+
+        function closeSettingsModal() {
+            document.getElementById("settings-modal").classList.add("hidden");
+        }
+
+        function saveSettings(e) {
+            e.preventDefault();
+            
+            const payload = {
+                api_key: document.getElementById("input-api-key").value.trim(),
+                model: document.getElementById("input-model").value.trim(),
+                base_url: document.getElementById("input-base-url").value.trim(),
+                sandbox_mode: document.getElementById("input-sandbox-mode").value,
+                max_turns: parseInt(document.getElementById("input-max-turns").value) || 15,
+                workspace_dir: document.getElementById("input-workspace-dir").value.trim()
+            };
+
+            fetch("/api/config/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to save config on server");
+                return res.json();
+            })
+            .then(data => {
+                closeSettingsModal();
+                fetchConfig(); // Reload header indicators
+                appendSystemAlert("System Settings Saved", "Configurations successfully updated on host disk (config.json) and memory. All future turns will operate under these settings.", "fa-check-double text-green-400");
+                refreshWorkspaceTree();
+            })
+            .catch(err => {
+                alert("Error saving settings: " + err);
+            });
+        }
+
+        // Fetch config details
+        function fetchConfig() {
+            fetch("/api/config")
+                .then(res => res.json())
+                .then(cfg => {
+                    document.getElementById("model-name").innerText = cfg.api.model;
+                    document.getElementById("workspace-path").innerText = "Path: " + cfg.agent.workspace_dir;
+                    document.getElementById("session-id").innerText = "Session: " + cfg.session_id;
+                })
+                .catch(err => console.error("Error fetching config:", err));
+        }
+
+        // Fetch and render workspace tree
+        function refreshWorkspaceTree() {
+            const treeContainer = document.getElementById("workspace-tree");
+            treeContainer.innerHTML = '<div class="text-slate-500 italic"><i class="fa-solid fa-spinner animate-spin mr-2"></i>Scanning workspace...</div>';
+            
+            fetch("/api/workspace/tree")
+                .then(res => res.json())
+                .then(data => {
+                    const lines = data.tree.split("\n");
+                    let html = "";
+                    lines.forEach(line => {
+                        if (!line.trim()) return;
+                        
+                        let processedLine = line
+                            .replace("[collapsed]", '<span class="text-slate-500 italic text-[10px] bg-slate-900 px-1.5 py-0.5 rounded ml-1">[collapsed]</span>')
+                            .replace(/\[Modified (.*?) ago\]/, '<span class="text-amber-400 text-[10px] bg-amber-950/40 border border-amber-800 px-1.5 py-0.5 rounded ml-2 font-mono"><i class="fa-solid fa-clock mr-0.5"></i>$1</span>')
+                            .replace("[New / Untracked]", '<span class="text-emerald-400 text-[10px] bg-emerald-950/40 border border-emerald-800 px-1.5 py-0.5 rounded ml-2 font-mono font-bold"><i class="fa-solid fa-plus-circle mr-0.5"></i>New</span>');
+                        
+                        html += `<div class="hover:bg-slate-800/40 px-2 py-0.5 rounded transition duration-75 truncate">${processedLine}</div>`;
+                    });
+                    treeContainer.innerHTML = html;
+                })
+                .catch(err => {
+                    treeContainer.innerHTML = `<div class="text-red-400">Failed to load directory tree: ${err}</div>`;
+                });
+        }
+
+        // Connect Server-Sent Events (SSE)
+        function connectSSE() {
+            if (sseSource) sseSource.close();
+            sseSource = new EventSource("/stream");
+            
+            sseSource.onmessage = (event) => {
+                const packet = JSON.parse(event.data);
+                handleIncomingEvent(packet);
+            };
+
+            sseSource.onerror = (err) => {
+                document.getElementById("status-dot").className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
+                document.getElementById("status-text").innerText = "Reconnecting...";
+                setTimeout(connectSSE, 2000);
+            };
+
+            sseSource.onopen = () => {
+                document.getElementById("status-dot").className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+                document.getElementById("status-text").innerText = "Connected";
+            };
+        }
+
+        function handleIncomingEvent(packet) {
+            if (packet.event === "session_init") {
+                document.getElementById("session-id").innerText = "Session: " + packet.data.session_id;
+            }
+
+            if (packet.event === "turn_secured") {
+                const turnData = packet.data;
+                appendTurnToChat(turnData);
+                refreshWorkspaceTree();
+            }
+
+            if (packet.event === "compaction") {
+                appendSystemAlert("Compaction Engaged", `Context compacted up to Turn ${packet.data.boundary_turn}. History older than this turn has been summarized to save tokens.`, "fa-compress text-indigo-400");
+            }
+
+            if (packet.event === "cost_update") {
+                activeCost += parseFloat(packet.data.cost);
+                document.getElementById("session-cost").innerText = "$" + activeCost.toFixed(4);
+            }
+        }
+
+        function appendTurnToChat(turn) {
+            const chatContainer = document.getElementById("chat-messages");
+            
+            let avatarChar = "U";
+            let avatarBg = "bg-slate-700";
+            let roleName = "You";
+            let cardBg = "bg-[#0b0f19]";
+            let borderStyle = "";
+
+            if (turn.role === "assistant") {
+                avatarChar = "🤖";
+                avatarBg = "bg-yellow-600";
+                roleName = "Assistant";
+                cardBg = "bg-slate-900/30";
+                borderStyle = "border-l-2 border-yellow-500";
+            } else if (turn.role === "tool") {
+                avatarChar = "🛠️";
+                avatarBg = "bg-cyan-700";
+                roleName = `Tool: ${turn.name}`;
+                cardBg = "bg-slate-900/10";
+                borderStyle = "border-l-2 border-cyan-500";
+            }
+
+            const messageId = `turn-${turn.turn_number}`;
+            const msgDiv = document.createElement("div");
+            msgDiv.id = messageId;
+            msgDiv.className = `flex space-x-4 items-start p-4 rounded-lg transition duration-150 group ${cardBg} ${borderStyle}`;
+
+            let rollbackButton = "";
+            if (turn.turn_number > 0) {
+                rollbackButton = `
+                    <button onclick="triggerFork(${turn.turn_number})" class="opacity-0 group-hover:opacity-100 text-[10px] bg-red-950/40 hover:bg-red-900 border border-red-800 text-red-400 font-mono px-2 py-0.5 rounded transition duration-150">
+                        <i class="fa-solid fa-arrows-spin mr-1"></i> Fork Here (Turn ${turn.turn_number})
+                    </button>
+                `;
+            }
+
+            let textHtml = "";
+            if (turn.role === "assistant" && turn.tool_calls) {
+                textHtml += `<p class="text-slate-300 text-sm font-sans mb-2">${turn.content || "Calling tools..."}</p>`;
+                turn.tool_calls.forEach(tc => {
+                    textHtml += `
+                        <div class="mt-2 bg-slate-950 border border-[#334155] rounded-md p-3 font-mono text-[11px] text-slate-300">
+                            <div class="text-cyan-400 font-bold mb-1"><i class="fa-solid fa-code mr-1"></i> Calling Function: ${tc.function.name}</div>
+                            <pre class="overflow-x-auto whitespace-pre-wrap">${tc.function.arguments}</pre>
+                        </div>
+                    `;
+                });
+            } else if (turn.role === "tool") {
+                let snippet = turn.content;
+                let truncatedSuffix = "";
+                if (snippet.length > 800) {
+                    snippet = snippet.substring(0, 800);
+                    truncatedSuffix = `\n... [TRUNCATED] ...`;
+                }
+                textHtml = `
+                    <div class="bg-slate-950 border border-slate-800 rounded-md p-3 font-mono text-[11px] text-emerald-400">
+                        <pre class="overflow-x-auto whitespace-pre-wrap">${snippet}${truncatedSuffix}</pre>
+                    </div>
+                `;
+            } else {
+                textHtml = `<p class="text-slate-300 text-sm whitespace-pre-wrap font-sans">${turn.content}</p>`;
+            }
+
+            msgDiv.innerHTML = `
+                <div class="w-8 h-8 rounded ${avatarBg} text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-md">
+                    ${avatarChar}
+                </div>
+                <div class="space-y-1 flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-bold text-slate-200 text-xs">${roleName}</span>
+                            <span class="text-[10px] text-slate-500 font-mono">#${turn.turn_number}</span>
+                        </div>
+                        ${rollbackButton}
+                    </div>
+                    ${textHtml}
+                </div>
+            `;
+
+            chatContainer.appendChild(msgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function appendSystemAlert(title, message, iconClass) {
+            const chatContainer = document.getElementById("chat-messages");
+            const alertDiv = document.createElement("div");
+            alertDiv.className = "flex space-x-3 items-center bg-indigo-950/20 border border-indigo-900/60 rounded-lg p-4 max-w-4xl mx-auto text-xs text-indigo-300 font-mono";
+            alertDiv.innerHTML = `
+                <i class="fa-solid ${iconClass} text-lg shrink-0"></i>
+                <div class="flex-1">
+                    <div class="font-bold uppercase tracking-wider">${title}</div>
+                    <div class="mt-0.5 text-indigo-400/80">${message}</div>
+                </div>
+            `;
+            chatContainer.appendChild(alertDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function submitPrompt(e) {
+            if (e) e.preventDefault();
+            const input = document.getElementById("prompt-input");
+            const prompt = input.value.trim();
+            if (!prompt) return;
+
+            turnCounter++;
+            appendTurnToChat({
+                role: "user",
+                content: prompt,
+                turn_number: turnCounter
+            });
+
+            input.value = "";
+            input.style.height = "auto";
+
+            fetch("/api/prompt", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt: prompt })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("API call failed");
+            })
+            .catch(err => {
+                appendSystemAlert("API Execution Error", "Failed to connect to the GoHarness execution API. Please ensure the backend is running.", "fa-triangle-exclamation text-red-400");
+            });
+        }
+
+        function triggerFork(targetTurn) {
+            if (!confirm(`Are you sure you want to rollback to Turn ${targetTurn}? This will delete newer turn logs and restore files on disk!`)) {
+                return;
+            }
+
+            fetch("/api/fork", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ turn: targetTurn })
+            })
+            .then(res => res.json())
+            .then(data => {
+                const chatContainer = document.getElementById("chat-messages");
+                chatContainer.innerHTML = "";
+                
+                appendSystemAlert("Session Forked", `State successfully rewound to Turn ${targetTurn}. You can resume executing commands from this timeline.`, "fa-arrows-spin text-green-400");
+                
+                data.history.forEach(turn => {
+                    appendTurnToChat(turn);
+                });
+                
+                turnCounter = targetTurn;
+                refreshWorkspaceTree();
+            })
+            .catch(err => {
+                alert("Fork failed: " + err);
+            });
+        }
+
+        function triggerCompaction() {
+            fetch("/api/compact", { method: "POST" })
+                .then(res => {
+                    if (res.ok) alert("Compaction requested in background!");
+                });
+        }
+
+        function handleInputKeydown(e) {
+            const input = document.getElementById("prompt-input");
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submitPrompt();
+            } else {
+                setTimeout(() => {
+                    input.style.height = "auto";
+                    input.style.height = input.scrollHeight + "px";
+                }, 0);
+            }
+        }
+    </script>
+</body>
+</html>

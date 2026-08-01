@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 650" width="100%" height="100%" style="background-color: #f8fafc; font-family: 'DejaVu Sans', 'Segoe UI', sans-serif;">
+<defs>
+  <filter id="glow" x="-10%" y="-10%" width="120%" height="120%">
+    <feGaussianBlur stdDeviation="3" result="blur" />
+    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+  </filter>
+  <marker id="flow-arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#3b82f6" />
+  </marker>
+  <marker id="loop-arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#f59e0b" />
+  </marker>
+  <marker id="back-arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#ef4444" />
+  </marker>
+  <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%" stop-color="#1e293b" />
+    <stop offset="100%" stop-color="#0f172a" />
+  </linearGradient>
+  <linearGradient id="userBlock" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" stop-color="#eff6ff" />
+    <stop offset="100%" stop-color="#dbeafe" />
+  </linearGradient>
+  <linearGradient id="harnessBlock" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" stop-color="#f0fdf4" />
+    <stop offset="100%" stop-color="#dcfce7" />
+  </linearGradient>
+  <linearGradient id="llmBlock" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" stop-color="#fdf4ff" />
+    <stop offset="100%" stop-color="#f3e8ff" />
+  </linearGradient>
+  <linearGradient id="sandboxBlock" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" stop-color="#fffbeb" />
+    <stop offset="100%" stop-color="#fef3c7" />
+  </linearGradient>
+</defs>
+<!-- Header -->
+<rect x="0" y="0" width="1000" height="85" fill="url(#headerGrad)" />
+<text x="30" y="38" font-size="22" font-weight="bold" fill="#f8fafc" letter-spacing="1">GOLANG AGENT HARNESS FLOW</text>
+<text x="30" y="62" font-size="13" fill="#94a3b8">The architectural loop connecting CLI Input, the Go Orchestrator, LLM Tool-Calling, and Isolated Sandboxes</text>
+<line x1="0" y1="85" x2="1000" y2="85" stroke="#3b82f6" stroke-width="3" />
+<line x1="100" y1="85" x2="100" y2="650" stroke="#f1f5f9" stroke-width="1" />
+<line x1="200" y1="85" x2="200" y2="650" stroke="#f1f5f9" stroke-width="1" />
+<line x1="300" y1="85" x2="300" y2="650" stroke="#f1f5f9" stroke-width="1" />
+<line x1="400" y1="85" x2="400" y2="650" stroke="#f1f5f9" stroke-width="1" />
+<line x1="500" y1="85" x2="500" y2="650" stroke="#f1f5f9" stroke-width="1" />
+<line x1="600" y1="85" x2="600" y2="650" stroke="#f1f5f9" stroke-width="1" />
+<line x1="700" y1="85" x2="700" y2="650" stroke="#f1f5f9" stroke-width="1" />
+<line x1="800" y1="85" x2="800" y2="650" stroke="#f1f5f9" stroke-width="1" />
+<line x1="900" y1="85" x2="900" y2="650" stroke="#f1f5f9" stroke-width="1" />
+<line x1="0" y1="150" x2="1000" y2="150" stroke="#f1f5f9" stroke-width="1" />
+<line x1="0" y1="250" x2="1000" y2="250" stroke="#f1f5f9" stroke-width="1" />
+<line x1="0" y1="350" x2="1000" y2="350" stroke="#f1f5f9" stroke-width="1" />
+<line x1="0" y1="450" x2="1000" y2="450" stroke="#f1f5f9" stroke-width="1" />
+<line x1="0" y1="550" x2="1000" y2="550" stroke="#f1f5f9" stroke-width="1" />
+<!-- Zone 1: CLI Interface -->
+<rect x="40" y="140" width="220" height="440" rx="10" fill="url(#userBlock)" stroke="#bfdbfe" stroke-width="2" />
+<rect x="40" y="140" width="220" height="40" rx="10" fill="#2563eb" />
+<rect x="41" y="160" width="218" height="20" fill="#2563eb" />
+<text x="150" y="165" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">1. USER INTERFACE (CLI)</text>
+  <rect x="55" y="200" width="190" height="85" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1" />
+  <text x="65" y="222" font-size="11" font-weight="bold" fill="#1e3a8a">User Prompt Input</text>
+  <text x="65" y="240" font-size="10" fill="#4b5563">- Read via OS Stdin</text>
+  <text x="65" y="255" font-size="10" fill="#4b5563">- Flags: -model, -sandbox</text>
+  <text x="65" y="270" font-size="10" fill="#4b5563">- Sets targets (host/docker)</text>
+  <rect x="55" y="320" width="190" height="230" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5" />
+  <text x="65" y="340" font-size="11" font-weight="bold" fill="#38bdf8">&gt;_ Terminal Output</text>
+  <text x="65" y="365" font-size="10" fill="#a7f3d0">[TURN 1] Thinking...</text>
+  <text x="65" y="385" font-size="10" fill="#fde047">🛠️ Tool: write_file</text>
+  <text x="65" y="405" font-size="10" fill="#fca5a5">  ↳ Path: script.py</text>
+  <text x="65" y="425" font-size="10" fill="#34d399">📡 Success (24 bytes)</text>
+  <text x="65" y="445" font-size="10" fill="#fde047">🛠️ Tool: execute_command</text>
+  <text x="65" y="465" font-size="10" fill="#cbd5e1">  ↳ Output: Hello World</text>
+  <text x="65" y="495" font-size="10" fill="#38bdf8">🤖 Final Answer:</text>
+  <text x="75" y="515" font-size="10" fill="#ffffff">"The script ran flawlessly."</text>
+<!-- Zone 2: Go Harness Engine -->
+<rect x="310" y="140" width="280" height="440" rx="10" fill="url(#harnessBlock)" stroke="#bbf7d0" stroke-width="2" />
+<rect x="310" y="140" width="280" height="40" rx="10" fill="#16a34a" />
+<rect x="311" y="160" width="278" height="20" fill="#16a34a" />
+<text x="450" y="165" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">2. GO ORCHESTRATOR LOOP</text>
+  <rect x="330" y="200" width="240" height="110" rx="6" fill="#ffffff" stroke="#86efac" stroke-width="1" />
+  <rect x="330" y="200" width="240" height="25" rx="6" fill="#f0fdf4" />
+  <rect x="330" y="215" width="240" height="10" fill="#f0fdf4" />
+  <text x="340" y="217" font-size="11" font-weight="bold" fill="#166534">Conversation State History</text>
+  <text x="340" y="240" font-size="10" fill="#1e293b" font-weight="bold">Message Slice Array:</text>
+  <text x="340" y="257" font-size="10" fill="#475569">- Index 0: System Instruction</text>
+  <text x="340" y="272" font-size="10" fill="#475569">- Index 1: User Prompt</text>
+  <text x="340" y="287" font-size="10" fill="#15803d">- Index 2+: Tool Calls &amp; Results</text>
+  <rect x="330" y="340" width="240" height="210" rx="6" fill="#ffffff" stroke="#86efac" stroke-width="1" />
+  <rect x="330" y="340" width="240" height="25" rx="6" fill="#f0fdf4" />
+  <rect x="330" y="355" width="240" height="10" fill="#f0fdf4" />
+  <text x="340" y="357" font-size="11" font-weight="bold" fill="#166534">JSON Parser &amp; Router</text>
+  <text x="340" y="380" font-size="10" fill="#1e293b" font-weight="bold">1. Intercepts API Response</text>
+  <text x="340" y="395" font-size="9" fill="#64748b">Decodes JSON into ChatCompletionResponse</text>
+  <text x="340" y="420" font-size="10" fill="#1e293b" font-weight="bold">2. Checks for ToolCalls[] array</text>
+  <text x="340" y="435" font-size="9" fill="#166534" font-weight="bold">IF ToolCalls &gt; 0 ──► Enters Execution</text>
+  <text x="340" y="450" font-size="9" fill="#b91c1c" font-weight="bold">IF ToolCalls == 0 ──► Print final &amp; stop</text>
+  <text x="340" y="475" font-size="10" fill="#1e293b" font-weight="bold">3. Executes Tool Dispatcher</text>
+  <text x="340" y="490" font-size="9" fill="#64748b">- write_file() -&gt; os.WriteFile / docker tee</text>
+  <text x="340" y="505" font-size="9" fill="#64748b">- execute_command() -&gt; exec.Command</text>
+  <text x="340" y="525" font-size="10" fill="#15803d" font-weight="bold">4. Increments turn counter (Max 15)</text>
+<!-- Zone 3: LLM API -->
+<rect x="670" y="140" width="290" height="170" rx="10" fill="url(#llmBlock)" stroke="#f0abfc" stroke-width="2" />
+<rect x="670" y="140" width="290" height="40" rx="10" fill="#a21caf" />
+<rect x="671" y="160" width="288" height="20" fill="#a21caf" />
+<text x="815" y="165" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">3. LLM ENGINE (REASONING &amp; PLANNING)</text>
+  <rect x="685" y="195" width="260" height="100" rx="6" fill="#ffffff" stroke="#f0abfc" stroke-width="1" />
+  <text x="695" y="215" font-size="11" font-weight="bold" fill="#701a75">Cloud APIs or Local Engines</text>
+  <text x="695" y="235" font-size="10" fill="#475569">- OpenAI: api.openai.com/v1 (gpt-4o)</text>
+  <text x="695" y="250" font-size="10" fill="#475569">- Local: Ollama (localhost:11434, llama3.1)</text>
+  <text x="695" y="265" font-size="10" fill="#701a75" font-weight="bold">Generates tool parameters in JSON schema</text>
+  <text x="695" y="280" font-size="9" fill="#64748b">Handles self-debugging when error is fed back</text>
+<!-- Zone 4: Sandboxes -->
+<rect x="670" y="360" width="290" height="220" rx="10" fill="url(#sandboxBlock)" stroke="#fde047" stroke-width="2" />
+<rect x="670" y="360" width="290" height="40" rx="10" fill="#eab308" />
+<rect x="671" y="380" width="288" height="20" fill="#eab308" />
+<text x="815" y="385" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">4. SANDBOX ENVIRONMENTS</text>
+  <rect x="685" y="415" width="260" height="65" rx="6" fill="#ffffff" stroke="#fef08a" stroke-width="1" />
+  <text x="695" y="432" font-size="11" font-weight="bold" fill="#854d0e">💻 Option A: Host Environment (-sandbox=host)</text>
+  <text x="695" y="448" font-size="9" fill="#475569">Runs commands directly on the native OS terminal</text>
+  <text x="695" y="462" font-size="9" fill="#ca8a04" font-weight="bold">Runs: cmd.exe /C (Windows) or sh -c (macOS/Linux)</text>
+  <rect x="685" y="495" width="260" height="70" rx="6" fill="#ffffff" stroke="#fef08a" stroke-width="1" />
+  <text x="695" y="512" font-size="11" font-weight="bold" fill="#854d0e">🐋 Option B: Docker Container (-sandbox=docker)</text>
+  <text x="695" y="528" font-size="9" fill="#475569">Runs commands safely inside an isolated VM/Container</text>
+  <text x="695" y="542" font-size="9" fill="#ca8a04" font-weight="bold">Runs: docker exec [container] sh -c [cmd]</text>
+  <text x="695" y="555" font-size="9" fill="#475569">Writes files via "docker exec -i tee [path]"</text>
+<!-- Connection Lines & Arrows -->
+  <!-- Flow 1: Stdin Prompt -->
+  <path d="M 245,242 L 320,242" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#flow-arrow)" />
+  <rect x="257" y="222" width="55" height="18" rx="3" fill="#ffffff" stroke="#bfdbfe" stroke-width="1" />
+  <text x="284" y="234" font-size="9" font-weight="bold" fill="#2563eb" text-anchor="middle">1. INPUT</text>
+  <!-- Flow 2: Send Request to LLM -->
+  <path d="M 570,230 L 658,230" fill="none" stroke="#3b82f6" stroke-width="2" marker-end="url(#flow-arrow)" />
+  <rect x="585" y="200" width="60" height="26" rx="3" fill="#ffffff" stroke="#93c5fd" stroke-width="1" />
+  <text x="615" y="212" font-size="9" font-weight="bold" fill="#2563eb" text-anchor="middle">2. DISPATCH</text>
+  <text x="615" y="222" font-size="8" fill="#475569" text-anchor="middle">HTTPS JSON</text>
+  <!-- Flow 3: LLM Response -->
+  <path d="M 670,260 C 620,265 620,350 582,360" fill="none" stroke="#f59e0b" stroke-width="2" marker-end="url(#loop-arrow)" />
+  <rect x="590" y="285" width="55" height="26" rx="3" fill="#ffffff" stroke="#fcd34d" stroke-width="1" />
+  <text x="617" y="297" font-size="9" font-weight="bold" fill="#d97706" text-anchor="middle">3. REPLY</text>
+  <text x="617" y="307" font-size="8" fill="#475569" text-anchor="middle">ToolCalls[]</text>
+  <!-- Flow 4: Tool Execution -->
+  <path d="M 570,445 C 610,445 615,465 658,470" fill="none" stroke="#f59e0b" stroke-width="2" marker-end="url(#loop-arrow)" />
+  <rect x="585" y="448" width="60" height="26" rx="3" fill="#ffffff" stroke="#fcd34d" stroke-width="1" />
+  <text x="615" y="460" font-size="9" font-weight="bold" fill="#d97706" text-anchor="middle">4. EXECUTE</text>
+  <text x="615" y="470" font-size="8" fill="#475569" text-anchor="middle">Write / Cmd</text>
+  <!-- Flow 5: Result Feedback -->
+  <path d="M 670,530 C 600,530 610,310 580,285" fill="none" stroke="#ef4444" stroke-width="2" stroke-dasharray="3,2" marker-end="url(#back-arrow)" />
+  <rect x="590" y="380" width="55" height="26" rx="3" fill="#ffffff" stroke="#fca5a5" stroke-width="1" />
+  <text x="617" y="392" font-size="9" font-weight="bold" fill="#b91c1c" text-anchor="middle">5. FEEDBACK</text>
+  <text x="617" y="402" font-size="8" fill="#475569" text-anchor="middle">Stdout/File</text>
+  <!-- Flow 6: Final Answer printed -->
+  <path d="M 330,455 L 260,455" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#flow-arrow)" />
+  <rect x="268" y="460" width="50" height="26" rx="3" fill="#ffffff" stroke="#86efac" stroke-width="1" />
+  <text x="293" y="472" font-size="9" font-weight="bold" fill="#15803d" text-anchor="middle">6. RENDER</text>
+  <text x="293" y="482" font-size="8" fill="#475569" text-anchor="middle">Final Text</text>
+  <rect x="40" y="600" width="920" height="30" rx="4" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1" />
+  <text x="50" y="618" font-size="10" fill="#64748b">• 1. Input prompt initialized ➔ • 2. Dispatched to LLM with schema list ➔ • 3. LLM returns Tool Call requests ➔ • 4. Orchestrator executes tools on Host or Docker ➔ • 5. Output sent back to history ➔ • 6. Answer displayed</text>
+</svg>
