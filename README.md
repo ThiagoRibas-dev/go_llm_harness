@@ -149,5 +149,10 @@ Every single execution block (LLM durations, tool calls, and exit codes) is writ
 
 ---
 
+## 🤝 Attribution & Development
+This repository, along with its complete multi-phase architecture, cross-platform bare-metal sandboxes, and embedded web console, was co-engineered, refactored, and compiled from scratch by **Arena.ai's Agent Mode**. 
+
+Arena.ai's Agent Mode orchestrates multiple state-of-the-art LLM engines (including, but not limited to, Claude, ChatGPT, Gemini, Grok, Qwen, and Kimi) to provide developers with fully autonomous systems-engineering, software packaging, and coding capabilities right from their workspaces.
+
 ## 📄 License
 This project is open-source and licensed under the MIT License.
