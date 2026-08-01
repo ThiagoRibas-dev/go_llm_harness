@@ -16,7 +16,7 @@ This document outlines the strategic engineering roadmap for evolving **GoHarnes
                   │
                   ▼
 ┌───────────────────────────────────┐
-│ PHASE 2: HIGH-EFFICIENCY CORE     │
+│ PHASE 2: HIGH-EFFICIENCY CORE     │ ◄── [Complete]
 │ - Semantic Diff Patching          │
 │ - Turn-by-Turn File Persistence   │
 │ - Dual-Engine Workspace Rollbacks │
@@ -25,14 +25,14 @@ This document outlines the strategic engineering roadmap for evolving **GoHarnes
                   │
                   ▼
 ┌───────────────────────────────────┐
-│ PHASE 3: MCP CLIENT INTEGRATION   │
+│ PHASE 3: MCP CLIENT INTEGRATION   │ ◄── [Complete]
 │ - JSON-RPC 2.0 over Stdio/SSE     │
 │ - Dynamic Tool Discovery          │
 └─────────────────┬─────────────────┘
                   │
                   ▼
 ┌───────────────────────────────────┐
-│ PHASE 4: EMBEDDED OS SANDBOXING   │
+│ PHASE 4: EMBEDDED OS SANDBOXING   │ ◄── [Complete]
 │ - Windows AppContainer / Jobs     │
 │ - Linux Landlock LSM              │
 │ - macOS sandbox-exec (SBPL)       │
@@ -41,7 +41,7 @@ This document outlines the strategic engineering roadmap for evolving **GoHarnes
                   │
                   ▼
 ┌───────────────────────────────────┐
-│ PHASE 5: ENTERPRISE & PACKAGING   │
+│ PHASE 5: ENTERPRISE & PACKAGING   │ ◄── [Complete]
 │ - Zero-dependency Python Bundle  │
 │ - CI/CD Cross-Compilation         │
 │ - Metadata Watcher & Trace Logs   │
@@ -49,10 +49,26 @@ This document outlines the strategic engineering roadmap for evolving **GoHarnes
                   │
                   ▼
 ┌───────────────────────────────────┐
-│ PHASE 6: EMBEDDED WEB CONSOLE     │ ◄── [Added Extension]
+│ PHASE 6: EMBEDDED WEB CONSOLE     │ ◄── [Complete]
 │ - HTML5/JS Single-Page App (SPA)  │
-│ - SSE/Websocket Live Log Stream   │
-│ - Visual Cost & Status Dashboards │
+│ - Workspace history and switching │
+│ - Parallel Session Branching      │
+└─────────────────┬─────────────────┘
+                  │
+                  ▼
+┌───────────────────────────────────┐
+│ PHASE 7: MULTI-PROVIDER CONNECTORS│ ◄── [Complete]
+│ - Anthropic Claude Messages API   │
+│ - Google Gemini (AI Studio) API   │
+│ - Google Gemini (Vertex AI OAuth) │
+└─────────────────┬─────────────────┘
+                  │
+                  ▼
+┌───────────────────────────────────┐
+│ PHASE 8: OPENAI COMPATIBLE GATEWAY│ ◄── [Planned Extension]
+│ - GET /v1/models discovery        │
+│ - POST /v1/chat completions proxy │
+│ - Tokenizer & Embedding Proxies   │
 └───────────────────────────────────┘
 ```
 
@@ -117,7 +133,7 @@ These highly-optimized, "no-bloat" features (inspired by modern developer agents
     "auto_compact_turns": 40,
     "model": "gpt-4o-mini",
     "temperature": 0.2,
-    "system_prompt": "You are a context compaction engine. Summarize the files modified, the bugs resolved, and the current task plan in a highly dense, bulleted state summary."
+    "system_prompt": "You are a context compaction engine. Summarize the files modified, the current bugs resolved, and the active task plan in a highly dense, bulleted state summary."
   }
   ```
 * **Sliding-Window State Reconstruction:** The engine tracks exactly which turn was compacted. On turn $42$, if compaction occurred at turn $40$, the engine constructs the LLM context dynamically by combining:
@@ -201,42 +217,55 @@ Using **GitHub Actions**, compile the static Go binary into a matrix of release 
 
 To make GoHarness accessible to non-CLI users and provide a visually rich dashboard that mirrors the TUI activity, we introduce a **Built-in Web Console** served directly from the compiled binary.
 
-```
-                  ┌──────────────────────────────────────────────┐
-                  │           Standalone Go Agent EXE            │
-                  │                                              │
-                  │   ┌───────────────┐     ┌─────────────────┐  │
-                  │   │  Go Controller│◄───►│ Embedded Web    │  │
-                  │   │  (Agent Loop) │     │ Server (Port    │  │
-                  │   └───────────────┘     │ 8080/Websocket) │  │
-                  └─────────────────────────┼─────────────────┘  │
-                                            │                    │
-                                            ▼ (Embeds Assets)    │
-                                    [ HTML5 / Tailwind / JS SPA ]
-                                                   │
-                                                   ▼
-                                       ┌───────────────────────┐
-                                       │   Your Web Browser    │
-                                       │ (localhost:8080/gui)  │
-                                       └───────────────────────┘
-```
-
 ### 6.1 Zero-Dependency Embedded Assets
-* **The Architecture:** The entire frontend (HTML5, Tailwind CSS via CDN, and a lightweight reactive JavaScript Single-Page Application) is authored inside a directory `web/` and compiled directly inside the Go executable using `//go:embed web/*`.
+* **The Architecture:** The entire frontend is compiled directly inside the Go executable using `//go:embed`.
 * **Zero-Setup Server:** The Go binary contains a built-in `net/http` router. When run with `./agent -web` (or flagged in `config.json`), Go spins up a lightweight, highly secure background web server (e.g. `http://localhost:8080`).
-* **Auto-Launch:** Go detects the user's OS on boot and automatically executes a native system command to open their default web browser directly to the console page (`cmd.exe /C start http://...` on Windows, `open` on macOS, or `xdg-open` on Linux).
+* **Auto-Launch:** Go automatically opens the default web browser on boot.
 
-### 6.2 Bidirectional Real-time streaming (Websockets / SSE)
-* The web browser connects to the Go binary via a persistent **WebSocket** or **Server-Sent Events (SSE)** connection.
-* **Stream Flow:**
-  - **Inputs:** The user can type prompts into the Web GUI chatbox.
-  - **Thoughts:** The LLM's streaming response is pushed chunk-by-turn to the Web GUI and rendered on the fly in beautiful, formatted Markdown.
-  - **Tool Logs:** When the agent runs a terminal command, the standard output is piped **live, line-by-line** to a scrolling visual terminal widget (powered by an embedded `xterm.js` canvas).
+### 6.2 Bidirectional Real-time streaming (SSE)
+* The web browser connects to the Go binary via a persistent Server-Sent Events (SSE) connection, streaming assistant tokens and tool executions live.
 
-### 6.3 Dashboards & Visual Controls
-* **Workspace Explorer (Right Panel):** A responsive, visual directory tree mapping the workspace. It highlights changed files, displays file sizes, and lets you click on a file to view a syntax-highlighted code editor preview.
-* **Token & Budget Monitor (Header):** A live visual progress bar and currency dial displaying:
-  - Total tokens consumed.
-  - Real-time cost in USD (calculated per turn).
-  - Current Turn Index relative to `max_turns`.
-* **Visual Rollback Button:** A visual chronological list of turn history. Hovering over a previous turn displays a **"Rollback to Here"** button, which triggers the `/fork <turn>` backend routine to automatically reset the chat logs and roll back workspace files on disk in one click!
+### 6.3 Dashboards, Workspaces, & Parallel Branching
+* **Workspace Swapper:** A dropdown selector lets users switch between independent local workspace folders dynamically, updating config history.
+* **Conversations Indexer:** Full list of previous sessions (creation times, active folders) is mapped, allowing developers to switch sessions and resume them in one click.
+* **Non-Destructive Fork (Branching):** Clicking the rollback button on any previous turn prompts a modal dialog to **Branch Timeline**. This clones the conversation state up to that turn into a brand-new, isolated session (leaving the original completely safe on disk!) and physically restores your folder files to exactly match that historical point in time.
+
+---
+
+## 🔌 Phase 7: Multi-Provider LLM Connectors
+
+To turn GoHarness into a completely flexible multi-model agent engine, we introduce a **Multi-Provider Translation Layer** built in-house with zero external library dependencies.
+
+### 7.1 Unified Translation Engine (`src/llm.go`)
+* We introduce a `"provider"` parameter inside `config.json`.
+* An in-process translation engine dynamically maps standard core `Message` and `Tool` structures to the specific, non-OpenAI JSON layouts of different cloud providers.
+
+### 7.2 Native Anthropic Claude Messages API
+* **System Prompt Extraction:** Automatically separates system prompts from the core message array, passing them as top-level parameters matching Anthropic's guidelines.
+* **Structure Mapping:** Maps assistant tool calls into custom `"tool_use"` blocks, and maps tool responses back as `"tool_result"` blocks inside standard user turns.
+* Uses the required API headers: `x-api-key` and `anthropic-version: 2023-06-01`.
+
+### 7.3 Native Google Gemini API (AI Studio & Vertex AI)
+* **Role Conversion:** Automatically maps conversational roles strictly to `"user"` or `"model"`.
+* **Function Schema Handshaking:** Maps tool schemas to Google's `"functionDeclarations"`, tool calls to `"functionCall"`, and tool responses to `"functionResponse"` objects.
+* **Auth Support:** Handles query-parameter key handshakes for Gemini AI Studio, and OAuth Bearer tokens (`Authorization: Bearer`) for Google Cloud Vertex AI integrations.
+
+---
+
+## 🌐 Phase 8: OpenAI-Compatible API Gateway
+
+To turn GoHarness into a unified local agentic middleware that any standard third-party LLM frontend can plug into, we expose a secure, standard-library-only OpenAI API Gateway.
+
+### 8.1 API Discovery & Completion Proxies
+* **`GET /v1/models`:** Serves static model descriptors so frontends like OpenWebUI, SillyTavern, and LibreChat can perform auto-discovery on boot.
+* **`POST /v1/chat/completions`:** Exposes a standard completions handler. It intercepts standard user chat messages, programmatically spawns our background secure bare-metal tool-use sandbox loops in the background to write code or execute shell scripts, and streams the final compiled solution back in standard OpenAI JSON chunks.
+
+### 8.2 Intelligent Vector Embeddings Proxy (`/v1/embeddings`)
+* Exposes a standardized embeddings endpoint.
+* When your frontend wants to index documents or read PDFs, it POSTs texts to GoHarness. GoHarness proxies these blocks directly to your active model provider (OpenAI, Gemini, or local Ollama) and returns standard OpenAI vector coordinates back, allowing your frontend to run localized RAG over a single connection port.
+
+### 8.3 Native Tokenizer & Detokenizer Proxies (`/v1/tokenize` & `/v1/detokenize`)
+* **The Importance:** Developer frontends require real-time token counts to calculate prompt limits, budget context allocations, and truncate history on the client side before dispatching requests.
+* **The Implementation:** We expose standard `/v1/tokenize` and `/v1/detokenize` (and their short-paths `/tokenize` and `/detokenize`) endpoints:
+  - **Local Model Syncing:** If a local model (via Ollama or llama-server) is selected, GoHarness dynamically forwards the text or tokens directly to the local model's native `/api/show` or `/tokenize` endpoints, returning $100\%$ accurate token metrics.
+  - **Cloud API Fallbacks:** If a cloud-based API is selected, GoHarness implements a fast, highly optimized Byte-Pair Encoding (BPE) tokenizer approximation locally in Go (similar to a compiled Tiktoken/llama.cpp tracker) to calculate token counts instantly in-process without any network latency.
