@@ -30,12 +30,14 @@ func main() {
 		Agent: AgentConfig{
 			WorkspaceDir:          "./workspace",
 			WorkspacesHistory:     []string{"./workspace"},
+			LastActiveSessionID:   "",
 			MaxTurns:              15,
 			CommandTimeoutSeconds: 30,
 		},
 		Security: SecurityConfig{
 			SandboxMode:     "host",
 			DockerContainer: "agent-workspace",
+			SandboxFallback: false,
 			AllowedTools:    []string{"write_file", "patch_file", "execute_command"},
 			BlockedPatterns: []string{"rm -rf /", "mkfs", "dd if=", "shutdown", "format"},
 		},
@@ -50,7 +52,19 @@ func main() {
 			KeepLastN:        2,
 			Model:            "gpt-4o-mini",
 			Temperature:      0.2,
-			SystemPrompt:     "You are a rolling context compaction engine. Summarize the files modified, the current bugs resolved, and the active task plan in a highly dense, bulleted summary. Do not lose key context.",
+			SystemPrompt:     "You are a professional context compaction, research synthesis, and developer handoff engine. Your task is to generate a highly structured, dense, and complete summary of the execution conversation so far. This summary will be injected into a future session as the sole active baseline context, so you MUST preserve critical technical details, architectural decisions, core research data, and constraints while dropping conversational noise.\n\n" +
+				"When compacting, you MUST structure your output into these 9 aspects:\n" +
+				"1. 📊 CURRENT STATE: High-level active task status, project progress, or current document draft baseline.\n" +
+				"2. 🎯 GOALS & INTENT: What the user explicitly requested, the overarching strategic objective, target audience, or desired output tone.\n" +
+				"3. 🛠️ RECENT CHANGES: Exact code modifications, files changed, newly configured tools, or primary data points newly extracted.\n" +
+				"4. 💡 KEY DECISIONS: Technical/architectural choices, analytical hypotheses selected, and key decisions (and why they were made).\n" +
+				"5. 🏗️ ACTIVE WORK: What is currently in progress, partially written drafts, active scripts running, or ongoing research pathways.\n" +
+				"6. 📂 KEY FILES & SOURCES: Crucial file paths, routes, configurations, research URLs, citations, or primary documents involved.\n" +
+				"7. 🎓 LEARNINGS & FINDINGS: Discovered bug resolutions, platform-specific blocks (like Windows API locks), crucial numbers/facts/statistics found, and analytical findings.\n" +
+				"8. 🔒 IMPORTANT CONTEXT & CONSTRAINTS: Active user preferences, structural requirements, legal/operational constraints, or explicit instructions (e.g. zero-dependency rules, security configurations, document limits).\n" +
+				"9. 📋 OPTIONAL NEXT STEPS: Clear, chronological, and actionable next steps or next-stage research questions for continuation.\n\n" +
+				"PRESERVE VERBATIM: Specific error messages and their corresponding fixes, raw credentials/tokens if any, core data parameters, facts and figures, and explicit user rules.\n" +
+				"MAY CONDENSE/DROP: Raw stdout/stderr terminal outputs (summarize the conclusion), raw file contents read or web page HTML scraped (summarize what was learned and extract key data), and dead exploratory steps.",
 		},
 		MCPServers: map[string]MCPServerConfig{
 			"sqlite-demo": {
@@ -63,10 +77,11 @@ func main() {
 			Port:              8080,
 			APIGatewayEnabled: true,
 		},
+		Debug: false,
 	}
 
-	// 2. Try to load config.json, or create a default one if it doesn't exist
-	configPath := "config.json"
+	// 2. Try to load config.json (Resolve relative to binary path - Phase 8.6)
+	configPath := GetSystemPath("config.json")
 	loadedCfg, err := LoadConfig(configPath)
 	if err != nil {
 		fmt.Printf("%s[SYSTEM] config.json not found or invalid (%v). Generating standard default config.json...%s\n", ColorYellow, err, ColorReset)
@@ -88,6 +103,7 @@ func main() {
 	flag.StringVar(&activeConfig.API.Model, "model", activeConfig.API.Model, "Model target name")
 	flag.StringVar(&activeConfig.Security.SandboxMode, "sandbox", activeConfig.Security.SandboxMode, "Sandbox environment: 'host', 'docker' or 'none'")
 	flag.StringVar(&activeConfig.Security.DockerContainer, "container", activeConfig.Security.DockerContainer, "Target Docker container if sandbox is docker")
+	flag.BoolVar(&activeConfig.Debug, "debug", activeConfig.Debug, "Enable verbose developer diagnostic logs") // Phase 8.6
 	flag.Parse()
 
 	// 4. Fallback Environment Variables for API Key
@@ -101,16 +117,34 @@ func main() {
 	// Populate workspace history if empty
 	if len(activeConfig.Agent.WorkspacesHistory) == 0 {
 		activeConfig.Agent.WorkspacesHistory = append(activeConfig.Agent.WorkspacesHistory, activeConfig.Agent.WorkspaceDir)
-		_ = SaveConfig("config.json", activeConfig)
+		_ = SaveConfig(configPath, activeConfig)
 	}
 
-	// 5. Initialize the Turn-by-Turn Session System
-	activeSessionID = "sess_" + time.Now().Format("20060102-150405")
-	sessionPath := filepath.Join(".goharness", "sessions", activeSessionID)
-	os.MkdirAll(sessionPath, 0755)
+	// 5. Initialize or Resume the Turn-by-Turn Session System (Phase 8.6 session persistence)
+	sessionID := activeConfig.Agent.LastActiveSessionID
+	sessionPath := ""
+	if sessionID != "" {
+		sessionPath = GetSystemPath(filepath.Join(".goharness", "sessions", sessionID))
+	}
 
-	// Write metadata for the initial session
-	createSessionMeta(activeSessionID, activeConfig.Agent.WorkspaceDir, "", "Initial Session")
+	// Verify that the saved last active session directory physically exists on disk
+	if sessionID != "" && dirExists(sessionPath) {
+		activeSessionID = sessionID
+		fmt.Printf("%s[SYSTEM] Resuming last active conversation session: %s%s\n", ColorGreen, activeSessionID, ColorReset)
+		_ = loadHistoryFromFiles() // Warm up memory cache
+		currentTurnNumber = findMaxTurnNumber(activeSessionID)
+	} else {
+		// Fallback: Create a brand new session on first boot or if deleted
+		activeSessionID = "sess_" + time.Now().Format("20060102-150405")
+		sessionPath = GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID))
+		os.MkdirAll(sessionPath, 0755)
+
+		// Write metadata for the initial session
+		createSessionMeta(activeSessionID, activeConfig.Agent.WorkspaceDir, "", "Initial Session")
+		
+		activeConfig.Agent.LastActiveSessionID = activeSessionID
+		_ = SaveConfig(configPath, activeConfig)
+	}
 
 	// 6. Spawn and initialize all registered Model Context Protocol (MCP) servers
 	defer cleanupMCPServers()
@@ -243,6 +277,23 @@ func runAgentLoop(userPrompt string) string {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: FunctionDescriptor{
+				Name:        "spawn_sub_agent",
+				Description: "Spawn a specialized background sub-agent to perform complex file searches, code analysis, or parallel research in the workspace or session archives, returning a dense final summary report.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"prompt": map[string]interface{}{
+							"type":        "string",
+							"description": "The precise task, file-search query, or instruction for the sub-agent (e.g., 'Find the postgres credentials in the archived turns in compacted_summary_up_to_turn_046/').",
+						},
+					},
+					"required": []string{"prompt"},
+				},
+			},
+		},
 	}
 
 	mcpTools := discoverMCPTools()
@@ -271,7 +322,15 @@ func runAgentLoop(userPrompt string) string {
 
 	history := loadHistoryFromFiles()
 
-	if len(history) >= activeConfig.Compaction.AutoCompactTurns {
+	// Count actual user prompts to decide if we should trigger compaction
+	userTurns := 0
+	for _, msg := range history {
+		if msg.Role == "user" {
+			userTurns++
+		}
+	}
+
+	if userTurns >= activeConfig.Compaction.AutoCompactTurns {
 		executeSlidingWindowCompaction(history)
 		history = loadHistoryFromFiles()
 	}
@@ -282,12 +341,18 @@ func runAgentLoop(userPrompt string) string {
 	requestMessages = append(requestMessages, Message{Role: "system", Content: fullSystemPrompt})
 
 	if compactedSummary != "" {
-		summaryState := fmt.Sprintf("=== CONTEXT COMPACTION STATE SUMMARY (Turns 1 to %d) ===\nBelow is a dense summary of prior turns which have been purged to save tokens. Refer to this as the active task baseline:\n\n%s", compactionBoundary, compactedSummary)
+		summaryState := fmt.Sprintf("=== CONTEXT COMPACTION STATE SUMMARY (Turns 1 to %d) ===\n"+
+			"Below is a dense summary of prior turns which have been archived to save tokens. Refer to this as the active task baseline:\n\n%s\n\n"+
+			"💡 RETRIEVAL INSTRUCTION: If you need to inspect the exact raw messages, tool calls, or code from these archived turns "+
+			"(e.g., to find specific technical details referenced in the summary), you have full access to their raw JSON files. "+
+			"They are stored in your active session subfolder under: '.goharness/sessions/%s/compacted_summary_up_to_turn_%03d/'. "+
+			"Use the 'execute_command' tool to read/find them if necessary.",
+			compactionBoundary, compactedSummary, activeSessionID, compactionBoundary)
 		requestMessages = append(requestMessages, Message{Role: "system", Content: summaryState})
 	}
 
 	var filteredHistory []Message
-	sessionPath := filepath.Join(".goharness", "sessions", activeSessionID)
+	sessionPath := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID))
 	entries, _ := os.ReadDir(sessionPath)
 	for _, entry := range entries {
 		name := entry.Name()
@@ -319,6 +384,14 @@ func runAgentLoop(userPrompt string) string {
 		if err != nil {
 			LogExecutionTrace(turn, "llm_completion", startTime, "failed", map[string]interface{}{"error": err.Error()})
 			fmt.Printf("%s[ERROR] LLM API Call Failed: %v%s\n", ColorRed, err, ColorReset)
+			
+			// Broadcast the API error directly to the Web Console!
+			BroadcastSSE("turn_secured", map[string]interface{}{
+				"turn_number": 0,
+				"role":        "system",
+				"name":        "system",
+				"content":     fmt.Sprintf("❌ [LLM API ERROR] Request failed: %v. Please verify your API Key and Provider Base URL in the Settings modal.", err),
+			})
 			return "Error: LLM API Call Failed."
 		}
 		LogExecutionTrace(turn, "llm_completion", startTime, "success", map[string]interface{}{"model": activeConfig.API.Model, "provider": activeConfig.API.Provider})
@@ -396,6 +469,20 @@ func runAgentLoop(userPrompt string) string {
 					} else {
 						result = fmt.Sprintf("Error parsing tool arguments: %v", err)
 						LogExecutionTrace(turn, "tool_execute_command", toolStart, "failed", map[string]interface{}{"error": err.Error()})
+					}
+				} else if toolCall.Function.Name == "spawn_sub_agent" {
+					var args struct {
+						Prompt string `json:"prompt"`
+					}
+					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
+						fmt.Printf("  ↳ Spawning specialized sub-agent for: %s\n", args.Prompt)
+						result = executeSubAgent(args.Prompt)
+						LogExecutionTrace(turn, "tool_spawn_sub_agent", toolStart, "success", map[string]interface{}{
+							"prompt": args.Prompt,
+						})
+					} else {
+						result = fmt.Sprintf("Error parsing tool arguments: %v", err)
+						LogExecutionTrace(turn, "tool_spawn_sub_agent", toolStart, "failed", map[string]interface{}{"error": err.Error()})
 					}
 				} else {
 					result = fmt.Sprintf("Unknown tool name: %s", toolCall.Function.Name)
@@ -510,7 +597,7 @@ func backupWorkspaceFile(relativePath string) {
 	content, err := os.ReadFile(srcPath)
 	if err != nil {
 		// File does not exist yet. Create a ".untracked_new" marker file (Phase 8.5)
-		markerDir := filepath.Join(".goharness", "sessions", activeSessionID, "backups", fmt.Sprintf("turn-%d", currentTurnNumber+1))
+		markerDir := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID, "backups", fmt.Sprintf("turn-%d", currentTurnNumber+1)))
 		os.MkdirAll(markerDir, 0755)
 		markerPath := filepath.Join(markerDir, relativePath+".untracked_new")
 		os.MkdirAll(filepath.Dir(markerPath), 0755)
@@ -518,7 +605,7 @@ func backupWorkspaceFile(relativePath string) {
 		return
 	}
 
-	backupDir := filepath.Join(".goharness", "sessions", activeSessionID, "backups", fmt.Sprintf("turn-%d", currentTurnNumber+1))
+	backupDir := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID, "backups", fmt.Sprintf("turn-%d", currentTurnNumber+1)))
 	os.MkdirAll(backupDir, 0755)
 
 	destPath := filepath.Join(backupDir, relativePath)
@@ -529,7 +616,7 @@ func backupWorkspaceFile(relativePath string) {
 
 // restoreWorkspaceBackups restores modified files and physically deletes newly created files on rollbacks (Phase 8.5)
 func restoreWorkspaceBackups(targetTurn int) {
-	backupRoot := filepath.Join(".goharness", "sessions", activeSessionID, "backups")
+	backupRoot := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID, "backups"))
 
 	// 1. Restore original contents of modified files
 	targetBackupFolder := filepath.Join(backupRoot, fmt.Sprintf("turn-%d", targetTurn+1))
@@ -590,4 +677,13 @@ func restoreWorkspaceBackups(targetTurn int) {
 			}
 		}
 	}
+}
+
+// Helper: Checks if a physical directory exists on disk (Phase 8.6)
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	if err == nil && info.IsDir() {
+		return true
+	}
+	return false
 }

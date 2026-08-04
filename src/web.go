@@ -356,6 +356,8 @@ func StartWebGUI(port int) {
 			"api":        activeConfig.API,
 			"agent":      activeConfig.Agent,
 			"security":   activeConfig.Security,
+			"compaction": activeConfig.Compaction,
+			"debug":      activeConfig.Debug, // Phase 8.6
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -369,19 +371,25 @@ func StartWebGUI(port int) {
 		}
 
 		var req struct {
-			Provider      string  `json:"provider"`       // Phase 7
-			APIKey        string  `json:"api_key"`
-			Model         string  `json:"model"`
-			BaseURL       string  `json:"base_url"`
-			SandboxMode   string  `json:"sandbox_mode"`
-			MaxTurns      int     `json:"max_turns"`
-			WorkspaceDir  string  `json:"workspace_dir"`
-			Temperature   float64 `json:"temperature"`     // Phase 8.6
-			TopP          float64 `json:"top_p"`           // Phase 8.6
-			TopK          int     `json:"top_k"`           // Phase 8.6
-			ThinkingLevel string  `json:"thinking_level"`  // Phase 8.6
-			ProjectID     string  `json:"project_id"`      // Phase 8.6
-			Region        string  `json:"region"`          // Phase 8.6
+			Provider        string  `json:"provider"` // Phase 7
+			APIKey          string  `json:"api_key"`
+			Model           string  `json:"model"`
+			BaseURL         string  `json:"base_url"`
+			SandboxMode     string  `json:"sandbox_mode"`
+			SandboxFallback bool    `json:"sandbox_fallback"`
+			MaxTurns        int     `json:"max_turns"`
+			WorkspaceDir    string  `json:"workspace_dir"`
+			Temperature     float64 `json:"temperature"`
+			TopP            float64 `json:"top_p"`
+			TopK            int     `json:"top_k"`
+			ThinkingLevel   string  `json:"thinking_level"`
+			ProjectID       string  `json:"project_id"`
+			Region          string  `json:"region"`
+			CompactModel    string  `json:"compact_model"`
+			CompactTurns    int     `json:"compact_turns"`
+			CompactKeepN    int     `json:"compact_keep_n"`
+			CompactPrompt   string  `json:"compact_prompt"`
+			Debug           bool    `json:"debug"` // Phase 8.6
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -389,7 +397,6 @@ func StartWebGUI(port int) {
 			return
 		}
 
-		// Update global memory settings immediately
 		activeConfig.API.Provider = req.Provider
 		activeConfig.API.Key = req.APIKey
 		activeConfig.API.Model = req.Model
@@ -400,9 +407,16 @@ func StartWebGUI(port int) {
 		activeConfig.API.ThinkingLevel = req.ThinkingLevel
 		activeConfig.API.ProjectID = req.ProjectID
 		activeConfig.API.Region = req.Region
-		
+		activeConfig.Debug = req.Debug // Phase 8.6
+
 		activeConfig.Security.SandboxMode = req.SandboxMode
+		activeConfig.Security.SandboxFallback = req.SandboxFallback
 		activeConfig.Agent.MaxTurns = req.MaxTurns
+
+		activeConfig.Compaction.Model = req.CompactModel
+		activeConfig.Compaction.AutoCompactTurns = req.CompactTurns
+		activeConfig.Compaction.KeepLastN = req.CompactKeepN
+		activeConfig.Compaction.SystemPrompt = req.CompactPrompt
 
 		if activeConfig.Agent.WorkspaceDir != req.WorkspaceDir {
 			selectWorkspace(req.WorkspaceDir)
@@ -450,12 +464,47 @@ func StartWebGUI(port int) {
 		})
 	})
 
+	mux.HandleFunc("/api/workspaces/remove", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Path string `json:"path"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		req.Path = filepath.Clean(req.Path)
+		var updated []string
+		for _, ws := range activeConfig.Agent.WorkspacesHistory {
+			if filepath.Clean(ws) != req.Path {
+				updated = append(updated, ws)
+			}
+		}
+		activeConfig.Agent.WorkspacesHistory = updated
+		_ = SaveConfig("config.json", activeConfig)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":     "success",
+			"workspaces": activeConfig.Agent.WorkspacesHistory,
+		})
+	})
+
 	mux.HandleFunc("/api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		sessionsRoot := filepath.Join(".goharness", "sessions")
 		entries, err := os.ReadDir(sessionsRoot)
 		if err != nil {
 			http.Error(w, "No sessions found", http.StatusNotFound)
 			return
+		}
+
+		filterWS := r.URL.Query().Get("workspace")
+		if filterWS != "" {
+			filterWS = filepath.Clean(filterWS)
 		}
 
 		var sessionList []SessionMeta
@@ -465,7 +514,9 @@ func StartWebGUI(port int) {
 				if bytes, err := os.ReadFile(metaPath); err == nil {
 					var meta SessionMeta
 					if err := json.Unmarshal(bytes, &meta); err == nil {
-						sessionList = append(sessionList, meta)
+						if filterWS == "" || filepath.Clean(meta.WorkspaceDir) == filterWS {
+							sessionList = append(sessionList, meta)
+						}
 					}
 				}
 			}
@@ -505,7 +556,7 @@ func StartWebGUI(port int) {
 		_ = SaveConfig("config.json", activeConfig)
 
 		history := loadHistoryFromFiles()
-		currentTurnNumber = len(history)
+		currentTurnNumber = findMaxTurnNumber(req.SessionID)
 
 		BroadcastSSE("session_init", map[string]interface{}{"session_id": activeSessionID})
 
@@ -575,6 +626,7 @@ func StartWebGUI(port int) {
 			ParentSessionID string `json:"parent_session_id"`
 			Turn            int    `json:"turn"`
 			BranchName      string `json:"branch_name"`
+			EditContent     string `json:"edit_content,omitempty"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -597,19 +649,39 @@ func StartWebGUI(port int) {
 			if !entry.IsDir() && strings.HasSuffix(name, ".json") && len(name) > 3 {
 				turnIdx, err := strconv.Atoi(name[:3])
 				if err == nil && turnIdx <= req.Turn {
-					_ = copyFile(filepath.Join(parentPath, name), filepath.Join(newSessionPath, name))
+					srcFile := filepath.Join(parentPath, name)
+					dstFile := filepath.Join(newSessionPath, name)
+					if turnIdx == req.Turn && req.EditContent != "" {
+						fileBytes, err := os.ReadFile(srcFile)
+						if err == nil {
+							var msg Message
+							if err := json.Unmarshal(fileBytes, &msg); err == nil {
+								msg.Content = req.EditContent
+								newBytes, _ := json.MarshalIndent(msg, "", "  ")
+								_ = os.WriteFile(dstFile, newBytes, 0644)
+							}
+						}
+					} else {
+						_ = copyFile(srcFile, dstFile)
+					}
 				}
 			}
 		}
 
-		pSummaryPath := filepath.Join(parentPath, "compacted_summary.json")
-		pBoundaryPath := filepath.Join(parentPath, "compaction_boundary.txt")
-		boundaryBytes, err := os.ReadFile(pBoundaryPath)
-		if err == nil {
-			boundary, _ := strconv.Atoi(string(boundaryBytes))
-			if boundary <= req.Turn {
-				_ = copyFile(pSummaryPath, filepath.Join(newSessionPath, "compacted_summary.json"))
-				_ = copyFile(pBoundaryPath, filepath.Join(newSessionPath, "compaction_boundary.txt"))
+		boundary := getSessionCompactionBoundary(req.ParentSessionID)
+		if boundary <= req.Turn {
+			// Copy any compacted summaries and their soft-related folders that are within range
+			for _, entry := range entries {
+				name := entry.Name()
+				if strings.HasPrefix(name, "compacted_summary_up_to_turn_") {
+					src := filepath.Join(parentPath, name)
+					dst := filepath.Join(newSessionPath, name)
+					if entry.IsDir() {
+						copyDir(src, dst)
+					} else {
+						_ = copyFile(src, dst)
+					}
+				}
 			}
 		}
 
@@ -642,6 +714,11 @@ func StartWebGUI(port int) {
 		history := loadHistoryFromFiles()
 
 		BroadcastSSE("session_init", map[string]interface{}{"session_id": activeSessionID})
+
+		// If we edited a user prompt, we trigger the agentic loop asynchronously on this new session!
+		if req.EditContent != "" {
+			go runAgentLoop(req.EditContent)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -676,6 +753,68 @@ func StartWebGUI(port int) {
 		_, _ = w.Write([]byte(`{"status":"queued"}`))
 	})
 
+	// POST /api/sessions/reroll: Deletes the last Assistant/Tool turns and resubmits the last User turn
+	mux.HandleFunc("/api/sessions/reroll", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+
+		sessionPath := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID))
+		entries, err := os.ReadDir(sessionPath)
+		if err != nil {
+			http.Error(w, "No session turns found", http.StatusNotFound)
+			return
+		}
+
+		// Walk backwards to find the last user prompt and the first assistant turn in the last round
+		history := loadHistoryFromFiles()
+		if len(history) == 0 {
+			http.Error(w, "History is empty", http.StatusBadRequest)
+			return
+		}
+
+		var lastUserPrompt string
+		var lastUserTurnIdx int
+		var assistantStartTurn int
+
+		for i := len(history) - 1; i >= 0; i-- {
+			msg := history[i]
+			if msg.Role == "user" {
+				lastUserPrompt = msg.Content
+				lastUserTurnIdx = i + 1
+				assistantStartTurn = lastUserTurnIdx + 1
+				break
+			}
+		}
+
+		if lastUserPrompt == "" {
+			http.Error(w, "No user prompt found to reroll", http.StatusBadRequest)
+			return
+		}
+
+		// Delete all turn files on disk greater than or equal to assistantStartTurn
+		for _, entry := range entries {
+			name := entry.Name()
+			if !entry.IsDir() && strings.HasSuffix(name, ".json") && len(name) > 3 {
+				turnIdx, err := strconv.Atoi(name[:3])
+				if err == nil && turnIdx >= assistantStartTurn {
+					_ = os.Remove(filepath.Join(sessionPath, name))
+				}
+			}
+		}
+
+		// Restore backups up to lastUserTurnIdx
+		restoreWorkspaceBackups(lastUserTurnIdx)
+		currentTurnNumber = lastUserTurnIdx
+
+		// Trigger the agentic loop asynchronously with the last user prompt!
+		go runAgentLoop(lastUserPrompt)
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success"}`))
+	})
+
 	mux.HandleFunc("/api/fork", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
@@ -705,8 +844,364 @@ func StartWebGUI(port int) {
 		w.WriteHeader(http.StatusOK)
 	})
 
+	// POST /api/sessions/rename
+	mux.HandleFunc("/api/sessions/rename", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			SessionID string `json:"session_id"`
+			Name      string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		metaPath := filepath.Join(".goharness", "sessions", req.SessionID, "meta.json")
+		bytes, err := os.ReadFile(metaPath)
+		if err != nil {
+			http.Error(w, "Session not found", http.StatusNotFound)
+			return
+		}
+
+		var meta SessionMeta
+		_ = json.Unmarshal(bytes, &meta)
+		meta.Name = req.Name
+
+		newBytes, _ := json.MarshalIndent(meta, "", "  ")
+		_ = os.WriteFile(metaPath, newBytes, 0644)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	})
+
+	// POST /api/sessions/delete
+	mux.HandleFunc("/api/sessions/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			SessionID string `json:"session_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		sessionPath := filepath.Join(".goharness", "sessions", req.SessionID)
+		if err := os.RemoveAll(sessionPath); err != nil {
+			http.Error(w, "Failed to delete session folder", http.StatusInternalServerError)
+			return
+		}
+
+		// If deleted the active session, choose another or create brand new
+		if req.SessionID == activeSessionID {
+			sessionsRoot := filepath.Join(".goharness", "sessions")
+			entries, _ := os.ReadDir(sessionsRoot)
+			var nextSession string
+			for _, entry := range entries {
+				if entry.IsDir() {
+					nextSession = entry.Name()
+					break
+				}
+			}
+
+			if nextSession != "" {
+				activeSessionID = nextSession
+				metaPath := filepath.Join(sessionsRoot, nextSession, "meta.json")
+				if bytes, err := os.ReadFile(metaPath); err == nil {
+					var meta SessionMeta
+					_ = json.Unmarshal(bytes, &meta)
+					activeConfig.Agent.WorkspaceDir = meta.WorkspaceDir
+				}
+			} else {
+				// No sessions left! Create a new one
+				activeSessionID = "sess_" + time.Now().Format("20060102-150405")
+				os.MkdirAll(filepath.Join(sessionsRoot, activeSessionID), 0755)
+				createSessionMeta(activeSessionID, activeConfig.Agent.WorkspaceDir, "", "Default Session")
+			}
+			
+			activeConfig.Agent.LastActiveSessionID = activeSessionID
+			_ = SaveConfig("config.json", activeConfig)
+			
+			_ = loadHistoryFromFiles()
+			currentTurnNumber = findMaxTurnNumber(activeSessionID)
+			BroadcastSSE("session_init", map[string]interface{}{"session_id": activeSessionID})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "success",
+			"active_session_id": activeSessionID,
+		})
+	})
+
+	// GET /api/config/exclusions
+	mux.HandleFunc("/api/config/exclusions", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ignored_patterns":   activeConfig.DirectoryScan.IgnoredPatterns,
+			"collapsed_patterns": activeConfig.DirectoryScan.CollapsedPatterns,
+		})
+	})
+
+	// POST /api/config/exclusions/save
+	mux.HandleFunc("/api/config/exclusions/save", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			IgnoredPatterns   []string `json:"ignored_patterns"`
+			CollapsedPatterns []string `json:"collapsed_patterns"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		activeConfig.DirectoryScan.IgnoredPatterns = req.IgnoredPatterns
+		activeConfig.DirectoryScan.CollapsedPatterns = req.CollapsedPatterns
+		_ = SaveConfig("config.json", activeConfig)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	})
+
+	// GET /api/snapshots
+	mux.HandleFunc("/api/snapshots", func(w http.ResponseWriter, r *http.Request) {
+		wsClean := cleanWorkspaceName(activeConfig.Agent.WorkspaceDir)
+		snapshotsDir := filepath.Join(".goharness", "snapshots", wsClean)
+		
+		var snapshotList []SnapshotMeta
+		if entries, err := os.ReadDir(snapshotsDir); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					metaPath := filepath.Join(snapshotsDir, entry.Name(), "metadata.json")
+					if bytes, err := os.ReadFile(metaPath); err == nil {
+						var meta SnapshotMeta
+						if err := json.Unmarshal(bytes, &meta); err == nil {
+							snapshotList = append(snapshotList, meta)
+						}
+					}
+				}
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"snapshots": snapshotList,
+		})
+	})
+
+	// POST /api/snapshots/create
+	mux.HandleFunc("/api/snapshots/create", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		wsClean := cleanWorkspaceName(activeConfig.Agent.WorkspaceDir)
+		snapID := "snap_" + time.Now().Format("20060102_150405")
+		snapDir := filepath.Join(".goharness", "snapshots", wsClean, snapID)
+		_ = os.MkdirAll(snapDir, 0755)
+
+		// Copy workspace files to snapshot folder
+		err := copyDirectory(activeConfig.Agent.WorkspaceDir, snapDir)
+		if err != nil {
+			http.Error(w, "Failed to copy workspace directory: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Calc count and size
+		count, size := getDirStats(snapDir)
+
+		meta := SnapshotMeta{
+			ID:        snapID,
+			Name:      req.Name,
+			Timestamp: time.Now().Format(time.RFC3339),
+			FileCount: count,
+			TotalSize: size,
+		}
+
+		metaBytes, _ := json.MarshalIndent(meta, "", "  ")
+		_ = os.WriteFile(filepath.Join(snapDir, "metadata.json"), metaBytes, 0644)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":   "success",
+			"snapshot": meta,
+		})
+	})
+
+	// POST /api/snapshots/revert
+	mux.HandleFunc("/api/snapshots/revert", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			SnapshotID string `json:"snapshot_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		wsClean := cleanWorkspaceName(activeConfig.Agent.WorkspaceDir)
+		snapDir := filepath.Join(".goharness", "snapshots", wsClean, req.SnapshotID)
+		
+		metaBytes, err := os.ReadFile(filepath.Join(snapDir, "metadata.json"))
+		if err != nil {
+			http.Error(w, "Snapshot not found or invalid", http.StatusNotFound)
+			return
+		}
+		var meta SnapshotMeta
+		_ = json.Unmarshal(metaBytes, &meta)
+
+		// Clear the active workspace (safety first: does not delete .git, .goharness, config.json)
+		err = clearDirectory(activeConfig.Agent.WorkspaceDir)
+		if err != nil {
+			http.Error(w, "Failed to clear active workspace: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Copy snapshot back to workspace
+		err = copyDirectory(snapDir, activeConfig.Agent.WorkspaceDir)
+		if err != nil {
+			http.Error(w, "Failed to restore workspace files from snapshot: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Broadcast restoration event to all UI clients
+		BroadcastSSE("turn_secured", map[string]interface{}{
+			"turn_number": 0,
+			"role":        "system",
+			"name":        "system",
+			"content":     fmt.Sprintf("🔄 [REVERTED] Workspace restored completely to Snapshot '%s' (%s). Files successfully reverted.", meta.Name, meta.ID),
+		})
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "success",
+			"name":   meta.Name,
+		})
+	})
+
+	// POST /api/snapshots/delete
+	mux.HandleFunc("/api/snapshots/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			SnapshotID string `json:"snapshot_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		wsClean := cleanWorkspaceName(activeConfig.Agent.WorkspaceDir)
+		snapDir := filepath.Join(".goharness", "snapshots", wsClean, req.SnapshotID)
+
+		if err := os.RemoveAll(snapDir); err != nil {
+			http.Error(w, "Failed to delete snapshot directory", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	})
+
+	// GET /api/mcp
+	mux.HandleFunc("/api/mcp", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(activeConfig.MCPServers)
+	})
+
+	// POST /api/mcp/save
+	mux.HandleFunc("/api/mcp/save", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Name    string   `json:"name"`
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.Name == "" || req.Command == "" {
+			http.Error(w, "Name and Command are required", http.StatusBadRequest)
+			return
+		}
+
+		// Initialize if map is nil
+		if activeConfig.MCPServers == nil {
+			activeConfig.MCPServers = make(map[string]MCPServerConfig)
+		}
+
+		// Save to configuration
+		activeConfig.MCPServers[req.Name] = MCPServerConfig{
+			Command: req.Command,
+			Args:    req.Args,
+		}
+		_ = SaveConfig("config.json", activeConfig)
+
+		// Dynamic Hot-Reload of MCP Servers!
+		cleanupMCPServers()
+		activeMCPServers = nil // Reset active list
+		bootstrapMCPServers()
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success"}`))
+	})
+
+	// POST /api/mcp/delete
+	mux.HandleFunc("/api/mcp/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if activeConfig.MCPServers != nil {
+			delete(activeConfig.MCPServers, req.Name)
+		}
+		_ = SaveConfig("config.json", activeConfig)
+
+		// Dynamic Hot-Reload of MCP Servers!
+		cleanupMCPServers()
+		activeMCPServers = nil // Reset active list
+		bootstrapMCPServers()
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success"}`))
+	})
+
 	// 4. Start Server and print beautiful UX logs (Phase 8.4)
-	serverAddr := fmt.Sprintf("127.0.0.1:%d", port)
+	serverAddr := fmt.Sprintf("0.0.0.0:%d", port)
 	
 	fmt.Printf("\n%s=======================================================%s\n", ColorBlue, ColorReset)
 	fmt.Printf("%s   🚀 GOHARNESS WEB & GATEWAY SERVICES ACTIVE 🚀       %s\n", ColorBold+ColorGreen, ColorReset)
@@ -756,7 +1251,7 @@ func selectWorkspace(workspacePath string) {
 
 	found := false
 	for _, ws := range activeConfig.Agent.WorkspacesHistory {
-		if ws == workspacePath {
+		if filepath.Clean(ws) == workspacePath {
 			found = true
 			break
 		}
@@ -765,6 +1260,41 @@ func selectWorkspace(workspacePath string) {
 		activeConfig.Agent.WorkspacesHistory = append(activeConfig.Agent.WorkspacesHistory, workspacePath)
 	}
 
+	// Try to find existing sessions for this workspace and choose the most recent one
+	sessionsRoot := filepath.Join(".goharness", "sessions")
+	entries, err := os.ReadDir(sessionsRoot)
+	var matchingSessions []SessionMeta
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				metaPath := filepath.Join(sessionsRoot, entry.Name(), "meta.json")
+				if bytes, err := os.ReadFile(metaPath); err == nil {
+					var meta SessionMeta
+					if err := json.Unmarshal(bytes, &meta); err == nil {
+						if filepath.Clean(meta.WorkspaceDir) == workspacePath {
+							matchingSessions = append(matchingSessions, meta)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if len(matchingSessions) > 0 {
+		mostRecent := matchingSessions[0]
+		for _, s := range matchingSessions {
+			if s.CreatedAt > mostRecent.CreatedAt {
+				mostRecent = s
+			}
+		}
+		activeSessionID = mostRecent.SessionID
+		_ = loadHistoryFromFiles()
+		currentTurnNumber = findMaxTurnNumber(activeSessionID)
+		BroadcastSSE("session_init", map[string]interface{}{"session_id": activeSessionID})
+		return
+	}
+
+	// If no existing session found, create a brand new one
 	activeSessionID = "sess_" + time.Now().Format("20060102-150405")
 	sessionPath := filepath.Join(".goharness", "sessions", activeSessionID)
 	os.MkdirAll(sessionPath, 0755)
@@ -870,4 +1400,84 @@ func detokenizeSlice(tokens []int) string {
 		}
 	}
 	return strings.Join(words, " ")
+}
+
+// SnapshotMeta holds workspace snapshot metadata
+type SnapshotMeta struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Timestamp string `json:"timestamp"`
+	FileCount int    `json:"file_count"`
+	TotalSize int64  `json:"total_size"`
+}
+
+func getDirStats(dir string) (int, int64) {
+	var count int
+	var size int64
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			rel, _ := filepath.Rel(dir, path)
+			if strings.HasPrefix(rel, ".git") || strings.HasPrefix(rel, ".goharness") || strings.Contains(rel, ".git") || strings.Contains(rel, ".goharness") {
+				return nil
+			}
+			count++
+			size += info.Size()
+		}
+		return nil
+	})
+	return count, size
+}
+
+func copyDirectory(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		if strings.HasPrefix(rel, ".git") || strings.HasPrefix(rel, ".goharness") || strings.Contains(rel, ".git") || strings.Contains(rel, ".goharness") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		targetPath := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(targetPath, 0755)
+		}
+		return copyFile(path, targetPath)
+	})
+}
+
+func clearDirectory(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == ".git" || name == ".goharness" || name == "config.json" {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		_ = os.RemoveAll(path)
+	}
+	return nil
+}
+
+func cleanWorkspaceName(path string) string {
+	cleaned := filepath.Clean(path)
+	cleaned = strings.ReplaceAll(cleaned, "/", "_")
+	cleaned = strings.ReplaceAll(cleaned, "\\", "_")
+	cleaned = strings.ReplaceAll(cleaned, ".", "")
+	cleaned = strings.ReplaceAll(cleaned, ":", "")
+	if cleaned == "" {
+		cleaned = "default"
+	}
+	return cleaned
 }

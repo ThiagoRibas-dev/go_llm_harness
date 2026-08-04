@@ -323,12 +323,13 @@ type GeminiPart struct {
 	Text             string                  `json:"text,omitempty"`
 	FunctionCall     *GeminiFunctionCall     `json:"functionCall,omitempty"`
 	FunctionResponse *GeminiFunctionResponse `json:"functionResponse,omitempty"`
+	ThoughtSignature string                  `json:"thought_signature,omitempty"`
+	ThoughtSigCamel  string                  `json:"thoughtSignature,omitempty"`
 }
 
 type GeminiFunctionCall struct {
 	Name             string          `json:"name"`
 	Args             json.RawMessage `json:"args"`
-	ThoughtSignature string          `json:"thoughtSignature,omitempty"`
 }
 
 type GeminiFunctionResponse struct {
@@ -395,8 +396,9 @@ func sendGeminiRequestWithUsage(messages []Message, tools []Tool, isVertex bool)
 					FunctionCall: &GeminiFunctionCall{
 						Name:             tc.Function.Name,
 						Args:             json.RawMessage(tc.Function.Arguments),
-						ThoughtSignature: tc.ThoughtSignature,
 					},
+					ThoughtSignature: tc.ThoughtSignature,
+					ThoughtSigCamel:  tc.ThoughtSignature,
 				})
 			}
 		} else if m.Role == "tool" {
@@ -501,6 +503,10 @@ func sendGeminiRequestWithUsage(messages []Message, tools []Tool, isVertex bool)
 		if part.FunctionCall != nil {
 			toolID := fmt.Sprintf("call_%d", time.Now().UnixNano())
 			argsBytes, _ := json.Marshal(part.FunctionCall.Args)
+			sig := part.ThoughtSignature
+			if sig == "" {
+				sig = part.ThoughtSigCamel
+			}
 			result.ToolCalls = append(result.ToolCalls, ToolCall{
 				ID:   toolID,
 				Type: "function",
@@ -508,7 +514,7 @@ func sendGeminiRequestWithUsage(messages []Message, tools []Tool, isVertex bool)
 					Name:      part.FunctionCall.Name,
 					Arguments: string(argsBytes),
 				},
-				ThoughtSignature: part.FunctionCall.ThoughtSignature,
+				ThoughtSignature: sig,
 			})
 		}
 	}

@@ -76,7 +76,7 @@
 
             <!-- Active Connections Status -->
             <div class="flex items-center space-x-2 text-xs bg-slate-800/80 px-3 py-1.5 rounded-md border border-[#334155]">
-                <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" id="status-dot"></div>
+                <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" id="status-dot"></div>
                 <span id="status-text">Connected</span>
             </div>
         </div>
@@ -96,6 +96,9 @@
                 <button onclick="switchSidebarTab('sessions')" id="tab-sessions-btn" class="flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
                     <i class="fa-solid fa-comments mr-1"></i> Sessions
                 </button>
+                <button onclick="switchSidebarTab('snapshots')" id="tab-snapshots-btn" class="flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+                    <i class="fa-solid fa-camera mr-1"></i> Snapshots
+                </button>
             </div>
 
             <!-- TAB 1: FILE EXPLORER -->
@@ -114,7 +117,7 @@
             <div id="tab-sessions" class="hidden flex-1 flex flex-col overflow-hidden p-4 space-y-4">
                 
                 <!-- WORKSPACE MANAGEMENT SECTION -->
-                <div class="space-y-2">
+                <div class="space-y-2 shrink-0">
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active Workspace</label>
                     <div class="flex space-x-2">
                         <!-- Selector dropdown -->
@@ -124,10 +127,18 @@
                     </div>
                     <!-- Create New Workspace input -->
                     <div class="flex space-x-2">
-                        <input type="text" id="new-workspace-input" placeholder="Add new workspace path..." class="flex-1 bg-[#1e293b] border border-[#334155] text-xs px-2 py-1 rounded outline-none focus:border-blue-500 font-mono">
+                        <input type="text" id="new-workspace-input" placeholder="Add workspace path..." class="flex-1 bg-[#1e293b] border border-[#334155] text-xs px-2 py-1 rounded outline-none focus:border-blue-500 font-mono">
                         <button onclick="addNewWorkspace()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs transition">
                             Add
                         </button>
+                    </div>
+                </div>
+
+                <!-- WORKSPACE HISTORY CHIPS/LIST -->
+                <div class="space-y-1 shrink-0">
+                    <label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Workspace History</label>
+                    <div id="workspaces-history-list" class="space-y-1 max-h-24 overflow-y-auto pr-1">
+                        <!-- Dynamic list of workspaces -->
                     </div>
                 </div>
 
@@ -148,6 +159,27 @@
 
             </div>
 
+            <!-- TAB 3: SNAPSHOTS MANAGER -->
+            <div id="tab-snapshots" class="hidden flex-1 flex flex-col overflow-hidden p-4 space-y-4">
+                <div class="space-y-2 shrink-0">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Workspace Snapshotting</label>
+                    <div class="flex flex-col space-y-2">
+                        <input type="text" id="snapshot-name-input" placeholder="Snapshot label (e.g. Pre-Refactor)..." class="bg-[#1e293b] border border-[#334155] text-xs px-2.5 py-1.5 rounded outline-none focus:border-blue-500 font-mono text-slate-200">
+                        <button onclick="createSnapshot()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-3 rounded text-xs transition flex items-center justify-center space-x-1">
+                            <i class="fa-solid fa-camera"></i> <span>Capture Workspace</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 flex flex-col overflow-hidden min-h-0 pt-2 border-t border-[#334155]/60">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Available Snapshots</label>
+                    <div class="flex-1 overflow-y-auto space-y-2 pr-1" id="snapshots-list">
+                        <!-- Snapshots will load here dynamically -->
+                        <div class="text-slate-500 italic text-xs">No snapshots captured yet.</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Quick Action controls -->
             <div class="p-4 border-t border-[#334155] bg-slate-900/30 space-y-2 text-xs shrink-0">
                 <button onclick="triggerCompaction()" class="w-full py-1.5 px-3 bg-indigo-950/40 text-indigo-400 border border-indigo-900 rounded hover:bg-indigo-900 hover:text-white transition duration-150 flex items-center justify-center">
@@ -166,10 +198,13 @@
             <!-- ⌨️ INPUT CONTROL PANEL -->
             <div class="p-6 border-t border-[#334155] bg-[#0f172a]/50 shrink-0">
                 <form id="prompt-form" onsubmit="submitPrompt(event)" class="relative max-w-4xl mx-auto flex items-center bg-[#1e293b] rounded-lg border border-[#334155] shadow-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition duration-150">
-                    <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')..." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36" onkeydown="handleInputKeydown(event)"></textarea>
+                    <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')...." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36" onkeydown="handleInputKeydown(event)"></textarea>
                     
                     <div class="flex items-center space-x-2 pr-3 shrink-0">
-                        <button type="submit" class="bg-blue-600 text-white hover:bg-blue-500 transition duration-150 px-4 py-2 rounded text-xs font-bold shadow-md flex items-center space-x-1.5">
+                        <button type="button" onclick="triggerReroll()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition p-2.5 rounded-md border border-[#334155] text-xs font-bold flex items-center justify-center h-9 w-9" title="Reroll Last Response (Regenerate)">
+                            <i class="fa-solid fa-rotate-right text-xs"></i>
+                        </button>
+                        <button type="submit" class="bg-blue-600 text-white hover:bg-blue-500 transition duration-150 px-4 py-2 rounded text-xs font-bold h-9 shadow-md flex items-center space-x-1.5">
                             <span>Execute</span> <i class="fa-solid fa-play"></i>
                         </button>
                     </div>
@@ -255,14 +290,45 @@
                             <input type="number" id="input-top-k" min="0" max="100" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
                         </div>
                     </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Gemini Reasoning/Thinking Level</label>
+                            <select id="input-thinking" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500">
+                                <option value="off">Off (Standard Fast Output)</option>
+                                <option value="low">Minimal (Low Reasoning)</option>
+                                <option value="medium">Medium (Standard Reasoning)</option>
+                                <option value="high">High (Extensive Thinking Budget)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="flex items-center space-x-2 text-slate-300 font-bold mb-1.5 cursor-pointer pt-6">
+                                <input type="checkbox" id="input-debug" class="rounded bg-[#0f172a] border-[#334155] text-blue-500 focus:ring-blue-500 h-4 w-4">
+                                <span>Enable Verbose Debug Logs</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced Context Compaction Section -->
+                <div class="space-y-3">
+                    <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">Advanced Context Compaction (Memory Management)</div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Compaction Model</label>
+                            <input type="text" id="input-compact-model" placeholder="gpt-4o-mini" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Auto-Compact Threshold (User Turns)</label>
+                            <input type="number" id="input-compact-turns" min="1" max="100" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Keep Last N Messages</label>
+                            <input type="number" id="input-compact-keep-n" min="1" max="20" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                    </div>
                     <div>
-                        <label class="block text-slate-300 font-bold mb-1.5">Gemini Reasoning/Thinking Level</label>
-                        <select id="input-thinking" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500">
-                            <option value="off">Off (Standard Fast Output)</option>
-                            <option value="low">Minimal (Low Reasoning)</option>
-                            <option value="medium">Medium (Standard Reasoning)</option>
-                            <option value="high">High (Extensive Thinking Budget)</option>
-                        </select>
+                        <label class="block text-slate-300 font-bold mb-1.5">Compaction System Prompt</label>
+                        <textarea id="input-compact-prompt" rows="5" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono text-[11px] leading-normal placeholder-slate-600 resize-y" placeholder="System prompt directives..."></textarea>
                     </div>
                 </div>
 
@@ -279,13 +345,87 @@
                             </select>
                         </div>
                         <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Allow Sandbox Fallback (Unsafe)</label>
+                            <select id="input-sandbox-fallback" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                                <option value="false">Disabled (Strict/Blocked - Secure Default)</option>
+                                <option value="true">Enabled (Graceful Unsandboxed Fallback)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
                             <label class="block text-slate-300 font-bold mb-1.5">Max Execution Turns</label>
                             <input type="number" id="input-max-turns" min="1" max="100" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
                         </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Workspace Directory Path</label>
+                            <input type="text" id="input-workspace-dir" placeholder="./workspace" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-slate-300 font-bold mb-1.5">Workspace Directory Path</label>
-                        <input type="text" id="input-workspace-dir" placeholder="./workspace" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                </div>
+
+                <!-- Directory Scan Exclusions & Collapses Section -->
+                <div class="space-y-3">
+                    <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">Directory Scan Exclusions &amp; Collapsing</div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1">Ignored Patterns (e.g. .git, venv)</label>
+                            <div class="flex space-x-1.5 mb-1.5">
+                                <input type="text" id="add-ignore-input" placeholder="e.g. *.tmp" class="flex-1 bg-[#0f172a] border border-[#334155] rounded px-2.5 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
+                                <button type="button" onclick="addIgnorePattern()" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 hover:text-white px-3 rounded font-bold text-xs">Add</button>
+                            </div>
+                            <div id="ignore-chips-list" class="flex flex-wrap gap-1 max-h-24 overflow-y-auto bg-slate-900/30 p-2 rounded border border-[#334155]/60">
+                                <!-- Chips will render here -->
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1">Collapsed Directories (e.g. node_modules)</label>
+                            <div class="flex space-x-1.5 mb-1.5">
+                                <input type="text" id="add-collapse-input" placeholder="e.g. target" class="flex-1 bg-[#0f172a] border border-[#334155] rounded px-2.5 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
+                                <button type="button" onclick="addCollapsePattern()" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 hover:text-white px-3 rounded font-bold text-xs">Add</button>
+                            </div>
+                            <div id="collapse-chips-list" class="flex flex-wrap gap-1 max-h-24 overflow-y-auto bg-slate-900/30 p-2 rounded border border-[#334155]/60">
+                                <!-- Chips will render here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Model Context Protocol (MCP) Servers Section -->
+                <div class="space-y-3">
+                    <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">Model Context Protocol (MCP) Servers</div>
+                    
+                    <!-- Quick Add Server Form -->
+                    <div class="bg-slate-900/30 p-3 rounded border border-[#334155]/60 space-y-2">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase">Register New MCP Server</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-slate-400 text-[10px] mb-1">Server Key/Identifier</label>
+                                <input type="text" id="mcp-name-input" placeholder="e.g. sqlite-db" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-100 font-mono outline-none focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 text-[10px] mb-1">Executable Command</label>
+                                <input type="text" id="mcp-cmd-input" placeholder="e.g. uvx or npx" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-100 font-mono outline-none focus:border-blue-500">
+                            </div>
+                            <div class="flex items-end">
+                                <button type="button" onclick="addMCPServer()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded text-xs transition flex items-center justify-center space-x-1">
+                                    <i class="fa-solid fa-plug"></i> <span>Add Server</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-[10px] mb-1">Arguments (space separated)</label>
+                            <input type="text" id="mcp-args-input" placeholder="e.g. mcp-server-sqlite --db-path ./dev.db" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-100 font-mono outline-none focus:border-blue-500">
+                        </div>
+                    </div>
+
+                    <!-- Registered Servers List -->
+                    <div class="space-y-1.5">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase">Registered MCP Servers</div>
+                        <div id="mcp-servers-list" class="space-y-1 max-h-32 overflow-y-auto pr-1 bg-slate-900/10 p-2 rounded border border-[#334155]/30">
+                            <!-- MCP servers will render here dynamically -->
+                            <div class="text-slate-500 italic text-[10px]">No MCP servers registered.</div>
+                        </div>
                     </div>
                 </div>
 
@@ -360,6 +500,7 @@
         let turnCounter = 0;
         let isSidebarCollapsed = false;
         let selectedForkTurn = 0;
+        let activeWorkspaceDir = "";
 
         window.addEventListener("DOMContentLoaded", () => {
             fetchConfig();
@@ -446,8 +587,67 @@
                         html += `<option value="${ws}" ${selected}>${ws}</option>`;
                     });
                     select.innerHTML = html;
+
+                    // Render gorgeous workspace history list
+                    let wsHtml = "";
+                    data.workspaces.forEach(ws => {
+                        const isActive = ws === data.active;
+                        const activeClass = isActive 
+                            ? "bg-blue-950/40 border-blue-500 text-blue-400 font-bold font-mono" 
+                            : "bg-slate-900/30 border-transparent text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 font-mono";
+                        wsHtml += `
+                            <div class="flex items-center justify-between p-1.5 rounded border border-[#334155]/60 text-[10px] ${activeClass}">
+                                <span class="truncate cursor-pointer flex-1" onclick="changeWorkspaceFromSelector('${ws.replace(/\\/g, '\\\\')}')" title="Click to swap to this workspace">${ws}</span>
+                                ${!isActive ? `
+                                <button onclick="removeWorkspaceFromHistory(event, '${ws.replace(/\\/g, '\\\\')}')" class="text-slate-500 hover:text-red-400 p-0.5 ml-1" title="Remove from history">
+                                    <i class="fa-solid fa-times text-[10px]"></i>
+                                </button>` : ''}
+                            </div>
+                        `;
+                    });
+                    document.getElementById("workspaces-history-list").innerHTML = wsHtml || '<div class="text-slate-500 italic text-[10px]">No workspace history.</div>';
                 })
                 .catch(err => console.error("Error loading workspaces:", err));
+        }
+
+        function removeWorkspaceFromHistory(e, path) {
+            if (e) e.stopPropagation();
+            if (!confirm(`Are you sure you want to remove workspace '${path}' from history?`)) return;
+            fetch("/api/workspaces/remove", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: path })
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchWorkspaces();
+            })
+            .catch(err => alert("Error removing workspace: " + err));
+        }
+
+        function addNewWorkspace() {
+            const input = document.getElementById("new-workspace-input");
+            const path = input.value.trim();
+            if (!path) return;
+            fetch("/api/workspaces/select", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: path })
+            })
+            .then(res => res.json())
+            .then(data => {
+                input.value = "";
+                fetchConfig();
+                refreshWorkspaceTree();
+                fetchWorkspaces();
+                fetchSessions();
+                const chatContainer = document.getElementById("chat-messages");
+                chatContainer.innerHTML = "";
+                appendGreeting();
+                appendSystemAlert("Workspace Swapped", `Active directory is now aligned to: ${path}. Spun up a new thread.`, "fa-folder-open text-cyan-400");
+                turnCounter = 0;
+            })
+            .catch(err => alert("Error adding workspace: " + err));
         }
 
         function changeWorkspaceFromSelector(path) {
@@ -472,7 +672,11 @@
 
         // SESSIONS MANAGEMENT
         function fetchSessions() {
-            fetch("/api/sessions")
+            let url = "/api/sessions";
+            if (activeWorkspaceDir) {
+                url += "?workspace=" + encodeURIComponent(activeWorkspaceDir);
+            }
+            fetch(url)
                 .then(res => res.json())
                 .then(data => {
                     const listContainer = document.getElementById("sessions-list");
@@ -494,18 +698,71 @@
                         const date = new Date(sess.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
                         html += `
-                            <div onclick="selectSession('${sess.session_id}')" class="p-2.5 rounded-lg border-l-4 cursor-pointer transition flex flex-col justify-between space-y-1 ${activeClass}">
+                            <div onclick="selectSession('${sess.session_id}')" class="group relative p-2.5 rounded-lg border-l-4 cursor-pointer transition flex flex-col justify-between space-y-1 ${activeClass}">
                                 <div class="flex items-center justify-between text-[11px]">
-                                    <span class="truncate pr-2">${sess.name}</span>
+                                    <span class="truncate pr-8 text-slate-200 font-medium" id="sess-display-${sess.session_id}">${sess.name}</span>
                                     <span class="text-[10px] text-slate-500 shrink-0 font-mono">${date}</span>
                                 </div>
                                 <div class="text-[10px] text-slate-500 truncate font-mono">Dir: ${sess.workspace_dir}</div>
+                                
+                                <!-- Session Action Buttons -->
+                                <div class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition duration-150 flex items-center space-x-1">
+                                    <button onclick="renameSessionPrompt(event, '${sess.session_id}', '${sess.name.replace(/'/g, "\\'")}')" class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white" title="Rename Session">
+                                        <i class="fa-solid fa-pen text-[9px]"></i>
+                                    </button>
+                                    <button onclick="deleteSessionConfirm(event, '${sess.session_id}')" class="p-1 rounded bg-red-950/60 hover:bg-red-900 text-red-400 hover:text-white" title="Delete Session">
+                                        <i class="fa-solid fa-trash text-[9px]"></i>
+                                    </button>
+                                </div>
                             </div>
                         `;
                     });
                     listContainer.innerHTML = html;
                 })
                 .catch(err => console.error("Error loading sessions:", err));
+        }
+
+        function renameSessionPrompt(e, id, currentName) {
+            if (e) e.stopPropagation();
+            const newName = prompt(`Enter a new name for session '${currentName}':`, currentName);
+            if (newName === null || newName.trim() === "" || newName.trim() === currentName) return;
+            fetch("/api/sessions/rename", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: id, name: newName.trim() })
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchSessions();
+            })
+            .catch(err => alert("Error renaming session: " + err));
+        }
+
+        function deleteSessionConfirm(e, id) {
+            if (e) e.stopPropagation();
+            if (!confirm("Are you sure you want to permanently delete this conversation session and its turn logs? This cannot be undone.")) return;
+            fetch("/api/sessions/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                const activeId = document.getElementById("session-id").innerText.replace("Session: ", "").trim();
+                if (id === activeId) {
+                    // We deleted the active session, let's load what the backend set as new active session
+                    fetchConfig();
+                    refreshWorkspaceTree();
+                    fetchSessions();
+                    const chatContainer = document.getElementById("chat-messages");
+                    chatContainer.innerHTML = "";
+                    appendGreeting();
+                    turnCounter = 0;
+                } else {
+                    fetchSessions();
+                }
+            })
+            .catch(err => alert("Error deleting session: " + err));
         }
 
         function selectSession(id) {
@@ -524,10 +781,13 @@
                 chatContainer.innerHTML = "";
                 appendGreeting();
                 
-                data.history.forEach(turn => {
-                    appendTurnToChat(turn);
-                });
-                turnCounter = data.history.length;
+                if (data.history) {
+                    data.history.forEach((turn, index) => {
+                        turn.turn_number = index + 1; // Dynamically restore turn indices (Phase 8.6 rendering fix)
+                        appendTurnToChat(turn);
+                    });
+                }
+                turnCounter = data.history ? data.history.length : 0;
             })
             .catch(err => alert("Failed to switch session: " + err));
         }
@@ -570,6 +830,7 @@
             document.getElementById("fork-modal").classList.remove("hidden");
         }
 
+        // Close branching modal
         function closeForkModal() {
             document.getElementById("fork-modal").classList.add("hidden");
         }
@@ -611,9 +872,12 @@
                     appendGreeting();
                     appendSystemAlert("New Timeline Created", `Spun up parallel timeline branch '${branchName}' from Turn ${selectedForkTurn}. The original timeline is completely preserved.`, "fa-code-branch text-green-400");
                     
-                    data.history.forEach(turn => {
-                        appendTurnToChat(turn);
-                    });
+                    if (data.history) {
+                        data.history.forEach((turn, index) => {
+                            turn.turn_number = index + 1; // Dynamically restore turn indices
+                            appendTurnToChat(turn);
+                        });
+                    }
                     turnCounter = selectedForkTurn;
                     switchSidebarTab("sessions");
                 })
@@ -636,9 +900,12 @@
                     appendGreeting();
                     appendSystemAlert("Session Truncated", `Timeline rolled back to Turn ${selectedForkTurn}. All future turn files deleted.`, "fa-scissors text-amber-400");
                     
-                    data.history.forEach(turn => {
-                        appendTurnToChat(turn);
-                    });
+                    if (data.history) {
+                        data.history.forEach((turn, index) => {
+                            turn.turn_number = index + 1; // Dynamically restore turn indices
+                            appendTurnToChat(turn);
+                        });
+                    }
                     turnCounter = selectedForkTurn;
                 })
                 .catch(err => alert("Fork failed: " + err));
@@ -656,8 +923,17 @@
                     document.getElementById("input-model").value = cfg.api.model || "gpt-4o";
                     document.getElementById("input-base-url").value = cfg.api.base_url || "";
                     document.getElementById("input-sandbox-mode").value = cfg.security.sandbox_mode || "host";
+                    document.getElementById("input-sandbox-fallback").value = String(cfg.security.sandbox_fallback || false);
                     document.getElementById("input-max-turns").value = cfg.agent.max_turns || 15;
                     document.getElementById("input-workspace-dir").value = cfg.agent.workspace_dir || "./workspace";
+
+                    // Compaction parameters
+                    if (cfg.compaction) {
+                        document.getElementById("input-compact-model").value = cfg.compaction.model || "gpt-4o-mini";
+                        document.getElementById("input-compact-turns").value = cfg.compaction.auto_compact_turns || 6;
+                        document.getElementById("input-compact-keep-n").value = cfg.compaction.keep_last_n || 2;
+                        document.getElementById("input-compact-prompt").value = cfg.compaction.system_prompt || "";
+                    }
                     
                     // Advanced parameters (Phase 8.6)
                     document.getElementById("input-temperature").value = cfg.api.temperature !== undefined ? cfg.api.temperature : 0.0;
@@ -666,6 +942,7 @@
                     document.getElementById("input-thinking").value = cfg.api.thinking_level || "off";
                     document.getElementById("input-project-id").value = cfg.api.project_id || "";
                     document.getElementById("input-region").value = cfg.api.region || "";
+                    document.getElementById("input-debug").checked = cfg.debug || false;
 
                     // Toggle fields based on active provider
                     const vFields = document.getElementById("vertex-fields");
@@ -674,6 +951,18 @@
                     } else {
                         vFields.classList.add("hidden");
                     }
+
+                    // Fetch exclusions
+                    fetch("/api/config/exclusions")
+                        .then(res => res.json())
+                        .then(ex => {
+                            currentIgnoredPatterns = ex.ignored_patterns || [];
+                            currentCollapsedPatterns = ex.collapsed_patterns || [];
+                            renderExclusionChips();
+                        });
+
+                    // Fetch MCP servers
+                    fetchMCPServers();
                     
                     document.getElementById("settings-modal").classList.remove("hidden");
                 })
@@ -694,8 +983,15 @@
                 model: document.getElementById("input-model").value.trim(),
                 base_url: document.getElementById("input-base-url").value.trim(),
                 sandbox_mode: document.getElementById("input-sandbox-mode").value,
+                sandbox_fallback: document.getElementById("input-sandbox-fallback").value === "true",
                 max_turns: parseInt(document.getElementById("input-max-turns").value) || 15,
                 workspace_dir: document.getElementById("input-workspace-dir").value.trim(),
+
+                // Compaction parameters
+                compact_model: document.getElementById("input-compact-model").value.trim(),
+                compact_turns: parseInt(document.getElementById("input-compact-turns").value) || 6,
+                compact_keep_n: parseInt(document.getElementById("input-compact-keep-n").value) || 2,
+                compact_prompt: document.getElementById("input-compact-prompt").value.trim(),
                 
                 // Advanced params (Phase 8.6)
                 temperature: parseFloat(document.getElementById("input-temperature").value) || 0.0,
@@ -703,13 +999,25 @@
                 top_k: parseInt(document.getElementById("input-top-k").value) || 40,
                 thinking_level: document.getElementById("input-thinking").value,
                 project_id: document.getElementById("input-project-id").value.trim(),
-                region: document.getElementById("input-region").value.trim()
+                region: document.getElementById("input-region").value.trim(),
+                debug: document.getElementById("input-debug").checked
             };
 
-            fetch("/api/config/save", {
+            // Save exclusions
+            fetch("/api/config/exclusions/save", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    ignored_patterns: currentIgnoredPatterns,
+                    collapsed_patterns: currentCollapsedPatterns
+                })
+            })
+            .then(() => {
+                return fetch("/api/config/save", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
             })
             .then(res => {
                 if (!res.ok) throw new Error("Failed to save config");
@@ -718,7 +1026,7 @@
             .then(data => {
                 closeSettingsModal();
                 fetchConfig();
-                appendSystemAlert("System Settings Saved", `Configurations successfully updated. Now running on provider '${payload.provider.toUpperCase()}' using model '${payload.model}'.`, "fa-check-double text-green-400");
+                appendSystemAlert("System Settings Saved", `Configurations and scan exclusions successfully updated. Now running on provider '${payload.provider.toUpperCase()}' using model '${payload.model}'.`, "fa-check-double text-green-400");
                 refreshWorkspaceTree();
                 fetchWorkspaces();
             })
@@ -732,9 +1040,11 @@
             fetch("/api/config")
                 .then(res => res.json())
                 .then(cfg => {
+                    activeWorkspaceDir = cfg.agent.workspace_dir;
                     document.getElementById("model-name").innerText = cfg.api.model + " (" + (cfg.api.provider || "openai").toUpperCase() + ")";
                     document.getElementById("workspace-path").innerText = "Path: " + cfg.agent.workspace_dir;
                     document.getElementById("session-id").innerText = "Session: " + cfg.session_id;
+                    fetchSessions();
                 })
                 .catch(err => console.error("Error fetching config:", err));
         }
@@ -783,7 +1093,7 @@
             };
 
             sseSource.onopen = () => {
-                document.getElementById("status-dot").className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+                document.getElementById("status-dot").className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
                 document.getElementById("status-text").innerText = "Connected";
             };
         }
@@ -872,16 +1182,23 @@
 
             let rollbackButton = "";
             if (turn.turn_number > 0) {
+                const canEdit = turn.role === "user" || turn.role === "assistant";
                 rollbackButton = `
-                    <button onclick="triggerFork(${turn.turn_number})" class="opacity-0 group-hover:opacity-100 text-[10px] bg-red-950/40 hover:bg-red-900 border border-red-800 text-red-400 font-mono px-2 py-0.5 rounded transition duration-150">
-                        <i class="fa-solid fa-code-fork mr-1"></i> Rollback / Branch (Turn ${turn.turn_number})
-                    </button>
+                    <div class="opacity-0 group-hover:opacity-100 transition duration-150 flex items-center space-x-1.5">
+                        ${canEdit ? `
+                        <button onclick="enableCardEdit(event, ${turn.turn_number})" class="text-[10px] bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 font-mono px-2 py-0.5 rounded transition" title="Edit and Fork Conversation">
+                            <i class="fa-solid fa-pen text-[9px] mr-1"></i> Edit &amp; Fork
+                        </button>` : ''}
+                        <button onclick="triggerFork(${turn.turn_number})" class="text-[10px] bg-red-950/40 hover:bg-red-900 border border-red-800 text-red-400 font-mono px-2 py-0.5 rounded transition">
+                            <i class="fa-solid fa-code-fork mr-1"></i> Rollback / Branch
+                        </button>
+                    </div>
                 `;
             }
 
             let textHtml = "";
             if (turn.role === "assistant" && turn.tool_calls) {
-                textHtml += `<p class="text-slate-300 text-sm font-sans mb-2">${turn.content || "Calling tools..."}</p>`;
+                textHtml += `<div id="turn-text-${turn.turn_number}" class="text-slate-300 text-sm font-sans mb-2">${turn.content || "Calling tools..."}</div>`;
                 turn.tool_calls.forEach(tc => {
                     textHtml += `
                         <div class="mt-2 bg-slate-950 border border-[#334155] rounded-md p-3 font-mono text-[11px] text-slate-300">
@@ -903,7 +1220,7 @@
                     </div>
                 `;
             } else {
-                textHtml = `<p class="text-slate-300 text-sm whitespace-pre-wrap font-sans">${turn.content}</p>`;
+                textHtml = `<div id="turn-text-${turn.turn_number}" class="text-slate-300 text-sm whitespace-pre-wrap font-sans">${turn.content}</div>`;
             }
 
             msgDiv.innerHTML = `
@@ -918,7 +1235,9 @@
                         </div>
                         ${rollbackButton}
                     </div>
-                    ${textHtml}
+                    <div id="turn-body-${turn.turn_number}" class="space-y-2">
+                        ${textHtml}
+                    </div>
                 </div>
             `;
 
@@ -968,6 +1287,350 @@
             .catch(err => {
                 appendSystemAlert("API Execution Error", "Failed to connect to the GoHarness execution API. Please ensure the backend is running.", "fa-triangle-exclamation text-red-400");
             });
+        }
+
+        // EXCLUSION & SNAPSHOT STATE VARIABLES AND ROUTINES
+        let currentIgnoredPatterns = [];
+        let currentCollapsedPatterns = [];
+
+        function renderExclusionChips() {
+            const ignoreList = document.getElementById("ignore-chips-list");
+            let ignoreHtml = "";
+            currentIgnoredPatterns.forEach((pat, idx) => {
+                ignoreHtml += `
+                    <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">
+                        <span>${pat}</span>
+                        <button type="button" onclick="removeIgnorePattern(${idx})" class="text-slate-500 hover:text-red-400 font-bold">&times;</button>
+                    </span>
+                `;
+            });
+            ignoreList.innerHTML = ignoreHtml || '<span class="text-slate-500 italic text-[10px]">No patterns ignored.</span>';
+
+            const collapseList = document.getElementById("collapse-chips-list");
+            let collapseHtml = "";
+            currentCollapsedPatterns.forEach((pat, idx) => {
+                collapseHtml += `
+                    <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">
+                        <span>${pat}</span>
+                        <button type="button" onclick="removeCollapsePattern(${idx})" class="text-slate-500 hover:text-red-400 font-bold">&times;</button>
+                    </span>
+                `;
+            });
+            collapseList.innerHTML = collapseHtml || '<span class="text-slate-500 italic text-[10px]">No directories collapsed.</span>';
+        }
+
+        function addIgnorePattern() {
+            const input = document.getElementById("add-ignore-input");
+            const val = input.value.trim();
+            if (val && !currentIgnoredPatterns.includes(val)) {
+                currentIgnoredPatterns.push(val);
+                input.value = "";
+                renderExclusionChips();
+            }
+        }
+
+        function removeIgnorePattern(idx) {
+            currentIgnoredPatterns.splice(idx, 1);
+            renderExclusionChips();
+        }
+
+        function addCollapsePattern() {
+            const input = document.getElementById("add-collapse-input");
+            const val = input.value.trim();
+            if (val && !currentCollapsedPatterns.includes(val)) {
+                currentCollapsedPatterns.push(val);
+                input.value = "";
+                renderExclusionChips();
+            }
+        }
+
+        function removeCollapsePattern(idx) {
+            currentCollapsedPatterns.splice(idx, 1);
+            renderExclusionChips();
+        }
+
+        // SNAPSHOTS MANAGEMENT
+        function fetchSnapshots() {
+            const list = document.getElementById("snapshots-list");
+            list.innerHTML = '<div class="text-slate-500 italic text-xs"><i class="fa-solid fa-spinner animate-spin mr-1"></i>Loading snapshots...</div>';
+            
+            fetch("/api/snapshots")
+                .then(res => res.json())
+                .then(data => {
+                    let html = "";
+                    if (!data.snapshots || data.snapshots.length === 0) {
+                        list.innerHTML = '<div class="text-slate-500 italic text-xs">No snapshots captured yet.</div>';
+                        return;
+                    }
+
+                    data.snapshots.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+                    data.snapshots.forEach(snap => {
+                        const date = new Date(snap.timestamp).toLocaleString();
+                        const sizeKB = (snap.total_size / 1024).toFixed(1);
+                        
+                        html += `
+                            <div class="p-3 bg-slate-900/40 border border-[#334155]/60 rounded-lg space-y-2 relative group hover:border-indigo-500/50 transition">
+                                <div class="pr-12">
+                                    <div class="font-bold text-slate-100 text-xs truncate">${snap.name}</div>
+                                    <div class="text-[9px] text-slate-500 font-mono mt-0.5">${date}</div>
+                                </div>
+                                <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                                    <span>${snap.file_count} file(s)</span>
+                                    <span>${sizeKB} KB</span>
+                                </div>
+                                <div class="flex items-center space-x-2 pt-1 border-t border-[#334155]/30">
+                                    <button onclick="revertToSnapshot('${snap.id}')" class="flex-1 py-1 bg-indigo-950/40 text-indigo-400 hover:bg-indigo-900 hover:text-white border border-indigo-900/60 rounded text-[10px] font-bold transition flex items-center justify-center space-x-1">
+                                        <i class="fa-solid fa-undo"></i> <span>Revert Workspace</span>
+                                    </button>
+                                    <button onclick="deleteSnapshot('${snap.id}')" class="px-2 py-1 bg-red-950/20 text-red-400 hover:bg-red-900 hover:text-white border border-red-900/40 rounded text-[10px] font-bold transition">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    list.innerHTML = html;
+                })
+                .catch(err => console.error("Error loading snapshots:", err));
+        }
+
+        function createSnapshot() {
+            const input = document.getElementById("snapshot-name-input");
+            const name = input.value.trim() || "Snapshot " + new Date().toLocaleTimeString();
+            
+            fetch("/api/snapshots/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: name })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to create snapshot");
+                return res.json();
+            })
+            .then(data => {
+                input.value = "";
+                fetchSnapshots();
+                appendSystemAlert("Workspace Captured", `Successfully created a file snapshot of your active workspace directory: '${name}'. You can revert to this state at any time.`, "fa-camera text-indigo-400");
+            })
+            .catch(err => alert("Failed to create snapshot: " + err));
+        }
+
+        function revertToSnapshot(id) {
+            if (!confirm("Are you sure you want to revert the active workspace to this snapshot? ALL untracked or unsaved file modifications in the workspace will be permanently overwritten!")) return;
+            
+            fetch("/api/snapshots/revert", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ snapshot_id: id })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to revert workspace");
+                return res.json();
+            })
+            .then(data => {
+                refreshWorkspaceTree();
+                fetchSnapshots();
+                appendSystemAlert("Workspace Restored", `Active files reverted completely to match snapshot: '${data.name}'.`, "fa-undo text-emerald-400");
+            })
+            .catch(err => alert("Failed to revert workspace: " + err));
+        }
+
+        function deleteSnapshot(id) {
+            if (!confirm("Are you sure you want to delete this snapshot from disk?")) return;
+            fetch("/api/snapshots/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ snapshot_id: id })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to delete snapshot");
+                return res.json();
+            })
+            .then(data => {
+                fetchSnapshots();
+            })
+            .catch(err => alert("Failed to delete snapshot: " + err));
+        }
+
+        // MCP SERVERS MANAGEMENT
+        function fetchMCPServers() {
+            const list = document.getElementById("mcp-servers-list");
+            list.innerHTML = '<div class="text-slate-500 italic text-[10px]"><i class="fa-solid fa-spinner animate-spin mr-1"></i>Loading MCP servers...</div>';
+
+            fetch("/api/mcp")
+                .then(res => res.json())
+                .then(data => {
+                    let html = "";
+                    const keys = Object.keys(data || {});
+                    if (keys.length === 0) {
+                        list.innerHTML = '<div class="text-slate-500 italic text-[10px]">No MCP servers registered.</div>';
+                        return;
+                    }
+
+                    keys.forEach(key => {
+                        const srv = data[key];
+                        const argsStr = (srv.args || []).join(" ");
+                        html += `
+                            <div class="flex items-center justify-between p-2 rounded bg-slate-900/30 border border-[#334155]/40 text-[10px] font-mono">
+                                <div class="truncate flex-1 pr-4">
+                                    <div class="font-bold text-slate-200">${key}</div>
+                                    <div class="text-slate-400 mt-0.5 truncate">${srv.command} ${argsStr}</div>
+                                </div>
+                                <button onclick="deleteMCPServer('${key}')" class="text-slate-500 hover:text-red-400 p-1 rounded hover:bg-slate-800 transition" title="Delete MCP Server">
+                                    <i class="fa-solid fa-trash text-[10px]"></i>
+                                </button>
+                            </div>
+                        `;
+                    });
+                    list.innerHTML = html;
+                })
+                .catch(err => {
+                    list.innerHTML = `<div class="text-red-400 text-[10px]">Failed to load: ${err}</div>`;
+                });
+        }
+
+        function addMCPServer() {
+            const nameInput = document.getElementById("mcp-name-input");
+            const cmdInput = document.getElementById("mcp-cmd-input");
+            const argsInput = document.getElementById("mcp-args-input");
+
+            const name = nameInput.value.trim();
+            const command = cmdInput.value.trim();
+            const argsRaw = argsInput.value.trim();
+
+            if (!name || !command) {
+                alert("Please supply both Server Key/Name and Startup Command.");
+                return;
+            }
+
+            const args = argsRaw ? argsRaw.split(" ").filter(a => a) : [];
+
+            fetch("/api/mcp/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: name, command: command, args: args })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to save MCP server");
+                return res.json();
+            })
+            .then(data => {
+                nameInput.value = "";
+                cmdInput.value = "";
+                argsInput.value = "";
+                fetchMCPServers();
+                appendSystemAlert("MCP Server Added", `Successfully registered and spawned MCP Server '${name}'. Live handshaking initiated.`, "fa-plug text-green-400");
+            })
+            .catch(err => alert("Error saving MCP server: " + err));
+        }
+
+        function deleteMCPServer(name) {
+            if (!confirm(`Are you sure you want to permanently delete and stop MCP server '${name}'?`)) return;
+
+            fetch("/api/mcp/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: name })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to delete MCP server");
+                return res.json();
+            })
+            .then(data => {
+                fetchMCPServers();
+                appendSystemAlert("MCP Server Deleted", `Successfully stopped and removed MCP Server '${name}'.`, "fa-plug text-amber-400");
+            })
+            .catch(err => alert("Error deleting MCP server: " + err));
+        }
+
+        // CARD EDITING & REROLLING LIFECYCLES
+        function enableCardEdit(e, turnNum) {
+            if (e) e.stopPropagation();
+            
+            const bodyDiv = document.getElementById(`turn-body-${turnNum}`);
+            const textDiv = document.getElementById(`turn-text-${turnNum}`);
+            if (!bodyDiv || !textDiv) return;
+
+            const originalText = textDiv.innerText;
+
+            // Render inplace editor
+            bodyDiv.innerHTML = `
+                <div class="space-y-2 mt-1">
+                    <textarea id="edit-textarea-${turnNum}" rows="4" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 text-sm outline-none focus:border-blue-500 font-mono leading-normal">${originalText}</textarea>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="saveAndBranchCard(event, ${turnNum})" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded text-[11px] transition">Save &amp; Branch</button>
+                        <button onclick="cancelCardEdit(event, ${turnNum}, \`${originalText.replace(/`/g, "\\`").replace(/\\/g, "\\\\")}\`)" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1 px-3 rounded text-[11px] transition">Cancel</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function cancelCardEdit(e, turnNum, originalText) {
+            if (e) e.stopPropagation();
+            const bodyDiv = document.getElementById(`turn-body-${turnNum}`);
+            if (!bodyDiv) return;
+
+            bodyDiv.innerHTML = `<div id="turn-text-${turnNum}" class="text-slate-300 text-sm whitespace-pre-wrap font-sans">${originalText}</div>`;
+        }
+
+        function saveAndBranchCard(e, turnNum) {
+            if (e) e.stopPropagation();
+            const textVal = document.getElementById(`edit-textarea-${turnNum}`).value.trim();
+            if (!textVal) return;
+
+            const payload = {
+                parent_session_id: document.getElementById("session-id").innerText.replace("Session: ", "").trim(),
+                turn: turnNum,
+                branch_name: `Branch Edit Turn ${turnNum}`,
+                edit_content: textVal
+            };
+
+            fetch("/api/sessions/branch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchConfig();
+                refreshWorkspaceTree();
+                fetchSessions();
+
+                const chatContainer = document.getElementById("chat-messages");
+                chatContainer.innerHTML = "";
+                appendGreeting();
+                appendSystemAlert("Timeline Edited & Branched", `Spun up parallel timeline branch from edited Turn ${turnNum}. The original timeline is completely preserved.`, "fa-code-fork text-green-400");
+                
+                if (data.history) {
+                    data.history.forEach((turn, index) => {
+                        turn.turn_number = index + 1; // Dynamically restore turn indices
+                        appendTurnToChat(turn);
+                    });
+                }
+                turnCounter = turnNum;
+                switchSidebarTab("sessions");
+            })
+            .catch(err => alert("Failed to branch edit: " + err));
+        }
+
+        function triggerReroll() {
+            if (!confirm("Are you sure you want to delete the last Assistant response and regenerate it? Any changes made in the workspace during the last turn will be safely reverted.")) return;
+            
+            appendSystemAlert("Regenerating Last Response", "Reverting last workspace edits and requesting a new Assistant generation...", "fa-rotate-right text-indigo-400 animate-spin");
+
+            fetch("/api/sessions/reroll", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" }
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Reroll failed");
+                return res.json();
+            })
+            .then(data => {
+                // Reroll is running asynchronously, the SSE connection streams the tokens live!
+            })
+            .catch(err => alert("Reroll failed: " + err));
         }
 
         function triggerCompaction() {

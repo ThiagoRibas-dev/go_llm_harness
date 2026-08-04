@@ -55,7 +55,7 @@ func ExecutePlatformSandbox(command, workspaceDir string) (string, error) {
 	currentProcess, _ := syscall.GetCurrentProcess()
 	err := syscall.OpenProcessToken(currentProcess, syscall.TOKEN_DUPLICATE|syscall.TOKEN_QUERY|syscall.TOKEN_ASSIGN_PRIMARY, &currentToken)
 	if err != nil {
-		return "", fmt.Errorf("failed to open parent token: %w", err)
+		return fallbackWindowsPlain(command, workspaceDir, fmt.Sprintf("OpenProcessToken failed: %v", err))
 	}
 	defer currentToken.Close()
 
@@ -70,7 +70,7 @@ func ExecutePlatformSandbox(command, workspaceDir string) (string, error) {
 		uintptr(unsafe.Pointer(&restrictedToken)),
 	)
 	if r1 == 0 {
-		return "", fmt.Errorf("failed to create restricted token: %v", err)
+		return fallbackWindowsPlain(command, workspaceDir, fmt.Sprintf("CreateRestrictedToken failed: %v", err))
 	}
 	restrictedTokenVal := syscall.Token(restrictedToken)
 	defer restrictedTokenVal.Close()
@@ -83,7 +83,7 @@ func ExecutePlatformSandbox(command, workspaceDir string) (string, error) {
 		uintptr(unsafe.Pointer(&lowSid)),
 	)
 	if r1 == 0 {
-		return "", fmt.Errorf("failed to parse Windows SID: %v", err)
+		return fallbackWindowsPlain(command, workspaceDir, fmt.Sprintf("ConvertStringSidToSidW failed: %v", err))
 	}
 
 	var label tokenMandatoryLabel
@@ -97,7 +97,7 @@ func ExecutePlatformSandbox(command, workspaceDir string) (string, error) {
 		uintptr(unsafe.Sizeof(label)),
 	)
 	if r1 == 0 {
-		return "", fmt.Errorf("failed to restrict token integrity class: %v", err)
+		return fallbackWindowsPlain(command, workspaceDir, fmt.Sprintf("SetTokenInformation failed (Access is denied): %v", err))
 	}
 
 	// 4. Set cmd execution with the low-integrity token
@@ -108,7 +108,7 @@ func ExecutePlatformSandbox(command, workspaceDir string) (string, error) {
 	// 5. Create active Job Object limits
 	r1, _, err = procCreateJobObjectW.Call(0, 0)
 	if r1 == 0 {
-		return "", fmt.Errorf("failed to create Job Object limits: %v", err)
+		return fallbackWindowsPlain(command, workspaceDir, fmt.Sprintf("CreateJobObjectW failed: %v", err))
 	}
 	job := syscall.Handle(r1)
 	defer syscall.CloseHandle(job)
@@ -116,16 +116,27 @@ func ExecutePlatformSandbox(command, workspaceDir string) (string, error) {
 	// 6. Spawn process
 	err = cmd.Start()
 	if err != nil {
-		return "", fmt.Errorf("failed to start low-integrity sandboxed command: %w", err)
+		return fallbackWindowsPlain(command, workspaceDir, fmt.Sprintf("cmd.Start failed: %v", err))
 	}
 
 	// 7. Lock process into Job Object
 	r1, _, err = procAssignProcessToJobObject.Call(uintptr(job), uintptr(cmd.Process.Pid))
 	if r1 == 0 {
-		return "", fmt.Errorf("failed to lock child process into Job Object: %v", err)
+		_ = cmd.Process.Kill()
+		return fallbackWindowsPlain(command, workspaceDir, fmt.Sprintf("AssignProcessToJobObject failed: %v", err))
 	}
 
 	runErr := cmd.Wait()
 
 	return formatCmdResult(runErr, stdout.String(), stderr.String()), nil
+}
+
+func fallbackWindowsPlain(command, workspaceDir, errDetail string) (string, error) {
+	if !activeConfig.Security.SandboxFallback {
+		// Hard Block (Secure Default!)
+		return "", fmt.Errorf("failed to restrict token integrity class: %s (Sandbox Fallback is disabled in config.json)", errDetail)
+	}
+	fmt.Printf("%s[SANDBOX WARNING] Windows restricted Job Object setup failed (%s). Falling back to unsandboxed execution.%s\n", ColorYellow, errDetail, ColorReset)
+	broadcastSandboxWarning("Windows Privilege Restriction failed (" + errDetail + ")")
+	return executeNativeCommandPlain(command, workspaceDir)
 }

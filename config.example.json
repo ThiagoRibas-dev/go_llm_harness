@@ -14,6 +14,7 @@
   "security": {
     "sandbox_mode": "host",
     "docker_container": "agent-workspace",
+    "sandbox_fallback": false,
     "allowed_tools": [
       "write_file",
       "patch_file",

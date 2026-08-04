@@ -77,3 +77,27 @@ func formatCmdResult(err error, stdout, stderr string) string {
 func runtimeOS() string {
 	return getOSName()
 }
+
+// broadcastSandboxWarning streams a highly detailed, security recommendations markdown block to the visual Web Console
+func broadcastSandboxWarning(reason string) {
+	warningMarkdown := fmt.Sprintf("⚠️ **[SECURITY ISOLATION WARNING] %s**\n\n" +
+		"The terminal command was executed directly on your host operating system without sandbox restrictions. " +
+		"To secure your host against prompt injections or malicious instructions, we highly recommend setting up one of these three secure sandboxing configurations:\n\n" +
+		"1. 🐳 **Docker Container Sandboxing (Highly Recommended):**\n" +
+		"   Run all shell commands inside an isolated Docker container. Run this locally to spawn your container workspace:\n" +
+		"   ```bash\n" +
+		"   docker run -d --name agent-workspace -v ./workspace:/workspace alpine tail -f /dev/null\n" +
+		"   ```\n" +
+		"   Then click **Settings** (⚙️) in the Web UI, change **Sandbox Mode** to **Docker**, and set **Docker Container** to `agent-workspace`.\n\n" +
+		"2. 🐧 **WSL2 / Linux Virtualization:**\n" +
+		"   Run GoHarness inside WSL2 or a Linux VM. Linux standard accounts have native access to **Landlock LSM** sandboxing, allowing GoHarness to lock down files with $100%%$ bare-metal isolation without administrative prompts.\n\n" +
+		"3. 🛡️ **Administrative Elevation (Windows Bare-Metal):**\n" +
+		"   If running natively on Windows host, open PowerShell or CMD as **Administrator** and launch `agent.exe` from there. This grants GoHarness the necessary security privileges to duplicate tokens and lock child processes into low-integrity Job Objects.", reason)
+
+	BroadcastSSE("turn_secured", map[string]interface{}{
+		"turn_number": 0,
+		"role":        "system",
+		"name":        "system",
+		"content":     warningMarkdown,
+	})
+}

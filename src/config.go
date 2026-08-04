@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 )
 
 // ANSI Color Codes for beautiful terminal outputs (shared globally)
@@ -27,6 +28,7 @@ type Config struct {
 	Compaction    CompactionConfig           `json:"compaction"`
 	MCPServers    map[string]MCPServerConfig `json:"mcp_servers"`
 	Web           WebConfig                  `json:"web"`
+	Debug         bool                       `json:"debug"` // Toggle verbose diagnostic logs (Phase 8.6)
 }
 
 type APIConfig struct {
@@ -45,7 +47,8 @@ type APIConfig struct {
 
 type AgentConfig struct {
 	WorkspaceDir          string   `json:"workspace_dir"`
-	WorkspacesHistory     []string `json:"workspaces_history"` // Workspace History (Phase 6.3)
+	WorkspacesHistory     []string `json:"workspaces_history"`       // Workspace History (Phase 6.3)
+	LastActiveSessionID   string   `json:"last_active_session_id"`   // Last Active Session ID for launch persistence (Phase 8.6)
 	MaxTurns              int      `json:"max_turns"`
 	CommandTimeoutSeconds int      `json:"command_timeout_seconds"`
 }
@@ -53,6 +56,7 @@ type AgentConfig struct {
 type SecurityConfig struct {
 	SandboxMode     string   `json:"sandbox_mode"`
 	DockerContainer string   `json:"docker_container"`
+	SandboxFallback bool     `json:"sandbox_fallback"` // Toggle graceful fallback if sandbox fails (default: false)
 	AllowedTools    []string `json:"allowed_tools"`
 	BlockedPatterns []string `json:"blocked_patterns"`
 }
@@ -86,11 +90,12 @@ type WebConfig struct {
 
 // SessionMeta holds metadata for each conversation session
 type SessionMeta struct {
-	SessionID       string `json:"session_id"`
-	WorkspaceDir    string `json:"workspace_dir"`
-	CreatedAt       string `json:"created_at"`
-	Name            string `json:"name"`
-	ParentSessionID string `json:"parent_session_id,omitempty"`
+	SessionID          string `json:"session_id"`
+	WorkspaceDir       string `json:"workspace_dir"`
+	CreatedAt          string `json:"created_at"`
+	Name               string `json:"name"`
+	ParentSessionID    string `json:"parent_session_id,omitempty"`
+	CompactionBoundary int    `json:"compaction_boundary,omitempty"`
 }
 
 // OpenAI Chat Completion API Schema structures
@@ -154,6 +159,17 @@ var (
 	currentTurnNumber int
 	mcpToolsMap       map[string]string // Maps ToolName ➔ MCPServerName
 )
+
+// GetSystemPath resolves a relative system path (like config.json or .goharness)
+// relative to the directory containing the active running binary executable (Phase 8.6)
+func GetSystemPath(relativePath string) string {
+	execPath, err := os.Executable()
+	if err != nil {
+		return relativePath // Fallback to current working directory if executable path cannot be resolved
+	}
+	execDir := filepath.Dir(execPath)
+	return filepath.Join(execDir, relativePath)
+}
 
 // LoadConfig reads and parses the config.json file
 func LoadConfig(filename string) (*Config, error) {

@@ -85,8 +85,12 @@ func ExecutePlatformSandbox(command, workspaceDir string) (string, error) {
 		0,
 	)
 	if sysErr != 0 {
+		if !activeConfig.Security.SandboxFallback {
+			return "", fmt.Errorf("Landlock system calls not supported by host kernel (Sandbox Fallback is disabled in config.json)")
+		}
 		// Fallback gracefully if the kernel doesn't support Landlock yet (e.g. WSL1 or older kernels)
 		fmt.Printf("%s[SANDBOX WARNING] Landlock system calls not supported by host kernel. Falling back to unsandboxed execution.%s\n", ColorYellow, ColorReset)
+		broadcastSandboxWarning("Linux Landlock LSM is unsupported on this kernel")
 		return executeNativeCommandPlain(command, workspaceDir)
 	}
 	defer syscall.Close(int(r1))
@@ -94,7 +98,11 @@ func ExecutePlatformSandbox(command, workspaceDir string) (string, error) {
 	// Allow full read/write to the Workspace Directory
 	err := addLandlockPathRule(r1, workspaceDir, allFSAccess)
 	if err != nil {
-		return "", fmt.Errorf("failed to restrict workspace directory path: %w", err)
+		if !activeConfig.Security.SandboxFallback {
+			return "", fmt.Errorf("failed to restrict workspace directory path: %w", err)
+		}
+		broadcastSandboxWarning("Linux Landlock add rule failed: " + err.Error())
+		return executeNativeCommandPlain(command, workspaceDir)
 	}
 
 	// Read-only access to critical system folders so command (like 'ls', 'python3', etc) can resolve dynamic linkings
