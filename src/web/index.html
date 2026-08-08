@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoHarness - Agentic Console</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS Embedded (Offline-First) -->
+    <script src="/tailwind.min.js"></script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -103,9 +103,30 @@
 
             <!-- TAB 1: FILE EXPLORER -->
             <div id="tab-files" class="flex-1 flex flex-col overflow-hidden">
-                <!-- Pre-defined workspace path banner -->
-                <div class="px-4 py-2 bg-slate-900/20 text-[11px] font-mono text-slate-400 border-b border-[#334155]/60 truncate" id="workspace-path">
-                    Path: ./workspace
+                <!-- Pre-defined workspace path banner & upload controller -->
+                <div class="px-4 py-2 bg-slate-900/20 text-[11px] font-mono text-slate-400 border-b border-[#334155]/60 flex items-center justify-between">
+                    <span id="workspace-path" class="truncate pr-2">Path: ./workspace</span>
+                    <button onclick="triggerFileUpload()" class="text-slate-400 hover:text-white transition shrink-0" title="Upload Custom Memory Reference File to Active Session">
+                        <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
+                    </button>
+                    <!-- Hidden file input element -->
+                    <input type="file" id="hidden-file-input" onchange="uploadSelectedFile(this)" class="hidden">
+                </div>
+                <!-- PINNED CONTEXT SECTION -->
+                <div class="px-4 py-2 border-b border-[#334155]/60 bg-slate-900/10 space-y-1.5 shrink-0">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Pinned Prompt Context</label>
+                        <span class="text-[9px] text-slate-400/60 font-mono">Turn 1 Injection</span>
+                    </div>
+                    <div id="pinned-chips-list" class="flex flex-wrap gap-1 max-h-16 overflow-y-auto pr-1">
+                        <!-- Chips of pinned files -->
+                        <div class="text-slate-500 italic text-[10px]">Loading pinned context...</div>
+                    </div>
+                    <!-- Quick Pin input -->
+                    <div class="flex space-x-1.5">
+                        <input type="text" id="quick-pin-input" placeholder="Pin file (e.g. SKILLS.md)..." class="flex-1 bg-[#1e293b] border border-[#334155] text-[10px] px-2 py-0.5 rounded outline-none focus:border-blue-500 font-mono text-slate-200">
+                        <button onclick="addContextPin()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-2.5 py-0.5 rounded text-[10px] border border-[#334155] transition font-bold">Pin</button>
+                    </div>
                 </div>
                 <!-- Tree View Container -->
                 <div class="flex-1 overflow-y-auto p-4 font-mono text-xs text-slate-300 leading-relaxed" id="workspace-tree">
@@ -312,11 +333,50 @@
                 <!-- Advanced Context Compaction Section -->
                 <div class="space-y-3">
                     <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">Advanced Context Compaction (Memory Management)</div>
-                    <div class="grid grid-cols-3 gap-4">
+                    
+                    <div class="grid grid-cols-2 gap-4 bg-slate-900/40 p-3 rounded border border-[#334155]/50 space-y-2">
+                        <div class="col-span-2 text-[10px] font-bold text-slate-400 uppercase">Compaction API Provider Configurations</div>
                         <div>
-                            <label class="block text-slate-300 font-bold mb-1.5">Compaction Model</label>
+                            <label class="block text-slate-300 font-bold mb-1.5">Compaction Provider</label>
+                            <select id="input-compact-provider" onchange="suggestCompactBaseURL(this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500">
+                                <option value="openai">OpenAI (OpenAI, DeepSeek, Groq, Ollama)</option>
+                                <option value="anthropic">Anthropic (Claude API)</option>
+                                <option value="gemini">Google Gemini (AI Studio)</option>
+                                <option value="vertex">Google Gemini (Vertex AI Key)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Compaction API Key (Optional)</label>
+                            <input type="password" id="input-compact-api-key" placeholder="Defaults to global key..." class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-slate-300 font-bold mb-1.5">Compaction Base Endpoint URL (Optional)</label>
+                            <input type="text" id="input-compact-base-url" placeholder="e.g. https://api.openai.com/v1/chat/completions..." class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <!-- GCP Vertex Compaction Specific Fields (Dynamically revealed) -->
+                        <div id="compact-vertex-fields" class="hidden col-span-2 grid grid-cols-2 gap-4 bg-slate-900/40 p-3 rounded border border-[#334155]/50">
+                            <div>
+                                <label class="block text-slate-300 font-bold mb-1.5">Compaction GCP Project ID</label>
+                                <input type="text" id="input-compact-project-id" placeholder="my-gcp-project" class="w-full bg-[#0f172a] border border-[#334155] rounded px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-slate-300 font-bold mb-1.5">Compaction GCP Region</label>
+                                <input type="text" id="input-compact-region" placeholder="us-central1" class="w-full bg-[#0f172a] border border-[#334155] rounded px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Compaction Model Target</label>
                             <input type="text" id="input-compact-model" placeholder="gpt-4o-mini" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
                         </div>
+                        <div>
+                            <label class="block text-slate-300 font-bold mb-1.5">Compaction Temp</label>
+                            <input type="number" id="input-compact-temp" min="0" max="2" step="0.1" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-slate-300 font-bold mb-1.5">Auto-Compact Threshold (User Turns)</label>
                             <input type="number" id="input-compact-turns" min="1" max="100" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
@@ -361,6 +421,10 @@
                             <label class="block text-slate-300 font-bold mb-1.5">Workspace Directory Path</label>
                             <input type="text" id="input-workspace-dir" placeholder="./workspace" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
                         </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-bold mb-1.5">Target Scan Subdirectories (Comma-separated)</label>
+                        <input type="text" id="input-target-scan-dirs" placeholder="e.g. src, docs, lib (Optional - restricts BM25 search space)" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
                     </div>
                 </div>
 
@@ -507,6 +571,7 @@
             refreshWorkspaceTree();
             fetchWorkspaces();
             fetchSessions();
+            fetchPinnedFiles();
             connectSSE();
             appendGreeting();
         });
@@ -662,6 +727,7 @@
                 fetchConfig();
                 refreshWorkspaceTree();
                 fetchSessions();
+                fetchPinnedFiles();
                 const chatContainer = document.getElementById("chat-messages");
                 chatContainer.innerHTML = "";
                 appendGreeting();
@@ -776,6 +842,7 @@
                 fetchConfig();
                 refreshWorkspaceTree();
                 fetchSessions();
+                fetchPinnedFiles();
                 
                 const chatContainer = document.getElementById("chat-messages");
                 chatContainer.innerHTML = "";
@@ -809,6 +876,7 @@
                 fetchConfig();
                 fetchSessions();
                 refreshWorkspaceTree();
+                fetchPinnedFiles();
                 
                 const chatContainer = document.getElementById("chat-messages");
                 chatContainer.innerHTML = "";
@@ -926,10 +994,28 @@
                     document.getElementById("input-sandbox-fallback").value = String(cfg.security.sandbox_fallback || false);
                     document.getElementById("input-max-turns").value = cfg.agent.max_turns || 15;
                     document.getElementById("input-workspace-dir").value = cfg.agent.workspace_dir || "./workspace";
+                    document.getElementById("input-target-scan-dirs").value = (cfg.agent.target_scan_dirs || []).join(", ");
 
                     // Compaction parameters
                     if (cfg.compaction) {
+                        const compProvider = cfg.compaction.provider || "openai";
+                        document.getElementById("input-compact-provider").value = compProvider;
+                        document.getElementById("input-compact-api-key").value = cfg.compaction.key || "";
+                        document.getElementById("input-compact-base-url").value = cfg.compaction.base_url || "";
                         document.getElementById("input-compact-model").value = cfg.compaction.model || "gpt-4o-mini";
+                        document.getElementById("input-compact-temp").value = cfg.compaction.temperature !== undefined ? cfg.compaction.temperature : 0.2;
+                        
+                        document.getElementById("input-compact-project-id").value = cfg.compaction.project_id || "";
+                        document.getElementById("input-compact-region").value = cfg.compaction.region || "";
+
+                        // Toggle compaction vertex fields based on provider selection
+                        const compVFields = document.getElementById("compact-vertex-fields");
+                        if (compProvider === "vertex") {
+                            compVFields.classList.remove("hidden");
+                        } else {
+                            compVFields.classList.add("hidden");
+                        }
+
                         document.getElementById("input-compact-turns").value = cfg.compaction.auto_compact_turns || 6;
                         document.getElementById("input-compact-keep-n").value = cfg.compaction.keep_last_n || 2;
                         document.getElementById("input-compact-prompt").value = cfg.compaction.system_prompt || "";
@@ -986,9 +1072,16 @@
                 sandbox_fallback: document.getElementById("input-sandbox-fallback").value === "true",
                 max_turns: parseInt(document.getElementById("input-max-turns").value) || 15,
                 workspace_dir: document.getElementById("input-workspace-dir").value.trim(),
+                target_scan_dirs: document.getElementById("input-target-scan-dirs").value.split(",").map(s => s.trim()).filter(s => s),
 
                 // Compaction parameters
-                compact_model: document.getElementById("input-compact-model").value.trim(),
+                compact_provider: document.getElementById("input-compact-provider").value,
+                compact_api_key: document.getElementById("input-compact-api-key").value.trim(),
+                compact_base_url: document.getElementById("input-compact-base-url").value.trim(),
+                compact_model: document.getElementById("input-compact-model").value.trim() || "gpt-4o-mini",
+                compact_temp: parseFloat(document.getElementById("input-compact-temp").value) || 0.2,
+                compact_project_id: document.getElementById("input-compact-project-id").value.trim(),
+                compact_region: document.getElementById("input-compact-region").value.trim(),
                 compact_turns: parseInt(document.getElementById("input-compact-turns").value) || 6,
                 compact_keep_n: parseInt(document.getElementById("input-compact-keep-n").value) || 2,
                 compact_prompt: document.getElementById("input-compact-prompt").value.trim(),
@@ -1544,13 +1637,126 @@
             .catch(err => alert("Error deleting MCP server: " + err));
         }
 
+        // DYNAMIC CONTEXT PINNING LIFECYCLES
+        let activePinnedFiles = [];
+
+        function fetchPinnedFiles() {
+            const list = document.getElementById("pinned-chips-list");
+            if (!list) return;
+
+            fetch("/api/sessions/pinned")
+                .then(res => res.json())
+                .then(data => {
+                    activePinnedFiles = data.pinned_files || [];
+                    let html = "";
+                    if (activePinnedFiles.length === 0) {
+                        list.innerHTML = '<div class="text-slate-500 italic text-[10px]">No pinned context files.</div>';
+                        return;
+                    }
+
+                    activePinnedFiles.forEach((file, idx) => {
+                        html += `
+                            <span class="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded bg-blue-950/40 text-blue-400 border border-blue-900/60 text-[9px] font-mono leading-none truncate max-w-[120px]">
+                                <span class="truncate" title="${file}">${file}</span>
+                                <button type="button" onclick="removeContextPin(${idx})" class="text-slate-500 hover:text-red-400 font-bold text-[10px]">&times;</button>
+                            </span>
+                        `;
+                    });
+                    list.innerHTML = html;
+                })
+                .catch(err => {
+                    list.innerHTML = `<div class="text-red-400 text-[10px]">Failed to load: ${err}</div>`;
+                });
+        }
+
+        function addContextPin() {
+            const input = document.getElementById("quick-pin-input");
+            const file = input.value.trim();
+            if (!file) return;
+
+            if (activePinnedFiles.includes(file)) {
+                alert("This file is already pinned to your session context!");
+                return;
+            }
+
+            activePinnedFiles.push(file);
+
+            fetch("/api/sessions/pinned/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pinned_files: activePinnedFiles })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Pin failed");
+                return res.json();
+            })
+            .then(data => {
+                input.value = "";
+                fetchPinnedFiles();
+                appendSystemAlert("Context File Pinned", `Successfully pinned custom instruction/reference file \`${file}\` to active session context. Will inject on next run.`, "fa-thumbtack text-blue-400");
+            })
+            .catch(err => alert("Failed to pin file: " + err));
+        }
+
+        function removeContextPin(idx) {
+            const file = activePinnedFiles[idx];
+            activePinnedFiles.splice(idx, 1);
+
+            fetch("/api/sessions/pinned/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pinned_files: activePinnedFiles })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Unpin failed");
+                return res.json();
+            })
+            .then(data => {
+                fetchPinnedFiles();
+                appendSystemAlert("Context File Unpinned", `Successfully unpinned file \`${file}\` from active session context.`, "fa-eraser text-amber-400");
+            })
+            .catch(err => alert("Failed to unpin file: " + err));
+        }
+
         // CARD EDITING & REROLLING LIFECYCLES
+        const originalCardHtmls = {};
+
+        function triggerFileUpload() {
+            document.getElementById("hidden-file-input").click();
+        }
+
+        function uploadSelectedFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            appendSystemAlert("Uploading Memory File", `Uploading reference document '${file.name}' to active session...`, "fa-cloud-arrow-up text-indigo-400 animate-pulse");
+
+            fetch("/api/upload", {
+                method: "POST",
+                body: formData
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Upload failed");
+                return res.json();
+            })
+            .then(data => {
+                input.value = ""; // Clear file selector
+            })
+            .catch(err => alert("File upload failed: " + err));
+        }
+
         function enableCardEdit(e, turnNum) {
             if (e) e.stopPropagation();
             
             const bodyDiv = document.getElementById(`turn-body-${turnNum}`);
             const textDiv = document.getElementById(`turn-text-${turnNum}`);
             if (!bodyDiv || !textDiv) return;
+
+            // Store the exact original HTML tree of the body div
+            originalCardHtmls[turnNum] = bodyDiv.innerHTML;
 
             const originalText = textDiv.innerText;
 
@@ -1560,18 +1766,22 @@
                     <textarea id="edit-textarea-${turnNum}" rows="4" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 text-sm outline-none focus:border-blue-500 font-mono leading-normal">${originalText}</textarea>
                     <div class="flex items-center space-x-2">
                         <button onclick="saveAndBranchCard(event, ${turnNum})" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded text-[11px] transition">Save &amp; Branch</button>
-                        <button onclick="cancelCardEdit(event, ${turnNum}, \`${originalText.replace(/`/g, "\\`").replace(/\\/g, "\\\\")}\`)" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1 px-3 rounded text-[11px] transition">Cancel</button>
+                        <button onclick="cancelCardEdit(event, ${turnNum})" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1 px-3 rounded text-[11px] transition">Cancel</button>
                     </div>
                 </div>
             `;
         }
 
-        function cancelCardEdit(e, turnNum, originalText) {
+        function cancelCardEdit(e, turnNum) {
             if (e) e.stopPropagation();
             const bodyDiv = document.getElementById(`turn-body-${turnNum}`);
             if (!bodyDiv) return;
 
-            bodyDiv.innerHTML = `<div id="turn-text-${turnNum}" class="text-slate-300 text-sm whitespace-pre-wrap font-sans">${originalText}</div>`;
+            // Restore from cached original DOM tree
+            if (originalCardHtmls[turnNum]) {
+                bodyDiv.innerHTML = originalCardHtmls[turnNum];
+                delete originalCardHtmls[turnNum];
+            }
         }
 
         function saveAndBranchCard(e, turnNum) {
@@ -1631,6 +1841,30 @@
                 // Reroll is running asynchronously, the SSE connection streams the tokens live!
             })
             .catch(err => alert("Reroll failed: " + err));
+        }
+
+        function suggestCompactBaseURL(provider) {
+            const urlInput = document.getElementById("input-compact-base-url");
+            const modelInput = document.getElementById("input-compact-model");
+            const vFields = document.getElementById("compact-vertex-fields");
+
+            if (provider === "vertex") {
+                vFields.classList.remove("hidden");
+                urlInput.value = ""; // Auto built by backend
+                modelInput.value = "gemini-1.5-flash";
+            } else {
+                vFields.classList.add("hidden");
+                if (provider === "anthropic") {
+                    urlInput.value = "https://api.anthropic.com/v1/messages";
+                    modelInput.value = "claude-3-5-haiku";
+                } else if (provider === "gemini") {
+                    urlInput.value = ""; // Auto built by backend
+                    modelInput.value = "gemini-1.5-flash";
+                } else {
+                    urlInput.value = "https://api.openai.com/v1/chat/completions";
+                    modelInput.value = "gpt-4o-mini";
+                }
+            }
         }
 
         function triggerCompaction() {

@@ -33,6 +33,7 @@ func main() {
 			LastActiveSessionID:   "",
 			MaxTurns:              15,
 			CommandTimeoutSeconds: 30,
+			TargetScanDirs:        []string{},
 		},
 		Security: SecurityConfig{
 			SandboxMode:     "host",
@@ -48,10 +49,15 @@ func main() {
 			CollapsedPatterns:    []string{"node_modules", "venv", ".venv", "dist", "build", "target"},
 		},
 		Compaction: CompactionConfig{
-			AutoCompactTurns: 6,
-			KeepLastN:        2,
+			Provider:         "openai",
+			Key:              "",
+			BaseURL:          "https://api.openai.com/v1/chat/completions",
 			Model:            "gpt-4o-mini",
 			Temperature:      0.2,
+			ProjectID:        "",
+			Region:           "",
+			AutoCompactTurns: 6,
+			KeepLastN:        2,
 			SystemPrompt:     "You are a professional context compaction, research synthesis, and developer handoff engine. Your task is to generate a highly structured, dense, and complete summary of the execution conversation so far. This summary will be injected into a future session as the sole active baseline context, so you MUST preserve critical technical details, architectural decisions, core research data, and constraints while dropping conversational noise.\n\n" +
 				"When compacting, you MUST structure your output into these 9 aspects:\n" +
 				"1. 📊 CURRENT STATE: High-level active task status, project progress, or current document draft baseline.\n" +
@@ -217,6 +223,31 @@ func runAgentLoop(userPrompt string) string {
 		{
 			Type: "function",
 			Function: FunctionDescriptor{
+				Name:        "read_file",
+				Description: "Read the contents of a file inside the workspace. For large files, you can specify specific start and end line ranges to prevent token blowouts.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":        "string",
+							"description": "Relative file path of the file to read (e.g. src/app.js).",
+						},
+						"start_line": map[string]interface{}{
+							"type":        "integer",
+							"description": "Optional 1-based line number to start reading from (default: 1).",
+						},
+						"end_line": map[string]interface{}{
+							"type":        "integer",
+							"description": "Optional 1-based line number to stop reading at (inclusive, default: end of file).",
+						},
+					},
+					"required": []string{"path"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: FunctionDescriptor{
 				Name:        "write_file",
 				Description: "Write or overwrite a file in the workspace directory. Paths must be relative.",
 				Parameters: map[string]interface{}{
@@ -294,6 +325,32 @@ func runAgentLoop(userPrompt string) string {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: FunctionDescriptor{
+				Name:        "bm25_search",
+				Description: "Index and search files inside the workspace or session chat archives using standard BM25 lexical ranking. Highly recommended over raw terminal searches for code, facts, or context retrieval in large directories.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"query": map[string]interface{}{
+							"type":        "string",
+							"description": "The keywords or query terms to search for (e.g. 'postgres database credentials').",
+						},
+						"scope": map[string]interface{}{
+							"type":        "string",
+							"description": "Scope of search: 'workspace' (to search active repository files) or 'session' (to search previous chat/tool logs).",
+							"enum":        []string{"workspace", "session"},
+						},
+						"limit": map[string]interface{}{
+							"type":        "integer",
+							"description": "Maximum number of scored results to return (default 5).",
+						},
+					},
+					"required": []string{"query"},
+				},
+			},
+		},
 	}
 
 	mcpTools := discoverMCPTools()
@@ -331,7 +388,7 @@ func runAgentLoop(userPrompt string) string {
 	}
 
 	if userTurns >= activeConfig.Compaction.AutoCompactTurns {
-		executeSlidingWindowCompaction(history)
+		executeSlidingWindowCompaction(history, false)
 		history = loadHistoryFromFiles()
 	}
 
@@ -424,7 +481,28 @@ func runAgentLoop(userPrompt string) string {
 					"tool_name":  toolCall.Function.Name,
 				})
 			} else {
-				if toolCall.Function.Name == "write_file" {
+				if toolCall.Function.Name == "read_file" {
+					var args struct {
+						Path      string `json:"path"`
+						StartLine int    `json:"start_line"`
+						EndLine   int    `json:"end_line"`
+					}
+					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
+						if args.StartLine <= 0 {
+							args.StartLine = 1
+						}
+						fmt.Printf("  ↳ Reading file: %s (Lines: %d to %d)\n", args.Path, args.StartLine, args.EndLine)
+						result = executeReadFile(args.Path, args.StartLine, args.EndLine)
+						LogExecutionTrace(turn, "tool_read_file", toolStart, "success", map[string]interface{}{
+							"path":       args.Path,
+							"start_line": args.StartLine,
+							"end_line":   args.EndLine,
+						})
+					} else {
+						result = fmt.Sprintf("Error parsing tool arguments: %v", err)
+						LogExecutionTrace(turn, "tool_read_file", toolStart, "failed", map[string]interface{}{"error": err.Error()})
+					}
+				} else if toolCall.Function.Name == "write_file" {
 					var args struct {
 						Path    string `json:"path"`
 						Content string `json:"content"`
@@ -483,6 +561,29 @@ func runAgentLoop(userPrompt string) string {
 					} else {
 						result = fmt.Sprintf("Error parsing tool arguments: %v", err)
 						LogExecutionTrace(turn, "tool_spawn_sub_agent", toolStart, "failed", map[string]interface{}{"error": err.Error()})
+					}
+				} else if toolCall.Function.Name == "bm25_search" {
+					var args struct {
+						Query string `json:"query"`
+						Scope string `json:"scope"`
+						Limit int    `json:"limit"`
+					}
+					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
+						if args.Limit <= 0 {
+							args.Limit = 5
+						}
+						if args.Scope == "" {
+							args.Scope = "workspace"
+						}
+						fmt.Printf("  ↳ Executing BM25 Search (Query: '%s', Scope: %s)\n", args.Query, args.Scope)
+						result = executeBM25Search(args.Query, args.Scope, args.Limit)
+						LogExecutionTrace(turn, "tool_bm25_search", toolStart, "success", map[string]interface{}{
+							"query": args.Query,
+							"scope": args.Scope,
+						})
+					} else {
+						result = fmt.Sprintf("Error parsing tool arguments: %v", err)
+						LogExecutionTrace(turn, "tool_bm25_search", toolStart, "failed", map[string]interface{}{"error": err.Error()})
 					}
 				} else {
 					result = fmt.Sprintf("Unknown tool name: %s", toolCall.Function.Name)
@@ -686,4 +787,60 @@ func dirExists(path string) bool {
 		return true
 	}
 	return false
+}
+
+// executeReadFile reads a specified line-range from a file in the workspace, enforcing safety truncation rules
+func executeReadFile(path string, startLine, endLine int) string {
+	cleanPath := filepath.Clean(path)
+
+	// Security Shield: protect system files
+	if strings.Contains(cleanPath, ".goharness") || strings.Contains(cleanPath, "config.json") || strings.HasPrefix(cleanPath, "..") || filepath.IsAbs(cleanPath) {
+		return fmt.Sprintf("Security Exception: Systemic or out-of-workspace directories are read-protected. Access denied to path: %s", path)
+	}
+
+	fullPath := filepath.Join(activeConfig.Agent.WorkspaceDir, cleanPath)
+	fileBytes, err := os.ReadFile(fullPath)
+	if err != nil {
+		return fmt.Sprintf("Error: File not found or could not be read at path '%s'. Ensure the file path is correct and relative.", cleanPath)
+	}
+
+	lines := strings.Split(string(fileBytes), "\n")
+	totalLines := len(lines)
+
+	if startLine > totalLines {
+		return fmt.Sprintf("Error: Requested start_line (%d) exceeds total lines in file (%d).", startLine, totalLines)
+	}
+
+	// Calculate end line
+	actualEndLine := totalLines
+	if endLine > 0 && endLine < totalLines {
+		actualEndLine = endLine
+	}
+
+	if actualEndLine < startLine {
+		return fmt.Sprintf("Error: Requested end_line (%d) is less than start_line (%d).", actualEndLine, startLine)
+	}
+
+	// Smart Size Truncation Safeguard:
+	// If the requested range (or entire file) is too large (e.g. over 200 lines) and the user/agent didn't specify end_line,
+	// we automatically truncate it to protect the LLM's context window!
+	isTruncated := false
+	maxLinesToReturn := 200
+	if endLine <= 0 && (actualEndLine-startLine+1) > maxLinesToReturn {
+		actualEndLine = startLine + maxLinesToReturn - 1
+		isTruncated = true
+	}
+
+	// Slice the lines
+	var sb strings.Builder
+	for idx := startLine - 1; idx < actualEndLine; idx++ {
+		// Line numbering is 1-based
+		sb.WriteString(fmt.Sprintf("%d | %s\n", idx+1, lines[idx]))
+	}
+
+	if isTruncated {
+		sb.WriteString(fmt.Sprintf("\n⚠️ [LINE-RANGE WARNING] File is too large (%d total lines). Output has been truncated to lines %d-%d to prevent token window blowouts. If you need to read subsequent sections, please invoke 'read_file' again with specific 'start_line' and 'end_line' parameters.", totalLines, startLine, actualEndLine))
+	}
+
+	return sb.String()
 }

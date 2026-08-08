@@ -6,7 +6,7 @@ This document acts as an audit-ready development ledger recording the complete c
 
 ## 📈 Summary of Contributions
 
-* **Total Commits:** 40
+* **Total Commits:** 41
 * **Repository Root:** `https://github.com/ThiagoRibas-dev/go_llm_harness`
 * **Core Contributors:**
   * **ThiagoRibas-dev** (Strategic enhancements, hierarchical memory, multi-agent concurrency, and Windows sandboxing)
@@ -16,7 +16,113 @@ This document acts as an audit-ready development ledger recording the complete c
 
 ## 📋 Chronological Commit Log
 
-### 1. Upgraded Context Compaction, In-Place Branching, & Windows Sandbox Fallbacks
+### 1. Implement Dynamic Session Context Pinning and Pinned Files Sidebar Manager
+> **Commit Hash:** `e1922cf`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 19:40:04 2026 +0000  
+* Engineered a session-specific **Dynamic Context Pinning Subsystem** integrated cleanly into the files sidebar tab in `src/web/index.html`.
+* Registers the `PinnedFiles` array parameter inside the `SessionMeta` schema in `src/config.go` to save context configurations directly into `meta.json`.
+* Registered `/api/sessions/pinned` and `/api/sessions/pinned/save` endpoints in `src/web.go` to handle session-pinned guidelines.
+* Upgraded `LoadLocalInstructions()` inside `src/agent.go` to strictly load, read, and inject only files explicitly matching the active session's `pinned_files` list, falling back to auto-discovering and auto-pinning defaults (`AGENTS.md`, `SKILLS.md`, etc.) on the first run.
+* Added a visual, chip-based **Pinned Prompt Context Manager** with instant unpin `×` actions and an inline add-pin input box inside the File Explorer sidebar panel.
+
+### 2. Bundle Tailwind CSS Offline inside Go Embedded Assets
+> **Commit Hash:** `1f658cf`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 17:38:04 2026 +0000  
+* Fully bundled and embedded **Tailwind CSS (`tailwind.min.js`)** directly inside our Go standard library binary.
+* Eliminated the external `cdn.tailwindcss.com` internet dependency by routing `/tailwind.min.js` natively through Go's Net/HTTP mux using `//go:embed web/*`.
+* Ensures that the entire visual Web Console operates **100% perfectly offline with zero internet dependencies**.
+
+### 2. Implement Native read_file Tool with Line-Range Slicing and Smart Size Truncation
+> **Commit Hash:** `e3cc043`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 15:12:04 2026 +0000  
+* Engineered a native, high-performance **`read_file`** tool inside `src/main.go` to prevent context window bloat during file inspections.
+* Supports surgical **Line-Range Selection** (`start_line` and `end_line` parameters) mapping the file with absolute line numbers (`12 | code...`) so the model knows exactly which lines to patch.
+* Integrates an automatic **Smart Size Truncation Safeguard** that limits un-ranged queries to 200 lines and returns a helpful warning guiding the agent to query targeted ranges.
+
+### 2. Replicate Main Provider Configurations for Advanced Context Compaction
+> **Commit Hash:** `808d4f9`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 01:02:04 2026 +0000  
+* Upgraded the **Advanced Context Compaction** settings under `src/web/index.html` to $100\%$ replicate the main provider configuration fields.
+* Replaced the hardcoded model selector with a fully open-ended plain text input box (`input-compact-model`).
+* Integrated a fully customizable compaction provider dropdown (supporting `OpenAI`, `Anthropic`, `Gemini AI Studio`, and `GCP Vertex AI`).
+* Added dynamically revealed GCP Vertex fields (`compact-vertex-fields` containing Compaction Project ID and Region) and mapped them to `CompactionConfig` inside `src/config.go` and `src/web.go`.
+
+### 2. Decouple Compaction API Provider and Settings Configuration
+> **Commit Hash:** `2f13052`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 00:44:04 2026 +0000  
+* Fully decoupled background memory compaction from your main model's execution API Provider settings.
+* Added `"compact_provider"`, `"compact_api_key"`, and `"compact_base_url"` parameters inside the `CompactionConfig` schema in `src/config.go`.
+* Upgraded `executeSlidingWindowCompaction` inside `src/agent.go` to temporarily swap active `APIConfig` credentials before dispatching, and restore them on exit, enabling fully decoupled hybrid execution architectures.
+* Replicated and integrated the entire **API Provider Configurations** group (Compaction Provider select, API Key password input, Base URL text input, and Temperature number input) inside the visual settings modal in `src/web/index.html`.
+
+### 2. Upgrade Compaction Model Config to a Custom Dropdown and Override Form
+> **Commit Hash:** `88e5179`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 00:36:04 2026 +0000  
+* Upgraded the plain-text Compaction Model configuration under settings inside `src/web/index.html` to a beautiful, native **Model Selector Dropdown**.
+* Offers standard, cost-efficient, and fast compaction options (`gpt-4o-mini`, `gemini-1.5-flash`, `claude-3-5-haiku`, `llama-3.1-8b`) along with a dynamic **Custom Model Override** text input.
+* Automatically hides/shows the custom input box based on selection and handles data binding seamlessly.
+
+### 2. Update README.md with Newly Introduced Memory and Branching Features
+> **Commit Hash:** `4fb541c`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Tue Aug 4 22:20:04 2026 +0000  
+* Fully updated `README.md` to document our newly developed **Advanced Memory Subsystem** (BM25 engine [1](https://arxiv.org/html/2607.26497v3), session-specific file uploads, and target directory limiting) and **Conversational Branching** (In-place card editing and one-click Reroll) systems.
+* Documented the `target_scan_dirs` configuration parameter in the main parameters breakdown table.
+
+### 2. Add TencentDB Agent Memory Analysis to RESEARCH.md
+> **Commit Hash:** `c520fbd`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Tue Aug 4 22:15:04 2026 +0000  
+* Added a comprehensive, expert-level analysis of Tencent Cloud's **TencentDB Agent Memory** (`TencentCloud/TencentDB-Agent-Memory`) inside `docs/RESEARCH.md`.
+* Documented their **4-tier progressive memory architecture** (L0 Conversation, L1 Atom, L2 Scenario, L3 Core/Persona) and mapped its structural alignment to our newly implemented GoHarness Advanced Memory and Upload subsystems.
+
+### 2. Implement Advanced Memory & Target Directory Subsystem
+> **Commit Hash:** `2463343`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Tue Aug 4 21:50:04 2026 +0000  
+* Engineered an **Advanced Memory Subsystem** inside GoHarness supporting session-specific custom file uploads.
+* Registered the `/api/upload` endpoint in `src/web.go` to receive, validate, and save custom text/JSON/code reference documents inside `.goharness/sessions/<session_id>/uploads/`.
+* Upgraded `executeBM25Search` in `src/agent.go` to **always index and search uploaded custom reference files** as a highly prioritized local memory cache.
+* Added `"target_scan_dirs"` configuration inside `src/config.go` and `src/web.go` to let users and the agent define specific relative directories (e.g., `["src", "docs"]`) for the BM25 search space.
+* Integrated a beautiful file upload button and comma-separated subdirectories selection textbox directly inside the Web Console's explorer sidebar and Settings modal in `src/web/index.html`.
+
+### 2. Implement Pure Go BM25 Indexing and Query Search Engine
+> **Commit Hash:** `ca0fdf9`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Tue Aug 4 21:40:04 2026 +0000  
+* Created a lightweight, standalone **BM25 Lexical Ranking Engine** inside `src/bm25.go` utilizing pure standard library Go packages (`math`, `sort`, `filepath`, `os`).
+* Implemented standard term tokenizers, document frequency accumulators, dynamic average document length scaling, and standard-compliant IDF score calculations.
+* Registered the `bm25_search` native tool inside `src/main.go` and `src/agent.go` to provide the agent with globally ranked candidate discovery (which our scaling study proved is the optimal RAG architecture!).
+
+### 2. Add BM25_SCALING_RESEARCH.md Documenting July 2026 Paper on RAG Scalability
+> **Commit Hash:** `10c9afc`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Tue Aug 4 22:04:12 2026 +0000  
+* Created `docs/BM25_SCALING_RESEARCH.md` compiling the findings, nested-scale accuracy point estimates, construction walls, and latency results of the July 30, 2026 paper: *"BM25 Wins at Scale: A Scaling Study of Retrieval-Augmented Generation Paradigms"*.
+* Documented core architectural lessons for local-first agent harnesses, specifically the crucial insight that **agentic reasoning works best after ranked discovery, rather than in place of it**.
+
+### 2. Implement Forced Manual Compaction Bypassing User Turn Thresholds
+> **Commit Hash:** `3d69260`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Tue Aug 4 21:52:12 2026 +0000  
+* Upgraded the compaction dispatcher to accept an explicit `force` parameter.
+* Allows manual compaction requested from the Web UI to execute instantly on demand, bypassing any `userTurns < limit` thresholds, while preserving strict automatic compaction checks.
+
+### 2. Resolve Conversational Editing Cancel Button DOM Restoration Bug
+> **Commit Hash:** `1225483`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Tue Aug 4 21:58:24 2026 +0000  
+* Fixed the `Cancel` button action when in-place editing message cards.
+* Resolved a JS string interpolation issue where unescaped backticks and carriage returns inside raw prompt text blocks caused unhandled console syntax crashes.
+* Implemented memory-based, state-driven DOM subtree restoration (`originalCardHtmls`) to securely reset previous layouts, guaranteeing 100% stable, bulletproof inline cancels on any character formats!
+
+### 2. Upgraded Context Compaction, In-Place Branching, & Windows Sandbox Fallbacks
 > **Commit Hash:** `ee8907f5276deeb998af1065cb183ec26dae4dd5`  
 > **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
 > **Date:** Tue Aug 4 21:16:42 2026 +0000  

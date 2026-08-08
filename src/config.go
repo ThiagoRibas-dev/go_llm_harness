@@ -51,6 +51,7 @@ type AgentConfig struct {
 	LastActiveSessionID   string   `json:"last_active_session_id"`   // Last Active Session ID for launch persistence (Phase 8.6)
 	MaxTurns              int      `json:"max_turns"`
 	CommandTimeoutSeconds int      `json:"command_timeout_seconds"`
+	TargetScanDirs        []string `json:"target_scan_dirs,omitempty"` // Specific subdirectory paths to target (e.g. ["src", "docs"])
 }
 
 type SecurityConfig struct {
@@ -69,10 +70,15 @@ type DirectoryScanConfig struct {
 }
 
 type CompactionConfig struct {
+	Provider         string  `json:"provider"`         // Compaction API Provider: "openai", "anthropic", "gemini", "vertex" (Default: global API)
+	Key              string  `json:"key"`              // Compaction API Key (Default: global API)
+	BaseURL          string  `json:"base_url"`         // Compaction Base Endpoint URL (Default: global API)
+	Model            string  `json:"model"`            // Compaction Model Target
+	Temperature      float64 `json:"temperature"`      // Compaction Temperature
+	ProjectID        string  `json:"project_id,omitempty"` // GCP Project ID for Vertex Compaction
+	Region           string  `json:"region,omitempty"`     // GCP Region for Vertex Compaction
 	AutoCompactTurns int     `json:"auto_compact_turns"`
 	KeepLastN        int     `json:"keep_last_n"`
-	Model            string  `json:"model"`
-	Temperature      float64 `json:"temperature"`
 	SystemPrompt     string  `json:"system_prompt"`
 }
 
@@ -90,12 +96,13 @@ type WebConfig struct {
 
 // SessionMeta holds metadata for each conversation session
 type SessionMeta struct {
-	SessionID          string `json:"session_id"`
-	WorkspaceDir       string `json:"workspace_dir"`
-	CreatedAt          string `json:"created_at"`
-	Name               string `json:"name"`
-	ParentSessionID    string `json:"parent_session_id,omitempty"`
-	CompactionBoundary int    `json:"compaction_boundary,omitempty"`
+	SessionID          string   `json:"session_id"`
+	WorkspaceDir       string   `json:"workspace_dir"`
+	CreatedAt          string   `json:"created_at"`
+	Name               string   `json:"name"`
+	ParentSessionID    string   `json:"parent_session_id,omitempty"`
+	CompactionBoundary int      `json:"compaction_boundary,omitempty"`
+	PinnedFiles        []string `json:"pinned_files,omitempty"` // Specific instruction files pinned to context
 }
 
 // OpenAI Chat Completion API Schema structures

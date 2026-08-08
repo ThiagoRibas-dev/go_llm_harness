@@ -197,6 +197,25 @@ To configure servers statically or add custom environment variables (like API ke
 
 ---
 
+## 🧠 Advanced Memory Subsystem (BM25, Custom Uploads, & Target Directories)
+
+GoHarness features a state-of-the-art, local-first **Advanced Memory Subsystem** inspired by Tencent's progressive memory layering [3](https://github.com/TencentCloud/TencentDB-Agent-Memory). It is designed to maximize search speed, limit token waste, and target your agent's focus exactly on what matters:
+
+* **🔍 BM25 Lexical Search Engine:** Written in pure, standard Go, our standalone BM25 engine performs exact keyword-relevance ranking across files on disk. The agent can invoke the `bm25_search` native tool to query files in seconds (outperforming slow terminal `grep` commands) [1](https://arxiv.org/html/2607.26497v3).
+* **📤 Custom File Uploads:** Clicking the Cloud-Upload button on the Files sidebar explorer allows you to upload text/JSON/code reference documents (up to 10MB) directly to your active session. GoHarness automatically registers and priority-indexes these uploads during any BM25 search.
+* **📂 Targeted Workspace Scanning (`target_scan_dirs`):** Under settings (⚙️), you can specify comma-separated relative directories (e.g. `src, docs`). If configured, GoHarness's BM25 engine will bypass the rest of the workspace and index *only* these designated folders, preventing noise and limiting token blowouts [1](https://arxiv.org/html/2607.26497v3).
+
+---
+
+## 🔄 Conversational Branching (Edit/Fork & Reroll)
+
+To give you complete control over your conversation history and workspace file states, GoHarness implements premium conversational lifecycle triggers:
+
+* **✏️ In-Place Edit & Fork:** Hovering over any previous user or assistant message card reveals an **Edit & Fork (Pen)** button. Clicking it lets you edit the prompt and save it. GoHarness will instantly spawn a parallel timeline branch, copy files up to that point, write your edited text, and automatically re-run the agent loop on the new timeline!
+* **🔄 One-Click Regeneration (Reroll):** Clicking the Reroll icon right next to the "Execute" button deletes the last Assistant and Tool execution turns, safely reverts any workspace edits made during that turn, and resubmits the last user prompt for a fresh, live-streamed generation.
+
+---
+
 ## 🛡️ Sandboxing & Safety Recommendations (Including Windows Fallback)
 
 To protect your host operating system from malicious commands or Indirect Prompt Injection attacks (e.g., if the agent reads a webpage instructing it to run a harmful script), GoHarness implements platform-specific bare-metal sandboxes:
@@ -246,6 +265,7 @@ To run GoHarness with complete, zero-compromise containerized or bare-metal isol
 | | `project_id` | GCP Project ID for scoped Vertex AI API Key queries. |
 | | `region` | GCP Region (e.g. `us-central1`) for regional Vertex AI REST requests. |
 | **`agent`** | `workspace_dir` | The directory where the agent is allowed to write, read, and edit files. |
+| | `target_scan_dirs` | Specific relative subdirectory paths inside the workspace to index for BM25 search (e.g., `["src", "docs"]`). |
 | | `workspaces_history` | Array list of registered local project workspaces. Managed automatically by the swapper. |
 | | `last_active_session_id` | Remembers and automatically resumes your most recent active session ID on launch. |
 | | `max_turns` | Loop cutoff safety fuse to prevent runaway infinite API spend. |

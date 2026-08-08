@@ -16,7 +16,7 @@ import (
 )
 
 // Global assets embedding (Phase 6.1)
-//go:embed web/index.html
+//go:embed web/*
 var embeddedWebFS embed.FS
 
 // SSE Client Management
@@ -94,6 +94,17 @@ func StartWebGUI(port int) {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(htmlBytes)
+	})
+
+	// Serve tailwind.min.js from embed
+	mux.HandleFunc("/tailwind.min.js", func(w http.ResponseWriter, r *http.Request) {
+		jsBytes, err := embeddedWebFS.ReadFile("web/tailwind.min.js")
+		if err != nil {
+			http.Error(w, "Embedded tailwind.min.js missing!", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		_, _ = w.Write(jsBytes)
 	})
 
 	// 2. SSE Streaming endpoint
@@ -371,25 +382,32 @@ func StartWebGUI(port int) {
 		}
 
 		var req struct {
-			Provider        string  `json:"provider"` // Phase 7
-			APIKey          string  `json:"api_key"`
-			Model           string  `json:"model"`
-			BaseURL         string  `json:"base_url"`
-			SandboxMode     string  `json:"sandbox_mode"`
-			SandboxFallback bool    `json:"sandbox_fallback"`
-			MaxTurns        int     `json:"max_turns"`
-			WorkspaceDir    string  `json:"workspace_dir"`
-			Temperature     float64 `json:"temperature"`
-			TopP            float64 `json:"top_p"`
-			TopK            int     `json:"top_k"`
-			ThinkingLevel   string  `json:"thinking_level"`
-			ProjectID       string  `json:"project_id"`
-			Region          string  `json:"region"`
-			CompactModel    string  `json:"compact_model"`
-			CompactTurns    int     `json:"compact_turns"`
-			CompactKeepN    int     `json:"compact_keep_n"`
-			CompactPrompt   string  `json:"compact_prompt"`
-			Debug           bool    `json:"debug"` // Phase 8.6
+			Provider        string   `json:"provider"` // Phase 7
+			APIKey          string   `json:"api_key"`
+			Model           string   `json:"model"`
+			BaseURL         string   `json:"base_url"`
+			SandboxMode     string   `json:"sandbox_mode"`
+			SandboxFallback bool     `json:"sandbox_fallback"`
+			MaxTurns        int      `json:"max_turns"`
+			WorkspaceDir    string   `json:"workspace_dir"`
+			TargetScanDirs  []string `json:"target_scan_dirs"`
+			Temperature     float64  `json:"temperature"`
+			TopP            float64  `json:"top_p"`
+			TopK            int      `json:"top_k"`
+			ThinkingLevel   string   `json:"thinking_level"`
+			ProjectID       string   `json:"project_id"`
+			Region          string   `json:"region"`
+			CompactProvider string   `json:"compact_provider"`
+			CompactAPIKey   string   `json:"compact_api_key"`
+			CompactBaseURL  string   `json:"compact_base_url"`
+			CompactModel    string   `json:"compact_model"`
+			CompactTemp     float64  `json:"compact_temp"`
+			CompactProjectID string  `json:"compact_project_id"`
+			CompactRegion   string   `json:"compact_region"`
+			CompactTurns    int      `json:"compact_turns"`
+			CompactKeepN    int      `json:"compact_keep_n"`
+			CompactPrompt   string   `json:"compact_prompt"`
+			Debug           bool     `json:"debug"` // Phase 8.6
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -412,8 +430,15 @@ func StartWebGUI(port int) {
 		activeConfig.Security.SandboxMode = req.SandboxMode
 		activeConfig.Security.SandboxFallback = req.SandboxFallback
 		activeConfig.Agent.MaxTurns = req.MaxTurns
+		activeConfig.Agent.TargetScanDirs = req.TargetScanDirs
 
+		activeConfig.Compaction.Provider = req.CompactProvider
+		activeConfig.Compaction.Key = req.CompactAPIKey
+		activeConfig.Compaction.BaseURL = req.CompactBaseURL
 		activeConfig.Compaction.Model = req.CompactModel
+		activeConfig.Compaction.Temperature = req.CompactTemp
+		activeConfig.Compaction.ProjectID = req.CompactProjectID
+		activeConfig.Compaction.Region = req.CompactRegion
 		activeConfig.Compaction.AutoCompactTurns = req.CompactTurns
 		activeConfig.Compaction.KeepLastN = req.CompactKeepN
 		activeConfig.Compaction.SystemPrompt = req.CompactPrompt
@@ -427,6 +452,63 @@ func StartWebGUI(port int) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success"}`))
+	})
+
+	// POST /api/upload: Receives a file upload and saves it inside .goharness/sessions/<session_id>/uploads/
+	mux.HandleFunc("/api/upload", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Parse the multipart form (max 10MB file)
+		err := r.ParseMultipartForm(10 << 20)
+		if err != nil {
+			http.Error(w, "File size too large (max 10MB)", http.StatusBadRequest)
+			return
+		}
+
+		file, handler, err := r.FormFile("file")
+		if err != nil {
+			http.Error(w, "Failed to parse file from request", http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+
+		uploadsDir := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID, "uploads"))
+		_ = os.MkdirAll(uploadsDir, 0755)
+
+		destPath := filepath.Clean(filepath.Join(uploadsDir, handler.Filename))
+		
+		// Guard: protect system files
+		if strings.Contains(destPath, ".goharness") && !strings.Contains(destPath, filepath.Join("sessions", activeSessionID, "uploads")) {
+			http.Error(w, "Security Exception: Invalid upload destination path", http.StatusForbidden)
+			return
+		}
+
+		out, err := os.Create(destPath)
+		if err != nil {
+			http.Error(w, "Failed to create destination file on disk", http.StatusInternalServerError)
+			return
+		}
+		defer out.Close()
+
+		_, err = io.Copy(out, file)
+		if err != nil {
+			http.Error(w, "Failed to write file to disk", http.StatusInternalServerError)
+			return
+		}
+
+		// Broadcast upload success SSE turn
+		BroadcastSSE("turn_secured", map[string]interface{}{
+			"turn_number": 0,
+			"role":        "system",
+			"name":        "system",
+			"content":     fmt.Sprintf("📤 **[FILE UPLOADED]** Custom memory reference file successfully uploaded and registered: `%s`. Ready for BM25 indexing!", handler.Filename),
+		})
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"success"}`))
@@ -615,6 +697,35 @@ func StartWebGUI(port int) {
 			"workspace":  req.WorkspaceDir,
 			"name":       req.Name,
 		})
+	})
+
+	// GET /api/sessions/pinned: Retrieves pinned context files for the active session
+	mux.HandleFunc("/api/sessions/pinned", func(w http.ResponseWriter, r *http.Request) {
+		pinned := getSessionPinnedFiles(activeSessionID)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"pinned_files": pinned,
+		})
+	})
+
+	// POST /api/sessions/pinned/save: Saves the list of pinned context files for the active session
+	mux.HandleFunc("/api/sessions/pinned/save", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			PinnedFiles []string `json:"pinned_files"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		updateSessionPinnedFiles(activeSessionID, req.PinnedFiles)
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success"}`))
 	})
 
 	mux.HandleFunc("/api/sessions/branch", func(w http.ResponseWriter, r *http.Request) {
@@ -840,7 +951,7 @@ func StartWebGUI(port int) {
 
 	mux.HandleFunc("/api/compact", func(w http.ResponseWriter, r *http.Request) {
 		history := loadHistoryFromFiles()
-		go executeSlidingWindowCompaction(history)
+		go executeSlidingWindowCompaction(history, true)
 		w.WriteHeader(http.StatusOK)
 	})
 

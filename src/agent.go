@@ -219,7 +219,7 @@ func executeSessionRollback(targetTurn int) {
 }
 
 // executeSlidingWindowCompaction triggers a background LLM call to compress history.
-func executeSlidingWindowCompaction(history []Message) {
+func executeSlidingWindowCompaction(history []Message, force bool) {
 	limit := activeConfig.Compaction.AutoCompactTurns
 	keepLastN := activeConfig.Compaction.KeepLastN
 
@@ -231,15 +231,24 @@ func executeSlidingWindowCompaction(history []Message) {
 		}
 	}
 
-	if userTurns < limit || len(history) <= keepLastN {
+	if !force && (userTurns < limit || len(history) <= keepLastN) {
+		return
+	}
+
+	if len(history) <= keepLastN {
 		return
 	}
 
 	compactionEndIndex := len(history) - keepLastN
 	boundaryTurnNumber := compactionEndIndex
 
-	fmt.Printf("\n%s⚡ [COMPACTION] User turn limit reached (%d / %d prompts). Compacting turns 1 to %d while keeping the last %d turns untouched...%s\n", 
-		ColorBold+ColorMagenta, userTurns, limit, boundaryTurnNumber, keepLastN, ColorReset)
+	if force {
+		fmt.Printf("\n%s⚡ [COMPACTION] Manual compaction forced. Compacting turns 1 to %d while keeping the last %d turns untouched...%s\n", 
+			ColorBold+ColorMagenta, boundaryTurnNumber, keepLastN, ColorReset)
+	} else {
+		fmt.Printf("\n%s⚡ [COMPACTION] User turn limit reached (%d / %d prompts). Compacting turns 1 to %d while keeping the last %d turns untouched...%s\n", 
+			ColorBold+ColorMagenta, userTurns, limit, boundaryTurnNumber, keepLastN, ColorReset)
+	}
 
 	// 1. Read previous summary if it exists to accumulate knowledge recursively
 	prevSummary, _ := getCompactedSummary()
@@ -264,6 +273,26 @@ func executeSlidingWindowCompaction(history []Message) {
 
 	compactionPrompt := fmt.Sprintf("Please summarize the following conversational execution history. Maintain a tight, bulleted summary listing (1) files created or modified, (2) current bugs resolved, and (3) the outstanding task list. Keep it highly dense.\n\nConversation Logs:\n%s", historyToCompact.String())
 
+	// Temporarily swap global API parameters with compaction parameters
+	parentAPI := activeConfig.API
+	compactionProvider := activeConfig.Compaction.Provider
+	if compactionProvider == "" {
+		compactionProvider = "openai"
+	}
+	activeConfig.API = APIConfig{
+		Provider:    compactionProvider,
+		Key:         activeConfig.Compaction.Key,
+		BaseURL:     activeConfig.Compaction.BaseURL,
+		Model:       activeConfig.Compaction.Model,
+		Temperature: activeConfig.Compaction.Temperature,
+		ProjectID:   activeConfig.Compaction.ProjectID,
+		Region:      activeConfig.Compaction.Region,
+		MaxTokens:   activeConfig.API.MaxTokens, // Keep standard output ceiling
+	}
+	if activeConfig.API.Key == "" {
+		activeConfig.API.Key = parentAPI.Key
+	}
+
 	reqBody := ChatCompletionRequest{
 		Model: activeConfig.Compaction.Model,
 		Messages: []Message{
@@ -274,6 +303,9 @@ func executeSlidingWindowCompaction(history []Message) {
 	}
 
 	respMsg, err := SendMultiProviderRequest(reqBody.Messages, nil)
+	
+	// Restore parent parameters immediately
+	activeConfig.API = parentAPI
 	if err != nil {
 		fmt.Printf("%s[WARNING] Context Compaction API call failed: %v. Skipping compaction.%s\n", ColorYellow, err, ColorReset)
 		return
@@ -388,37 +420,81 @@ func getSessionCompactionBoundary(sessionID string) int {
 	return 0
 }
 
+func updateSessionPinnedFiles(sessionID string, files []string) {
+	metaPath := filepath.Join(".goharness", "sessions", sessionID, "meta.json")
+	bytes, err := os.ReadFile(metaPath)
+	if err == nil {
+		var meta SessionMeta
+		if err := json.Unmarshal(bytes, &meta); err == nil {
+			meta.PinnedFiles = files
+			newBytes, _ := json.MarshalIndent(meta, "", "  ")
+			_ = os.WriteFile(metaPath, newBytes, 0644)
+		}
+	}
+}
+
+func getSessionPinnedFiles(sessionID string) []string {
+	metaPath := filepath.Join(".goharness", "sessions", sessionID, "meta.json")
+	bytes, err := os.ReadFile(metaPath)
+	if err == nil {
+		var meta SessionMeta
+		if err := json.Unmarshal(bytes, &meta); err == nil {
+			if meta.PinnedFiles == nil {
+				return []string{}
+			}
+			return meta.PinnedFiles
+		}
+	}
+	return []string{}
+}
+
 // LoadLocalInstructions recursively scans both the Global Binary Directory and the Active Project Workspace Folder
 // for AGENTS.md, SKILLS.md, INSTRUCTIONS.md, and standard CLAUDE.md files, injecting them dynamically on Turn 1 (Phase 8.6)
 func LoadLocalInstructions() string {
 	var instructions []string
-	targets := []string{"AGENTS.md", "SKILLS.md", "INSTRUCTIONS.md", "CLAUDE.md"}
+	
+	// Load specifically pinned context files for this session
+	pinned := getSessionPinnedFiles(activeSessionID)
 
-	// Set up path map to prevent reading duplicate files if workspace matches binary root
+	// Fallback/First run: Auto-discover default targets inside the workspace and pin them!
+	if len(pinned) == 0 {
+		targets := []string{"AGENTS.md", "SKILLS.md", "INSTRUCTIONS.md", "CLAUDE.md"}
+		for _, filename := range targets {
+			projPath := filepath.Join(activeConfig.Agent.WorkspaceDir, filename)
+			if _, err := os.Stat(projPath); err == nil {
+				pinned = append(pinned, filename)
+			} else {
+				globPath := GetSystemPath(filename)
+				if _, err := os.Stat(globPath); err == nil {
+					pinned = append(pinned, filename)
+				}
+			}
+		}
+		// Save discovered defaults to session meta.json
+		updateSessionPinnedFiles(activeSessionID, pinned)
+	}
+
 	loadedPaths := make(map[string]bool)
 
-	// 1. PROJECT SCOPE (Highest priority): Read instructions inside the active workspace directory
-	for _, filename := range targets {
+	for _, filename := range pinned {
+		// Try to read inside workspace directory first (Project scoped)
 		projectPath := filepath.Join(activeConfig.Agent.WorkspaceDir, filename)
 		if content, err := os.ReadFile(projectPath); err == nil {
 			loadedPaths[projectPath] = true
 			fmt.Printf("%s[INJECTION] Injecting PROJECT guideline from %s (%d bytes)%s\n", ColorMagenta, projectPath, len(content), ColorReset)
-			header := fmt.Sprintf("\n=== PROJECT GUIDELINE: %s ===\n", filename)
+			header := fmt.Sprintf("\n=== ACTIVE PINNED GUIDELINE: %s ===\n", filename)
 			instructions = append(instructions, header+string(content))
-		}
-	}
-
-	// 2. GLOBAL SCOPE (Fallback): Read instructions sitting directly next to our binary executable
-	for _, filename := range targets {
-		globalPath := GetSystemPath(filename)
-		// Skip if it was already loaded from the workspace folder
-		if loadedPaths[globalPath] {
 			continue
 		}
-		if content, err := os.ReadFile(globalPath); err == nil {
-			fmt.Printf("%s[INJECTION] Injecting GLOBAL guideline from %s (%d bytes)%s\n", ColorMagenta, globalPath, len(content), ColorReset)
-			header := fmt.Sprintf("\n=== GLOBAL GUIDELINE: %s ===\n", filename)
-			instructions = append(instructions, header+string(content))
+
+		// Fallback to read next to binary (Global scoped)
+		globalPath := GetSystemPath(filename)
+		if !loadedPaths[globalPath] {
+			if content, err := os.ReadFile(globalPath); err == nil {
+				fmt.Printf("%s[INJECTION] Injecting GLOBAL guideline from %s (%d bytes)%s\n", ColorMagenta, globalPath, len(content), ColorReset)
+				header := fmt.Sprintf("\n=== ACTIVE PINNED GUIDELINE (GLOBAL): %s ===\n", filename)
+				instructions = append(instructions, header+string(content))
+			}
 		}
 	}
 
@@ -581,4 +657,64 @@ func executeSubAgent(prompt string) string {
 
 	// Return a beautifully structured markdown report to the parent LLM!
 	return fmt.Sprintf("=== SUB-AGENT RESEARCH REPORT ===\n\n**Requested Task:** %s\n\n**Specialized Findings:**\n%s\n\n=================================", prompt, answer)
+}
+
+// executeBM25Search indexes and queries workspace or session folder files using our custom BM25 engine
+func executeBM25Search(query, scope string, limit int) string {
+	engine := NewBM25Engine()
+	var err error
+
+	if scope == "session" {
+		// Index all session turns
+		sessionPath := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID))
+		err = engine.IndexDirectory(sessionPath, []string{"backups", "compacted_summary_up_to_turn_"})
+	} else {
+		// Default to workspace. If TargetScanDirs is non-empty, index ONLY those subdirectories!
+		if len(activeConfig.Agent.TargetScanDirs) > 0 {
+			for _, sub := range activeConfig.Agent.TargetScanDirs {
+				subPath := filepath.Join(activeConfig.Agent.WorkspaceDir, sub)
+				if _, errStat := os.Stat(subPath); errStat == nil {
+					_ = engine.IndexDirectory(subPath, []string{".git", ".goharness", "node_modules", "venv", ".venv", "dist", "build", "target"})
+				}
+			}
+		} else {
+			// Fallback to indexing the entire workspace root
+			err = engine.IndexDirectory(activeConfig.Agent.WorkspaceDir, []string{".git", ".goharness", "node_modules", "venv", ".venv", "dist", "build", "target"})
+		}
+
+		// Always index the session uploads folder if it exists!
+		uploadsPath := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID, "uploads"))
+		if _, errStat := os.Stat(uploadsPath); errStat == nil {
+			_ = engine.IndexDirectory(uploadsPath, []string{})
+		}
+	}
+
+	if err != nil && len(engine.Documents) == 0 {
+		return fmt.Sprintf("Error initializing BM25 indexer: %v", err)
+	}
+
+	results := engine.Search(query, limit)
+	if len(results) == 0 {
+		return "No relevant documents found matching BM25 query keywords: " + query
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("=== BM25 LEXICAL SEARCH RESULTS (Query: '%s', Scope: %s) ===\n", query, scope))
+	for i, res := range results {
+		sb.WriteString(fmt.Sprintf("[%d] File: %s (BM25 Relevance Score: %.4f)\n", i+1, res.Path, res.Score))
+
+		bytes, err := os.ReadFile(res.Path)
+		if err == nil {
+			content := string(bytes)
+			excerpt := content
+			if len(excerpt) > 400 {
+				excerpt = excerpt[:400] + "\n... [TRUNCATED] ..."
+			}
+			sb.WriteString("Excerpt:\n")
+			sb.WriteString(excerpt)
+			sb.WriteString("\n--------------------------------------------------\n")
+		}
+	}
+
+	return sb.String()
 }

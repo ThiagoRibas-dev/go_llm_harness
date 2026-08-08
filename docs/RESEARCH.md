@@ -109,6 +109,13 @@ To design a production-grade, local-first agent runner, we must formalize our sy
 * **Core Research Vector:** *Multi-Provider Portability & Extensibility Standards (Phases 7 & 8)*
 * **GoHarness Translation:** By exposing a local, un-sandboxed OpenAI API Gateway (Phase 8), GoHarness decouples its core sandboxed loop capabilities from its native Web UI. It allows you to plug its secure, sandboxed multi-turn capabilities directly into self-hosted, open-source IDE extensions or collaborative git agents without any corporate cloud lock-in.
 
+### 11. 🧠 TencentDB Agent Memory (`TencentCloud/TencentDB-Agent-Memory`)
+* **Core Research Vector:** *Memory, State Management, & RAG Customization (Phases 2 & 9)*
+* **GoHarness Translation:** TencentDB Agent Memory pioneered a **4-tier progressive memory architecture** (L0 Conversation, L1 Atom, L2 Scenario, L3 Core/Persona) that rejects brute-force context stuffing. GoHarness translates this philosophy into our newly introduced **Advanced Memory Subsystem**:
+  - **L0 Conversation Layer:** Fully retained via our sequential, turn-by-turn plain-text JSON file structures.
+  - **L1/L2 Segmented Retrieval:** Our custom **BM25 Lexical Ranking Engine** and **custom session file upload manager** allow the agent and the user to surgically query localized memory blocks, target scan subdirectories (e.g. `src/`, `docs/`), and prevent context-bloating.
+  - **L3 Consolidated Core:** Our standard-compliant 9-aspect compaction summaries (Current State, Learnings, Key Decisions, Next Steps) act as the progressive, distilled meta-cognitive layer of the session.
+
 ---
 
 ## 📄 License
