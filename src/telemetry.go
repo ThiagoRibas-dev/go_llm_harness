@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -53,4 +54,29 @@ func LogExecutionTrace(turn int, action string, startTime time.Time, status stri
 
 	// 4. Append log to file followed by newline
 	_, _ = file.Write(append(jsonBytes, '\n'))
+}
+
+var (
+	debugLogMu sync.Mutex
+)
+
+// writeDebugLog appends a verbose diagnostic message to .goharness/debug.log in debug mode
+func writeDebugLog(format string, args ...interface{}) {
+	if activeConfig == nil || !activeConfig.Debug {
+		return
+	}
+
+	debugLogMu.Lock()
+	defer debugLogMu.Unlock()
+
+	logPath := GetSystemPath(filepath.Join(".goharness", "debug.log"))
+	_ = os.MkdirAll(filepath.Dir(logPath), 0755)
+
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err == nil {
+		defer file.Close()
+		timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+		logLine := fmt.Sprintf("[%s] "+format+"\n", append([]interface{}{timestamp}, args...)...)
+		_, _ = file.WriteString(logLine)
+	}
 }

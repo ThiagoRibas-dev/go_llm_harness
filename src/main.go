@@ -433,14 +433,17 @@ func runAgentLoop(userPrompt string) string {
 	maxTurns := activeConfig.Agent.MaxTurns
 	for turn := 1; turn <= maxTurns; turn++ {
 		fmt.Printf("\n%s--- TURN LOOP (%d / %d) ---%s\n", ColorBold+ColorWhite, turn, maxTurns, ColorReset)
+		writeDebugLog("Entering Turn %d of %d (Active Session: %s)", turn, maxTurns, activeSessionID)
 
 		fmt.Printf("%s[LLM] Thinking...%s\n", ColorYellow, ColorReset)
+		writeDebugLog("Requesting completion from provider: %s, model: %s", activeConfig.API.Provider, activeConfig.API.Model)
 		
 		startTime := time.Now()
 		responseMsg, err := SendMultiProviderRequest(requestMessages, agentTools)
 		if err != nil {
 			LogExecutionTrace(turn, "llm_completion", startTime, "failed", map[string]interface{}{"error": err.Error()})
 			fmt.Printf("%s[ERROR] LLM API Call Failed: %v%s\n", ColorRed, err, ColorReset)
+			writeDebugLog("LLM API Call failed on Turn %d: %v", turn, err)
 			
 			// Broadcast the API error directly to the Web Console!
 			BroadcastSSE("turn_secured", map[string]interface{}{
@@ -452,6 +455,7 @@ func runAgentLoop(userPrompt string) string {
 			return "Error: LLM API Call Failed."
 		}
 		LogExecutionTrace(turn, "llm_completion", startTime, "success", map[string]interface{}{"model": activeConfig.API.Model, "provider": activeConfig.API.Provider})
+		writeDebugLog("LLM response received. Content length: %d bytes. Tool calls: %d", len(responseMsg.Content), len(responseMsg.ToolCalls))
 
 		saveMessageTurn(*responseMsg)
 		requestMessages = append(requestMessages, *responseMsg)
@@ -492,6 +496,7 @@ func runAgentLoop(userPrompt string) string {
 							args.StartLine = 1
 						}
 						fmt.Printf("  ↳ Reading file: %s (Lines: %d to %d)\n", args.Path, args.StartLine, args.EndLine)
+						writeDebugLog("[TOOL] read_file requested for path: %s (start: %d, end: %d)", args.Path, args.StartLine, args.EndLine)
 						result = executeReadFile(args.Path, args.StartLine, args.EndLine)
 						LogExecutionTrace(turn, "tool_read_file", toolStart, "success", map[string]interface{}{
 							"path":       args.Path,
@@ -509,6 +514,7 @@ func runAgentLoop(userPrompt string) string {
 					}
 					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
 						fmt.Printf("  ↳ Writing %d bytes to: %s\n", len(args.Content), args.Path)
+						writeDebugLog("[TOOL] write_file requested for path: %s (%d bytes)", args.Path, len(args.Content))
 						result = executeWriteFile(args.Path, args.Content)
 						LogExecutionTrace(turn, "tool_write_file", toolStart, "success", map[string]interface{}{
 							"path":          args.Path,

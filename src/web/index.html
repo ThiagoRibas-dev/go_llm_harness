@@ -1218,6 +1218,15 @@
 
                 // Update cumulative character count indicator (Phase 8.6)
                 document.getElementById("session-chars").innerText = `(${packet.data.char_count} chars)`;
+
+                // Real-time Intermediate Node Metrics population (Observability!)
+                const lastTurnCostId = `metric-cost-${turnCounter}`;
+                const lastTokensCardId = `metric-tokens-${turnCounter}`;
+
+                if (document.getElementById(lastTurnCostId)) {
+                    document.getElementById(lastTurnCostId).innerText = "$" + parseFloat(packet.data.cost).toFixed(6);
+                    document.getElementById(lastTokensCardId).innerText = `${packet.data.prompt_tokens} In / ${packet.data.completion_tokens} Out (${packet.data.total_tokens} total)`;
+                }
             }
         }
 
@@ -1316,6 +1325,25 @@
                 textHtml = `<div id="turn-text-${turn.turn_number}" class="text-slate-300 text-sm whitespace-pre-wrap font-sans">${turn.content}</div>`;
             }
 
+            let metricsHtml = "";
+            if (turn.role === "assistant") {
+                metricsHtml = `
+                    <div class="mt-2 text-[10px] text-slate-500 font-mono">
+                        <button onclick="toggleCardMetrics(event, ${turn.turn_number})" class="text-slate-400 hover:text-white bg-slate-800/40 hover:bg-slate-800 border border-[#334155]/60 px-2 py-0.5 rounded transition">
+                            <i class="fa-solid fa-microscope mr-1 text-[9px]"></i> Inspect Execution Metrics
+                        </button>
+                        <div id="card-metrics-${turn.turn_number}" class="hidden mt-1.5 p-2.5 bg-slate-950/40 rounded border border-slate-800/80 space-y-1">
+                            <div class="grid grid-cols-2 gap-2 text-[9px] text-slate-400">
+                                <div><span class="text-slate-500">Node Target:</span> <span class="text-cyan-400 font-bold">llm_query</span></div>
+                                <div><span class="text-slate-500">Latency:</span> <span class="text-emerald-400 font-bold">Active (Online Streaming)</span></div>
+                                <div><span class="text-slate-500">Tokens In/Out:</span> <span class="text-indigo-400 font-bold" id="metric-tokens-${turn.turn_number}">Calculating...</span></div>
+                                <div><span class="text-slate-500">USD Spent:</span> <span class="text-amber-400 font-bold" id="metric-cost-${turn.turn_number}">Metering...</span></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
             msgDiv.innerHTML = `
                 <div class="w-8 h-8 rounded ${avatarBg} text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-md">
                     ${avatarChar}
@@ -1331,6 +1359,7 @@
                     <div id="turn-body-${turn.turn_number}" class="space-y-2">
                         ${textHtml}
                     </div>
+                    ${metricsHtml}
                 </div>
             `;
 
@@ -1686,8 +1715,11 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ pinned_files: activePinnedFiles })
             })
-            .then(res => {
-                if (!res.ok) throw new Error("Pin failed");
+            .then(async res => {
+                if (!res.ok) {
+                    const errMsg = await res.text();
+                    throw new Error(errMsg || "Pin failed");
+                }
                 return res.json();
             })
             .then(data => {
@@ -1695,7 +1727,11 @@
                 fetchPinnedFiles();
                 appendSystemAlert("Context File Pinned", `Successfully pinned custom instruction/reference file \`${file}\` to active session context. Will inject on next run.`, "fa-thumbtack text-blue-400");
             })
-            .catch(err => alert("Failed to pin file: " + err));
+            .catch(err => {
+                activePinnedFiles.pop(); // Revert optimistic addition
+                alert(err.message);
+                fetchPinnedFiles();
+            });
         }
 
         function removeContextPin(idx) {
@@ -1864,6 +1900,14 @@
                     urlInput.value = "https://api.openai.com/v1/chat/completions";
                     modelInput.value = "gpt-4o-mini";
                 }
+            }
+        }
+
+        function toggleCardMetrics(e, turnNum) {
+            if (e) e.stopPropagation();
+            const panel = document.getElementById(`card-metrics-${turnNum}`);
+            if (panel) {
+                panel.classList.toggle("hidden");
             }
         }
 

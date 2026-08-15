@@ -722,6 +722,27 @@ func StartWebGUI(port int) {
 			return
 		}
 
+		// Validate each pinned file path on disk (must exist in workspace or global binary root)
+		for _, file := range req.PinnedFiles {
+			file = filepath.Clean(file)
+			// Prevent path escapes and absolute paths
+			if strings.HasPrefix(file, "..") || filepath.IsAbs(file) {
+				http.Error(w, fmt.Sprintf("Forbidden: Path escapes or absolute paths are not allowed: '%s'", file), http.StatusForbidden)
+				return
+			}
+
+			projPath := filepath.Join(activeConfig.Agent.WorkspaceDir, file)
+			globalPath := GetSystemPath(file)
+
+			_, errProj := os.Stat(projPath)
+			_, errGlobal := os.Stat(globalPath)
+
+			if os.IsNotExist(errProj) && os.IsNotExist(errGlobal) {
+				http.Error(w, fmt.Sprintf("File '%s' does not exist in your workspace or global system folder. Please check the path and try again.", file), http.StatusBadRequest)
+				return
+			}
+		}
+
 		updateSessionPinnedFiles(activeSessionID, req.PinnedFiles)
 
 		w.Header().Set("Content-Type", "application/json")

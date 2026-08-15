@@ -1,0 +1,141 @@
+{
+  "active_workflow": "linear_chat",
+  "workflows": {
+    "linear_chat": {
+      "name": "Standard Linear Chat",
+      "description": "Standard conversational agent loop mapping user input to a single, high-fidelity LLM response.",
+      "nodes": [
+        {
+          "id": "start",
+          "type": "user_input",
+          "properties": {},
+          "inputs": []
+        },
+        {
+          "id": "query_node",
+          "type": "llm_query",
+          "properties": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "temperature": 0.0,
+            "system_prompt": "You are a highly capable agent with access to a local terminal sandbox. Use your tools to solve the user's request."
+          },
+          "inputs": [
+            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+          ]
+        },
+        {
+          "id": "terminal",
+          "type": "assistant_response",
+          "properties": {},
+          "inputs": [
+            { "source_node": "query_node", "source_output": "response", "target_input": "final_output" }
+          ]
+        }
+      ]
+    },
+    "enhanced_cognition": {
+      "name": "Enhanced Cognition (POADR)",
+      "description": "Decomposes your query concurrently across 5 parallel cognitive axes to eliminate representational interference in smaller models, merging them in a final synthesis pass.",
+      "nodes": [
+        {
+          "id": "start",
+          "type": "user_input",
+          "properties": {},
+          "inputs": []
+        },
+        {
+          "id": "axis_chronological",
+          "type": "llm_query",
+          "properties": {
+            "provider": "openai",
+            "model": "gpt-4o-mini",
+            "temperature": 0.1,
+            "system_prompt": "You are a chronological state tracking specialist. Analyze the query and history, tracking timelines, mutable states, and temporal continuity."
+          },
+          "inputs": [
+            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+          ]
+        },
+        {
+          "id": "axis_causal_logical",
+          "type": "llm_query",
+          "properties": {
+            "provider": "openai",
+            "model": "gpt-4o-mini",
+            "temperature": 0.1,
+            "system_prompt": "You are a causal-logical constraint specialist. Obey rules, compile bounds, check for logical fallacies and conditional requirements."
+          },
+          "inputs": [
+            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+          ]
+        },
+        {
+          "id": "axis_semantic_world",
+          "type": "llm_query",
+          "properties": {
+            "provider": "openai",
+            "model": "gpt-4o-mini",
+            "temperature": 0.1,
+            "system_prompt": "You are a spatial-ontological world specialist. Analyze directory hierarchies, visual layout environments, and ontological coordinates."
+          },
+          "inputs": [
+            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+          ]
+        },
+        {
+          "id": "axis_behavioral_psych",
+          "type": "llm_query",
+          "properties": {
+            "provider": "openai",
+            "model": "gpt-4o-mini",
+            "temperature": 0.1,
+            "system_prompt": "You are a social-behavioral psychology specialist. Track characters motivations, parent/sub-agent objectives, secrets, and Theory of Mind."
+          },
+          "inputs": [
+            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+          ]
+        },
+        {
+          "id": "axis_stylistic_prose",
+          "type": "llm_query",
+          "properties": {
+            "provider": "openai",
+            "model": "gpt-4o-mini",
+            "temperature": 0.1,
+            "system_prompt": "You are a stylistic-prose aesthetics specialist. Analyze dialogue dialect, grammar flow, syntax conventions, and output formatting."
+          },
+          "inputs": [
+            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+          ]
+        },
+        {
+          "id": "aggregator",
+          "type": "llm_synthesis",
+          "properties": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "temperature": 0.2,
+            "system_prompt": "You are the master aggregator. Synthesize the five parallel cognitive reports (Chronological, Causal, Semantic, Behavioral, Stylistic) into a single, high-fidelity response answering the user prompt."
+          },
+          "inputs": [
+            { "source_node": "axis_chronological", "source_output": "response", "target_input": "chronological_context" },
+            { "source_node": "axis_causal_logical", "source_output": "response", "target_input": "causal_context" },
+            { "source_node": "axis_semantic_world", "source_output": "response", "target_input": "semantic_context" },
+            { "source_node": "axis_behavioral_psych", "source_output": "response", "target_input": "behavioral_context" },
+            { "source_node": "axis_stylistic_prose", "source_output": "response", "target_input": "stylistic_context" },
+            { "source_node": "start", "source_output": "prompt", "target_input": "raw_prompt" }
+          ]
+        },
+        {
+          "id": "terminal",
+          "type": "assistant_response",
+          "properties": {},
+          "inputs": [
+            { "source_node": "aggregator", "source_output": "response", "target_input": "final_output" }
+          ]
+        }
+      ]
+    }
+  }
+}

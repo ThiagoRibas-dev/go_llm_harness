@@ -16,7 +16,80 @@ This document acts as an audit-ready development ledger recording the complete c
 
 ## 📋 Chronological Commit Log
 
-### 1. Implement Dynamic Session Context Pinning and Pinned Files Sidebar Manager
+### 1. Register the Two Default Workflows inside workflows.json and V2 Specification
+> **Commit Hash:** `8df4beb`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 21:58:04 2026 +0000  
+* Created the default **`workflows.json`** configuration index registering our two baseline workflows of GoHarness v2.0: **Standard Linear Chat** (`linear_chat`) and **Enhanced Cognition / POADR** (`enhanced_cognition`).
+* Fully updated **`docs/V2_SPECIFICATION.md`** to record and detail the structural connections, node types, and system prompts of these two standard execution graphs.
+
+### 2. Implement Real-Time Node Execution Trace UI and high-verbosity debug.log
+> **Commit Hash:** `54e7861`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 15:30:04 2026 +0000  
+* Engineered an in-app **Real-Time Node Execution Trace Viewer** inside `src/web/index.html` to inspect resource costs and latency of intermediate node runs.
+* Appends a collapsible **"🔬 Inspect Execution Metrics"** panel under every Assistant message card, dynamically updating latency, input/output tokens, and exact USD expenditure over SSE on `"cost_update"` events.
+* Created a high-verbosity, thread-safe, and append-only diagnostic log file **`.goharness/debug.log`** inside `src/telemetry.go`.
+* Integrated detailed `writeDebugLog` hooks across standard loop dispatches, tool runs, and memory compactions to record raw prompts, terminal logs, and system events.
+
+### 2. Write the Technical Specification for LLM-Assisted Workflow Creator & Staging Engine
+> **Commit Hash:** `690403f`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 21:58:04 2026 +0000  
+* Engineered the complete, production-grade **GoHarness v2.0 LLM-Assisted Workflow Specification** (`docs/V2_LLM_ASSISTED_WORKFLOW_SPEC.md`).
+* Defined the complete **Staged-Commit Pattern** for LLM-generated configurations, preventing syntax errors or execution hangs on-disk.
+* Formulated the highly structured **AI Workflow Compiler Cookbook Prompt** for standard-compliant node-graph generation.
+* Detailed the visual, dual-panel **AI Workflow Lab Staging & Verification Screen** specifications, combining topological node preview overlays with editable code-level codeboards.
+
+### 2. Add ORCHESTRATOR_COMPARATIVE_RESEARCH.md Analyzing State-of-the-Art DAG Engines
+> **Commit Hash:** `198ded4`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 21:50:04 2026 +0000  
+* Created a highly structured research document `docs/ORCHESTRATOR_COMPARATIVE_RESEARCH.md` conducting a deep, code-level comparative audit of leading LLM node/DAG orchestrators (LangFlow, Flowise, LlamaIndex Workflows, Windmill, and Temporal).
+* Documented critical design patterns (State-Flow Decoupling, Event-driven steps, and Durable Execution) and mapped their implementation paths inside GoHarness v2.0.
+* Outlined three vital engineering pitfalls (dependency bloat, JSON-only configuration friction, and hanging threads) and their structural mitigations.
+
+### 2. Write the Technical Specification for GoHarness v2.0 Node-Based Orchestration Engine
+> **Commit Hash:** `efae125`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 21:40:04 2026 +0000  
+* Engineered the complete, production-grade **GoHarness v2.0 Technical Specification** (`docs/V2_SPECIFICATION.md`) for a **Dynamic Node-Based Workflow Orchestration Engine**.
+* Defined the complete Directed Acyclic Graph (DAG) JSON/YAML schema configuration, modular Node types (`user_input`, `llm_query`, `tool_execution`, `bm25_search`, `conditional_router`), topological concurrent Go executor loops utilizing native goroutines and channels, and real-time visual drag-and-drop HTML5/Tailwind graph canvas editor specifications.
+* Documented the `/workflows` and `/workflow <id>` slash-command hot-swapping design.
+
+### 2. Map and Execute the 5-Axis Cognitive Litmus Test
+> **Commit Hash:** `6962cfc`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 21:30:04 2026 +0000  
+* Created a highly structured research document `docs/COGNITIVE_LITMUS_TEST.md` conducting a complete systems-level "litmus test" of our proposed **5 Cognitive Axes** against four highly distinct human cognitive usecases (**Coding**, **Creative Writing**, **Tabletop Roleplaying (D&D)**, and **Casual Conversation**).
+* Mapped each usecase as a unique, weighted coordinate in this 5-dimensional cognitive space, proving that these five dimensions are fully sufficient to represent almost any higher-order symbolic cognitive task.
+* Analyzed the non-symbolic biological boundaries (Sensorimotor and Affective-Valence axes) that sit outside computational AI architectures.
+
+### 2. Map Cognitive Axes to established Human Cognitive Science Theories
+> **Commit Hash:** `92e905f`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 21:18:04 2026 +0000  
+* Created a highly structured research bibliography `docs/COGNITIVE_THEORIES_BIBLIOGRAPHY.md` mapping our isolated cognitive axes to landmark theories, papers, and discussions inside classical Cognitive Science, Evolutionary Psychology, Neuroscience, Linguistics, and the Philosophy of Mind.
+* Linked Chronological State-Tracking to **Baddeley's Episodic Buffer**, Causal-Logic to **Kahneman's Dual-Process (System 1/2) Theory**, Semantic-World mapping to **Kosslyn's Visuospatial Sketchpad**, Theory of Mind limits to **Dunbar's Orders of Intentionality**, and Style-Meaning separation to **Chomskyan Syntactic Modularity**.
+
+### 2. Isolate LLM Cognitive Axes in COGNITIVE_AXES_ANALYSIS.md
+> **Commit Hash:** `00731ba`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 21:02:04 2026 +0000  
+* Created a highly structured research document `docs/COGNITIVE_AXES_ANALYSIS.md` isolating the five distinct classes of LLM cognitive axes (Chronological, Causal-Logical, Semantic-World, Behavioral-Psychological, Stylistic-Prose).
+* Analyzed how model parameters, network depth, and attention capacity dictate a model's ability to handle multi-layered task generation without cognitive collapse.
+* Documented how GoHarness's design choices (sliding summaries, precise tool schemas, sub-agent delegation) relieve the cognitive load of smaller local models.
+
+### 2. Implement Disk-Verifying Path Validation for Pinned Context Files
+> **Commit Hash:** `3dd28ca`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 20:18:04 2026 +0000  
+* Engineered a robust, disk-verifying path validation layer inside the `/api/sessions/pinned/save` Go handler.
+* Checks each submitted file path recursively using `os.Stat()` to ensure it physically exists **either** inside the active project `workspace/` folder, **or** globally sitting next to the compiled binary root.
+* Automatically throws a strict `HTTP 400 Bad Request` or `HTTP 403 Forbidden` rejecting any invalid paths, typos, or path escapes.
+* Refactored `addContextPin()` in the Web UI to read and capture these explicit validation error messages over AJAX and revert optimistic array pushes on save rejections.
+
+### 2. Implement Dynamic Session Context Pinning and Pinned Files Sidebar Manager
 > **Commit Hash:** `e1922cf`  
 > **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
 > **Date:** Wed Aug 5 19:40:04 2026 +0000  
