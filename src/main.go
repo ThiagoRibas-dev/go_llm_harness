@@ -1,11 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -99,6 +99,12 @@ func main() {
 	}
 	activeConfig = loadedCfg
 
+	// 2b. Seed workflows.json with the built-in defaults if it is missing.
+	//     This is non-destructive: an existing workflows.json is never overwritten.
+	if err := EnsureDefaultWorkflows(); err != nil {
+		fmt.Printf("%s[WARNING] Failed to seed default workflows.json: %v%s\n", ColorYellow, err, ColorReset)
+	}
+
 	// 3. Command Line Flags (Overriding config values)
 	var webMode bool
 	flag.BoolVar(&webMode, "web", activeConfig.Web.Enabled, "Start GoHarness in Web GUI & API Gateway mode")
@@ -166,17 +172,21 @@ func main() {
 	printBanner()
 
 	// 9. CLI Prompt Input Shell Loop (TUI Mode)
+	scanner := bufio.NewScanner(os.Stdin)
+	// Allow prompts up to 4096 bytes (preserves prior input ceiling).
+	scanner.Buffer(make([]byte, 4096), 4096)
 	for {
-		fmt.Printf("\n%s%sEnter your prompt (or type '/fork <turn>' to rollback history, 'exit' to quit):%s\n> ", ColorBold, ColorCyan, ColorReset)
-		
-		reader := io.LimitReader(os.Stdin, 4096)
-		buf := make([]byte, 4096)
-		n, err := reader.Read(buf)
-		if err != nil {
-			fmt.Printf("%sError reading input: %v%s\n", ColorRed, err, ColorReset)
+		fmt.Printf("\n%s%sEnter your prompt (or type '/fork <turn>' to rollback history, '/workflows' to list pipelines, 'exit' to quit):%s\n> ", ColorBold, ColorCyan, ColorReset)
+
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				fmt.Printf("%sError reading input: %v%s\n", ColorRed, err, ColorReset)
+			} else {
+				fmt.Println("\nGoodbye!")
+			}
 			return
 		}
-		prompt := strings.TrimSpace(string(buf[:n]))
+		prompt := strings.TrimSpace(scanner.Text())
 
 		if prompt == "exit" || prompt == "quit" {
 			fmt.Println("Goodbye!")
@@ -196,6 +206,40 @@ func main() {
 				continue
 			}
 			executeSessionRollback(targetTurn)
+			continue
+		}
+
+		// /workflows: List all registered pipelines and highlight the active one
+		if prompt == "/workflows" {
+			activeID, wfs, err := ListWorkflows()
+			if err != nil {
+				fmt.Printf("%s[ERROR] Failed to load workflows: %v%s\n", ColorRed, err, ColorReset)
+				continue
+			}
+			fmt.Printf("\n%s%s=== Registered Workflows ===%s\n", ColorBold, ColorCyan, ColorReset)
+			for id, wf := range wfs {
+				marker := "  "
+				if id == activeID {
+					marker = ColorGreen + "▶ " + ColorReset
+				}
+				fmt.Printf("  %s%s%s%s %s- %s\n", marker, ColorBold, id, ColorReset, wf.Name, wf.Description)
+			}
+			fmt.Printf("\n  Switch with: %s/workflow <id>%s (e.g. /workflow enhanced_cognition)\n", ColorYellow, ColorReset)
+			continue
+		}
+
+		// /workflow <id>: Hot-swap the active conversation pipeline
+		if strings.HasPrefix(prompt, "/workflow") {
+			targetID := strings.TrimSpace(strings.TrimPrefix(prompt, "/workflow"))
+			if targetID == "" {
+				fmt.Printf("%sUsage: /workflow <id>   (try /workflows to list available pipelines)%s\n", ColorYellow, ColorReset)
+				continue
+			}
+			if err := ActivateWorkflow(targetID); err != nil {
+				fmt.Printf("%s[ERROR] %v%s\n", ColorRed, err, ColorReset)
+				continue
+			}
+			fmt.Printf("%s✅ [WORKFLOW ACTIVATED] Active pipeline switched to '%s'.%s\n", ColorGreen, targetID, ColorReset)
 			continue
 		}
 

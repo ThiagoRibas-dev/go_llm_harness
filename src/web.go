@@ -1334,15 +1334,23 @@ func StartWebGUI(port int) {
 
 	// Serve workflows.json from disk
 	mux.HandleFunc("/workflows.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
 		bytes, err := os.ReadFile(GetSystemPath("workflows.json"))
 		if err != nil {
-			// If file missing on disk, return default template
-			defaultSchema := `{"active_workflow": "linear_chat"}`
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(defaultSchema))
+			// File missing on disk: serve the full built-in default set
+			// (linear_chat + enhanced_cognition) rather than an empty stub,
+			// and seed it to disk so it persists for future runs.
+			_ = EnsureDefaultWorkflows()
+			cfg := DefaultWorkflowConfig()
+			encoded, encErr := json.MarshalIndent(cfg, "", "  ")
+			if encErr != nil {
+				http.Error(w, "Failed to encode default workflows", http.StatusInternalServerError)
+				return
+			}
+			_, _ = w.Write(encoded)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(bytes)
 	})
 
@@ -1376,6 +1384,44 @@ func StartWebGUI(port int) {
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"success"}`))
+	})
+
+	// POST /api/workflows/activate: Switches the active workflow by id.
+	// Used by the header dropdown and the /workflow <id> web slash command.
+	// Validates the id exists and only rewrites the active_workflow pointer,
+	// leaving any custom graph definitions untouched.
+	mux.HandleFunc("/api/workflows/activate", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := ActivateWorkflow(req.ID); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Read back the activated workflow's display name.
+		cfg, _ := LoadWorkflowConfig()
+		name := req.ID
+		if cfg != nil {
+			if wf, ok := cfg.Workflows[req.ID]; ok {
+				name = wf.Name
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":          "success",
+			"active_workflow": req.ID,
+			"name":            name,
+		})
 	})
 
 	// 4. Start Server and print beautiful UX logs (Phase 8.4)

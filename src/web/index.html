@@ -54,6 +54,15 @@
                 <span class="text-cyan-400 font-mono font-bold" id="model-name">gpt-4o</span>
             </div>
 
+            <!-- Active Workflow Switcher (v2.0) -->
+            <div class="flex items-center space-x-2 text-xs bg-slate-800/80 px-3 py-1.5 rounded-md border border-[#334155]">
+                <i class="fa-solid fa-diagram-project text-purple-400"></i>
+                <span class="text-slate-400 hidden sm:inline">Workflow:</span>
+                <select id="workflow-selector" onchange="switchWorkflow(this.value)" class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono font-bold text-xs rounded px-1.5 py-0.5 outline-none focus:border-purple-500 cursor-pointer">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+
             <!-- Token / Character Indicator Card (Phase 8.6) -->
             <div class="flex items-center space-x-2 text-xs bg-cyan-950/40 text-cyan-400 border border-cyan-800 px-3 py-1.5 rounded-md shadow-inner">
                 <i class="fa-solid fa-calculator"></i>
@@ -632,6 +641,7 @@
             fetchWorkspaces();
             fetchSessions();
             fetchPinnedFiles();
+            loadWorkflowSelector();
             connectSSE();
             appendGreeting();
         });
@@ -1288,6 +1298,17 @@
                     document.getElementById(lastTokensCardId).innerText = `${packet.data.prompt_tokens} In / ${packet.data.completion_tokens} Out (${packet.data.total_tokens} total)`;
                 }
             }
+
+            // ===== v2.0 LIVE WORKFLOW TRACE =====
+            if (packet.event === "workflow_start") {
+                renderWorkflowTrace(packet.data);
+            }
+            if (packet.event === "workflow_node") {
+                updateWorkflowNode(packet.data);
+            }
+            if (packet.event === "workflow_end") {
+                finalizeWorkflowTrace(packet.data);
+            }
         }
 
         function appendGreeting() {
@@ -1442,11 +1463,180 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
+        // ===== v2.0 LIVE WORKFLOW TRACE =====
+        // Maps node type -> {icon, accent} for the trace card rows.
+        const WF_NODE_META = {
+            llm_query:      { icon: "fa-robot",              accent: "text-purple-400" },
+            llm_synthesis:  { icon: "fa-layer-group",        accent: "text-blue-400" },
+            bm25_search:    { icon: "fa-magnifying-glass",   accent: "text-indigo-400" },
+            tool_execution: { icon: "fa-terminal",           accent: "text-cyan-400" },
+            conditional_router: { icon: "fa-route",          accent: "text-amber-400" },
+        };
+
+        // Renders the live trace card when a workflow run starts, listing each
+        // intermediate node in a pending state. It appears in the chat stream
+        // BEFORE the final assistant reply.
+        function renderWorkflowTrace(data) {
+            const chatContainer = document.getElementById("chat-messages");
+            const cardId = `wf-trace-${data.run_id}`;
+            if (document.getElementById(cardId)) return;
+
+            const nodes = data.nodes || [];
+            let rows = "";
+            nodes.forEach(n => {
+                const meta = WF_NODE_META[n.type] || { icon: "fa-circle-node", accent: "text-slate-400" };
+                const label = n.label ? `<span class="text-slate-500 font-mono ml-1">[${n.label}]</span>` : "";
+                rows += `
+                    <div id="wf-node-${data.run_id}-${n.id}" class="wf-node-row flex items-start space-x-2 py-1.5 border-b border-slate-800/50 last:border-0" data-node="${n.id}">
+                        <span class="wf-node-status mt-0.5 text-slate-600"><i class="fa-regular fa-circle text-[10px]"></i></span>
+                        <span class="${meta.accent} mt-0.5"><i class="fa-solid ${meta.icon} text-[11px]"></i></span>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-[11px] text-slate-300 font-mono truncate">${n.id}${label}</div>
+                            <div class="wf-node-detail text-[10px] text-slate-500 mt-0.5">queued…</div>
+                        </div>
+                    </div>`;
+            });
+
+            const card = document.createElement("div");
+            card.id = cardId;
+            card.className = "max-w-4xl mx-auto rounded-lg border border-purple-500/30 bg-slate-900/40 overflow-hidden";
+            card.innerHTML = `
+                <div class="flex items-center justify-between px-4 py-2 bg-purple-950/30 border-b border-purple-500/20">
+                    <div class="flex items-center space-x-2 text-purple-300">
+                        <i class="fa-solid fa-diagram-project text-sm"></i>
+                        <span class="font-bold text-xs uppercase tracking-wider">Workflow: ${data.name || data.workflow_id}</span>
+                    </div>
+                    <span class="wf-trace-status text-[10px] text-purple-400 font-mono flex items-center">
+                        <i class="fa-solid fa-spinner fa-spin mr-1.5"></i> running
+                    </span>
+                </div>
+                <div class="px-4 py-2">${rows}</div>
+            `;
+            chatContainer.appendChild(card);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Updates a single node row when its status changes (running -> completed/failed).
+        function updateWorkflowNode(data) {
+            const row = document.getElementById(`wf-node-${data.run_id}-${data.node_id}`);
+            if (!row) return;
+            const statusEl = row.querySelector(".wf-node-status");
+            const detailEl = row.querySelector(".wf-node-detail");
+
+            if (data.status === "running") {
+                statusEl.className = "wf-node-status mt-0.5 text-blue-400";
+                statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px]"></i>';
+                detailEl.className = "wf-node-detail text-[10px] text-blue-400/80 mt-0.5";
+                detailEl.textContent = "running…";
+            } else if (data.status === "completed") {
+                statusEl.className = "wf-node-status mt-0.5 text-emerald-400";
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-check text-[10px]"></i>';
+                const dur = data.duration_ms ? ` · ${data.duration_ms} ms` : "";
+                const preview = data.preview ? escapeHtml(data.preview) : "";
+                detailEl.className = "wf-node-detail text-[10px] text-slate-400 mt-0.5";
+                detailEl.innerHTML = `<span class="text-emerald-400">done${dur}</span>` +
+                    (preview ? `<button onclick="toggleWfPreview(this)" class="ml-2 text-purple-400 hover:text-purple-300 underline">show output</button>
+                        <pre class="wf-preview hidden mt-1.5 p-2 bg-slate-950/60 border border-slate-800 rounded text-[10px] text-slate-300 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${preview}</pre>` : "");
+            } else if (data.status === "failed") {
+                statusEl.className = "wf-node-status mt-0.5 text-red-400";
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark text-[10px]"></i>';
+                detailEl.className = "wf-node-detail text-[10px] text-red-400 mt-0.5";
+                detailEl.textContent = "failed: " + (data.error || "unknown error");
+            }
+
+            const chatContainer = document.getElementById("chat-messages");
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Marks the whole trace card completed/failed.
+        function finalizeWorkflowTrace(data) {
+            const card = document.getElementById(`wf-trace-${data.run_id}`);
+            if (!card) return;
+            const statusEl = card.querySelector(".wf-trace-status");
+            if (data.status === "completed") {
+                statusEl.className = "wf-trace-status text-[10px] text-emerald-400 font-mono flex items-center";
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-check mr-1.5"></i> completed';
+            } else {
+                statusEl.className = "wf-trace-status text-[10px] text-red-400 font-mono flex items-center";
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark mr-1.5"></i> failed';
+            }
+        }
+
+        function toggleWfPreview(btn) {
+            const pre = btn.parentElement.querySelector(".wf-preview");
+            if (!pre) return;
+            if (pre.classList.contains("hidden")) {
+                pre.classList.remove("hidden");
+                btn.textContent = "hide output";
+            } else {
+                pre.classList.add("hidden");
+                btn.textContent = "show output";
+            }
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement("div");
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
         function submitPrompt(e) {
             if (e) e.preventDefault();
             const input = document.getElementById("prompt-input");
             const prompt = input.value.trim();
             if (!prompt) return;
+
+            // Web slash commands: /workflows and /workflow <id> (v2.0)
+            if (prompt === "/workflows" || prompt.startsWith("/workflow")) {
+                const parts = prompt.split(/\s+/);
+                if (parts[0] === "/workflows") {
+                    fetch("/workflows.json")
+                        .then(res => res.json())
+                        .then(data => {
+                            const wfs = data.workflows || {};
+                            const active = data.active_workflow || "";
+                            let body = `Currently active: **${active}**\n\n`;
+                            Object.keys(wfs).forEach(id => {
+                                const marker = id === active ? "▶ " : "  ";
+                                body += `${marker}\`${id}\` — **${wfs[id].name || id}**\n   _${wfs[id].description || ""}_\n`;
+                            });
+                            body += `\n_Switch with_ \`/workflow <id>\` _or use the Workflow dropdown in the header._`;
+                            appendSystemAlert("Registered Workflows", body, "fa-diagram-project text-purple-400");
+                        })
+                        .catch(err => alert("Failed to list workflows: " + err));
+                    input.value = "";
+                    input.style.height = "auto";
+                    return;
+                }
+                // /workflow <id>
+                const targetId = (parts[1] || "").trim();
+                if (!targetId) {
+                    appendSystemAlert("Workflow Switch", "Usage: `/workflow <id>` — run `/workflows` to list available pipelines.", "fa-circle-info text-amber-400");
+                    input.value = "";
+                    input.style.height = "auto";
+                    return;
+                }
+                fetch("/api/workflows/activate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: targetId })
+                })
+                .then(async res => {
+                    if (!res.ok) {
+                        const msg = await res.text();
+                        throw new Error(msg || "Activation failed");
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    loadWorkflowSelector();
+                    // The SSE confirmation card is broadcast by the backend.
+                })
+                .catch(err => appendSystemAlert("Workflow Switch Failed", err.message, "fa-triangle-exclamation text-red-400"));
+                input.value = "";
+                input.style.height = "auto";
+                return;
+            }
 
             turnCounter++;
             appendTurnToChat({
@@ -2164,12 +2354,64 @@
                 })
                 .then(data => {
                     closeSettingsModal();
+                    loadWorkflowSelector();
                     appendSystemAlert("Active Pipeline Saved", `workflows.json successfully compiled, saved, and hot-swapped! Currently running on active pipeline: '${schema.active_workflow}'.`, "fa-check-double text-green-400");
                 })
                 .catch(err => alert("Error committing workflow to disk: " + err));
             } catch (err) {
                 alert("Cannot apply: Staged JSON contains syntax errors.");
             }
+        }
+
+        // WORKFLOW HEADER SELECTOR (v2.0)
+        function loadWorkflowSelector() {
+            const selector = document.getElementById("workflow-selector");
+            if (!selector) return;
+            fetch("/workflows.json")
+                .then(res => res.json())
+                .then(data => {
+                    const workflows = data.workflows || {};
+                    const active = data.active_workflow || "";
+                    let html = "";
+                    Object.keys(workflows).forEach(id => {
+                        const wf = workflows[id];
+                        const selected = id === active ? "selected" : "";
+                        html += `<option value="${id}" ${selected}>${wf.name || id}</option>`;
+                    });
+                    selector.innerHTML = html;
+                    selector.value = active;
+                })
+                .catch(err => console.error("Error loading workflow selector:", err));
+        }
+
+        function switchWorkflow(id) {
+            if (!id) return;
+            fetch("/api/workflows/activate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: id })
+            })
+            .then(async res => {
+                if (!res.ok) {
+                    const msg = await res.text();
+                    throw new Error(msg || "Activation failed");
+                }
+                return res.json();
+            })
+            .then(data => {
+                // SSE already streams the confirmation card; just keep the selector in sync.
+                const selector = document.getElementById("workflow-selector");
+                if (selector) selector.value = id;
+                // Refresh the AI Workflow Lab editor if it happens to be open.
+                const labPanel = document.getElementById("settings-panel-workflow");
+                if (labPanel && !labPanel.classList.contains("hidden")) {
+                    loadWorkflowsSchema();
+                }
+            })
+            .catch(err => {
+                alert("Failed to switch workflow: " + err.message);
+                loadWorkflowSelector(); // revert dropdown to server state
+            });
         }
 
         function toggleCardMetrics(e, turnNum) {

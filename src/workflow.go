@@ -61,9 +61,14 @@ const (
 
 // WorkflowExecutor executes a given workflow DAG
 type WorkflowExecutor struct {
-	SessionID string
-	Nodes     map[string]*RuntimeNode
-	Timeout   time.Duration
+	SessionID    string
+	WorkflowID   string
+	WorkflowName string
+	RunID        string       // Unique id for this execution run (groups live node events)
+	TurnNumber   int          // Final assistant turn number this run maps to in the UI
+	NodeOrder    []string     // Node ids in declaration order (for stable UI rendering)
+	Nodes        map[string]*RuntimeNode
+	Timeout      time.Duration
 }
 
 // LoadWorkflowConfig reads the workflows.json file from disk
@@ -78,6 +83,236 @@ func LoadWorkflowConfig() (*WorkflowConfig, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+// DefaultWorkflowConfig returns the built-in set of workflows shipped with
+// GoHarness v2.0: Standard Linear Chat and Enhanced Cognition (POADR). It is
+// the single source of truth used both to bootstrap workflows.json on first
+// run and as the HTTP fallback when the file is missing on disk, ensuring the
+// two defaults never drift between the loader, the seeder, and the web UI.
+func DefaultWorkflowConfig() *WorkflowConfig {
+	return &WorkflowConfig{
+		ActiveWorkflow: "linear_chat",
+		Workflows: map[string]Workflow{
+			"linear_chat": {
+				Name:        "Standard Linear Chat",
+				Description: "Standard conversational agent loop mapping user input to a single, high-fidelity LLM response.",
+				Nodes: []WorkflowNode{
+					{
+						ID:         "start",
+						Type:       "user_input",
+						Properties: map[string]interface{}{},
+						Inputs:     []NodeConnection{},
+					},
+					{
+						ID:   "query_node",
+						Type: "llm_query",
+						Properties: map[string]interface{}{
+							"provider":      "openai",
+							"model":         "gpt-4o",
+							"temperature":   0.0,
+							"system_prompt": "You are a highly capable agent with access to a local terminal sandbox. Use your tools to solve the user's request.",
+						},
+						Inputs: []NodeConnection{
+							{SourceNode: "start", SourceOutput: "prompt", TargetInput: "prompt"},
+						},
+					},
+					{
+						ID:         "terminal",
+						Type:       "assistant_response",
+						Properties: map[string]interface{}{},
+						Inputs: []NodeConnection{
+							{SourceNode: "query_node", SourceOutput: "response", TargetInput: "final_output"},
+						},
+					},
+				},
+			},
+			"enhanced_cognition": {
+				Name:        "Enhanced Cognition (POADR)",
+				Description: "Decomposes your query concurrently across 5 parallel cognitive axes to eliminate representational interference in smaller models, merging them in a final synthesis pass.",
+				Nodes: []WorkflowNode{
+					{
+						ID:         "start",
+						Type:       "user_input",
+						Properties: map[string]interface{}{},
+						Inputs:     []NodeConnection{},
+					},
+					{
+						ID:   "axis_chronological",
+						Type: "llm_query",
+						Properties: map[string]interface{}{
+							"provider":      "openai",
+							"model":         "gpt-4o-mini",
+							"temperature":   0.1,
+							"system_prompt": "You are a chronological state tracking specialist. Analyze the query and history, tracking timelines, mutable states, and temporal continuity.",
+						},
+						Inputs: []NodeConnection{
+							{SourceNode: "start", SourceOutput: "prompt", TargetInput: "prompt"},
+						},
+					},
+					{
+						ID:   "axis_causal_logical",
+						Type: "llm_query",
+						Properties: map[string]interface{}{
+							"provider":      "openai",
+							"model":         "gpt-4o-mini",
+							"temperature":   0.1,
+							"system_prompt": "You are a causal-logical constraint specialist. Obey rules, compile bounds, check for logical fallacies and conditional requirements.",
+						},
+						Inputs: []NodeConnection{
+							{SourceNode: "start", SourceOutput: "prompt", TargetInput: "prompt"},
+						},
+					},
+					{
+						ID:   "axis_semantic_world",
+						Type: "llm_query",
+						Properties: map[string]interface{}{
+							"provider":      "openai",
+							"model":         "gpt-4o-mini",
+							"temperature":   0.1,
+							"system_prompt": "You are a spatial-ontological world specialist. Analyze directory hierarchies, visual layout environments, and ontological coordinates.",
+						},
+						Inputs: []NodeConnection{
+							{SourceNode: "start", SourceOutput: "prompt", TargetInput: "prompt"},
+						},
+					},
+					{
+						ID:   "axis_behavioral_psych",
+						Type: "llm_query",
+						Properties: map[string]interface{}{
+							"provider":      "openai",
+							"model":         "gpt-4o-mini",
+							"temperature":   0.1,
+							"system_prompt": "You are a social-behavioral psychology specialist. Track characters motivations, parent/sub-agent objectives, secrets, and Theory of Mind.",
+						},
+						Inputs: []NodeConnection{
+							{SourceNode: "start", SourceOutput: "prompt", TargetInput: "prompt"},
+						},
+					},
+					{
+						ID:   "axis_stylistic_prose",
+						Type: "llm_query",
+						Properties: map[string]interface{}{
+							"provider":      "openai",
+							"model":         "gpt-4o-mini",
+							"temperature":   0.1,
+							"system_prompt": "You are a stylistic-prose aesthetics specialist. Analyze dialogue dialect, grammar flow, syntax conventions, and output formatting.",
+						},
+						Inputs: []NodeConnection{
+							{SourceNode: "start", SourceOutput: "prompt", TargetInput: "prompt"},
+						},
+					},
+					{
+						ID:   "aggregator",
+						Type: "llm_synthesis",
+						Properties: map[string]interface{}{
+							"provider":      "openai",
+							"model":         "gpt-4o",
+							"temperature":   0.2,
+							"system_prompt": "You are the master aggregator. Synthesize the five parallel cognitive reports (Chronological, Causal, Semantic, Behavioral, Stylistic) into a single, high-fidelity response answering the user prompt.",
+						},
+						Inputs: []NodeConnection{
+							{SourceNode: "axis_chronological", SourceOutput: "response", TargetInput: "chronological_context"},
+							{SourceNode: "axis_causal_logical", SourceOutput: "response", TargetInput: "causal_context"},
+							{SourceNode: "axis_semantic_world", SourceOutput: "response", TargetInput: "semantic_context"},
+							{SourceNode: "axis_behavioral_psych", SourceOutput: "response", TargetInput: "behavioral_context"},
+							{SourceNode: "axis_stylistic_prose", SourceOutput: "response", TargetInput: "stylistic_context"},
+							{SourceNode: "start", SourceOutput: "prompt", TargetInput: "raw_prompt"},
+						},
+					},
+					{
+						ID:         "terminal",
+						Type:       "assistant_response",
+						Properties: map[string]interface{}{},
+						Inputs: []NodeConnection{
+							{SourceNode: "aggregator", SourceOutput: "response", TargetInput: "final_output"},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// EnsureDefaultWorkflows writes the built-in default workflows.json next to the
+// binary if it does not already exist. An existing file is never overwritten,
+// so user customizations are always preserved. Safe to call on every startup.
+func EnsureDefaultWorkflows() error {
+	path := GetSystemPath("workflows.json")
+	if _, err := os.Stat(path); err == nil {
+		return nil // File already exists; leave user customizations untouched.
+	}
+
+	cfg := DefaultWorkflowConfig()
+	bytes, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, bytes, 0644); err != nil {
+		return err
+	}
+
+	fmt.Printf("%s[SYSTEM] workflows.json not found. Seeded default workflows (linear_chat, enhanced_cognition).%s\n", ColorYellow, ColorReset)
+	return nil
+}
+
+// ListWorkflows returns the active workflow id and the map of registered
+// workflows, ensuring defaults are seeded first. Used by the /workflows slash
+// command and the header dropdown.
+func ListWorkflows() (active string, workflows map[string]Workflow, err error) {
+	if err = EnsureDefaultWorkflows(); err != nil {
+		return "", nil, err
+	}
+	cfg, err := LoadWorkflowConfig()
+	if err != nil {
+		return "", nil, err
+	}
+	return cfg.ActiveWorkflow, cfg.Workflows, nil
+}
+
+// ActivateWorkflow sets the named workflow as active in workflows.json after
+// validating it exists. It is non-destructive: only the active_workflow field
+// changes (the rest of the graph is preserved). On success it broadcasts an
+// SSE hot-swap notification so all connected Web Consoles update instantly.
+func ActivateWorkflow(id string) error {
+	if id == "" {
+		return fmt.Errorf("workflow id cannot be empty")
+	}
+	if err := EnsureDefaultWorkflows(); err != nil {
+		return err
+	}
+
+	cfg, err := LoadWorkflowConfig()
+	if err != nil {
+		return err
+	}
+	wf, ok := cfg.Workflows[id]
+	if !ok {
+		return fmt.Errorf("workflow '%s' is not registered in workflows.json (use /workflows to list available)", id)
+	}
+
+	if cfg.ActiveWorkflow != id {
+		cfg.ActiveWorkflow = id
+		bytes, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(GetSystemPath("workflows.json"), bytes, 0644); err != nil {
+			return err
+		}
+	}
+
+	writeDebugLog("[WORKFLOW ENGINE] Active workflow set to '%s' (%s)", id, wf.Name)
+
+	// Broadcast hot-swap to every connected Web Console (also doubles as the
+	// confirmation card for /workflow issued from the browser chat input).
+	BroadcastSSE("turn_secured", map[string]interface{}{
+		"turn_number": 0,
+		"role":        "system",
+		"name":        "system",
+		"content":     fmt.Sprintf("🔄 **[WORKFLOW ACTIVATED]** Conversation pipeline switched to **%s** (`%s`) dynamically!", wf.Name, id),
+	})
+	return nil
 }
 
 // ExecuteActiveWorkflow runs the active workflow DAG inside workflows.json
@@ -96,12 +331,17 @@ func ExecuteActiveWorkflow(rawUserPrompt string) (string, error) {
 
 	// Build the runtime executor DAG
 	executor := &WorkflowExecutor{
-		SessionID: activeSessionID,
-		Nodes:     make(map[string]*RuntimeNode),
-		Timeout:   120 * time.Second, // 2-minute hard timeout boundary
+		SessionID:    activeSessionID,
+		WorkflowID:   cfg.ActiveWorkflow,
+		WorkflowName: wf.Name,
+		RunID:        fmt.Sprintf("run_%d", time.Now().UnixNano()),
+		TurnNumber:   currentTurnNumber + 1, // Final assistant turn this run produces
+		Nodes:        make(map[string]*RuntimeNode),
+		Timeout:      120 * time.Second, // 2-minute hard timeout boundary
 	}
 
 	for _, n := range wf.Nodes {
+		executor.NodeOrder = append(executor.NodeOrder, n.ID)
 		executor.Nodes[n.ID] = &RuntimeNode{
 			ID:         n.ID,
 			Type:       n.Type,
@@ -122,7 +362,8 @@ func ExecuteActiveWorkflow(rawUserPrompt string) (string, error) {
 		return "", fmt.Errorf("invalid graph: missing terminal 'assistant_response' node anchor")
 	}
 
-	// Run execution loop
+	// Run execution loop. Execute() itself emits the workflow_start/node/end
+	// live-trace SSE events.
 	ctx := context.Background()
 	err = executor.Execute(ctx, rawUserPrompt)
 	if err != nil {
@@ -152,6 +393,53 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, rawUserPrompt string) er
 	close(startNode.doneChan)
 	startNode.State = StateCompleted
 
+	// 2. Announce the run so the Web Console can render a live trace card
+	//    BEFORE the final assistant reply streams in.
+	type nodeSummary struct {
+		ID    string `json:"id"`
+		Type  string `json:"type"`
+		Label string `json:"label"`
+	}
+	var traceNodes []nodeSummary
+	for _, id := range e.NodeOrder {
+		n := e.Nodes[id]
+		if n.Type == "user_input" || n.Type == "assistant_response" {
+			continue
+		}
+		label := ""
+		if model, ok := n.Properties["model"].(string); ok {
+			label = model
+		} else if tool, ok := n.Properties["tool_name"].(string); ok {
+			label = tool
+		} else if scope, ok := n.Properties["scope"].(string); ok {
+			label = scope
+		}
+		traceNodes = append(traceNodes, nodeSummary{ID: n.ID, Type: n.Type, Label: label})
+	}
+	BroadcastSSE("workflow_start", map[string]interface{}{
+		"run_id":      e.RunID,
+		"workflow_id": e.WorkflowID,
+		"name":        e.WorkflowName,
+		"turn_number": e.TurnNumber,
+		"nodes":       traceNodes,
+	})
+
+	// Defer a terminal event so failure paths (timeout/ctx cancel) are also reported.
+	runErr := error(nil)
+	defer func() {
+		status := "completed"
+		payload := map[string]interface{}{
+			"run_id":      e.RunID,
+			"workflow_id": e.WorkflowID,
+			"status":      status,
+		}
+		if runErr != nil {
+			payload["status"] = "failed"
+			payload["error"] = runErr.Error()
+		}
+		BroadcastSSE("workflow_end", payload)
+	}()
+
 	// 2. Spawn concurrent worker goroutines for every downstream node
 	for id, node := range e.Nodes {
 		if id == "start" {
@@ -177,14 +465,20 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, rawUserPrompt string) er
 
 			n.mu.Lock()
 			n.State = StateRunning
+			startTime := time.Now()
 			n.mu.Unlock()
+
+			// Announce that this node has started (parallel nodes light up live).
+			e.broadcastNode(n, "running", startTime, 0, "")
 
 			// Resolve actual input data from upstream outputs
 			inputPayload := e.resolveIncomingData(n)
 
 			// Execute node logic based on type
 			err := e.runNodeLogic(ctx, n, inputPayload)
-			
+
+			duration := time.Since(startTime).Milliseconds()
+
 			n.mu.Lock()
 			if err != nil {
 				n.State = StateFailed
@@ -193,6 +487,15 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, rawUserPrompt string) er
 				n.State = StateCompleted
 			}
 			n.mu.Unlock()
+
+			// Announce completion/failure with a preview of the node's output.
+			status := "completed"
+			errMsg := ""
+			if err != nil {
+				status = "failed"
+				errMsg = err.Error()
+			}
+			e.broadcastNode(n, status, startTime, duration, errMsg)
 
 			// Signal all downstreams that this node's outputs are ready
 			close(n.doneChan)
@@ -207,7 +510,8 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, rawUserPrompt string) er
 	// Check if terminal node completed successfully
 	terminal := e.Nodes["terminal"]
 	if terminal.State != StateCompleted {
-		return fmt.Errorf("workflow execution failed: %v", terminal.Error)
+		runErr = fmt.Errorf("workflow execution failed: %v", terminal.Error)
+		return runErr
 	}
 
 	return nil
@@ -280,6 +584,79 @@ func (e *WorkflowExecutor) resolveIncomingData(n *RuntimeNode) map[string]interf
 		payload[conn.TargetInput] = val
 	}
 	return payload
+}
+
+// nodePreview extracts a short, human-readable preview of a node's main output.
+// Preview length is capped so parallel node reports never overwhelm the UI.
+func (e *WorkflowExecutor) nodePreview(n *RuntimeNode) string {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	var raw string
+	switch n.Type {
+	case "llm_query", "llm_synthesis":
+		if v, ok := n.Outputs["response"].(string); ok {
+			raw = v
+		}
+	case "bm25_search":
+		if v, ok := n.Outputs["search_results"].(string); ok {
+			raw = v
+		}
+	case "tool_execution":
+		if v, ok := n.Outputs["stdout"].(string); ok {
+			raw = v
+		}
+	case "conditional_router":
+		if v, ok := n.Outputs["route_branch"].(string); ok {
+			return "→ " + v
+		}
+	case "assistant_response":
+		if v, ok := n.Outputs["final_output"].(string); ok {
+			raw = v
+		}
+	}
+
+	const maxPreview = 600
+	if len(raw) > maxPreview {
+		return raw[:maxPreview] + "\n… [truncated]"
+	}
+	return raw
+}
+
+// broadcastNode pushes a node lifecycle event (running/completed/failed) to
+// all connected Web Consoles. These events render the live parallel trace.
+func (e *WorkflowExecutor) broadcastNode(n *RuntimeNode, status string, startTime time.Time, durationMs int64, errMsg string) {
+	// Anchors are part of the graph but not interesting as execution steps.
+	if n.Type == "user_input" || n.Type == "assistant_response" {
+		return
+	}
+
+	label := ""
+	if model, ok := n.Properties["model"].(string); ok {
+		label = model
+	} else if tool, ok := n.Properties["tool_name"].(string); ok {
+		label = tool
+	} else if scope, ok := n.Properties["scope"].(string); ok {
+		label = scope
+	}
+
+	payload := map[string]interface{}{
+		"run_id":     e.RunID,
+		"node_id":    n.ID,
+		"type":       n.Type,
+		"label":      label,
+		"status":     status,
+		"duration_ms": durationMs,
+	}
+	if status == "running" {
+		payload["started_at"] = startTime.Format(time.RFC3339)
+	} else {
+		payload["preview"] = e.nodePreview(n)
+	}
+	if errMsg != "" {
+		payload["error"] = errMsg
+	}
+	BroadcastSSE("workflow_node", payload)
 }
 
 func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inputs map[string]interface{}) error {
