@@ -10,6 +10,7 @@ sandbox_poc_bin
 .goharness/
 workspace/
 config.json
+providers.json
 
 # Caches and OS files
 .cache/

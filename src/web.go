@@ -363,12 +363,13 @@ func StartWebGUI(port int) {
 
 	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]interface{}{
-			"session_id": activeSessionID,
-			"api":        activeConfig.API,
-			"agent":      activeConfig.Agent,
-			"security":   activeConfig.Security,
-			"compaction": activeConfig.Compaction,
-			"debug":      activeConfig.Debug, // Phase 8.6
+			"session_id":         activeSessionID,
+			"api":                activeConfig.API,
+			"provider_profile":   activeConfig.ProviderProfile,
+			"agent":              activeConfig.Agent,
+			"security":           activeConfig.Security,
+			"compaction":         activeConfig.Compaction,
+			"debug":              activeConfig.Debug, // Phase 8.6
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -382,32 +383,34 @@ func StartWebGUI(port int) {
 		}
 
 		var req struct {
-			Provider        string   `json:"provider"` // Phase 7
-			APIKey          string   `json:"api_key"`
-			Model           string   `json:"model"`
-			BaseURL         string   `json:"base_url"`
-			SandboxMode     string   `json:"sandbox_mode"`
-			SandboxFallback bool     `json:"sandbox_fallback"`
-			MaxTurns        int      `json:"max_turns"`
-			WorkspaceDir    string   `json:"workspace_dir"`
-			TargetScanDirs  []string `json:"target_scan_dirs"`
-			Temperature     float64  `json:"temperature"`
-			TopP            float64  `json:"top_p"`
-			TopK            int      `json:"top_k"`
-			ThinkingLevel   string   `json:"thinking_level"`
-			ProjectID       string   `json:"project_id"`
-			Region          string   `json:"region"`
-			CompactProvider string   `json:"compact_provider"`
-			CompactAPIKey   string   `json:"compact_api_key"`
-			CompactBaseURL  string   `json:"compact_base_url"`
-			CompactModel    string   `json:"compact_model"`
-			CompactTemp     float64  `json:"compact_temp"`
-			CompactProjectID string  `json:"compact_project_id"`
-			CompactRegion   string   `json:"compact_region"`
-			CompactTurns    int      `json:"compact_turns"`
-			CompactKeepN    int      `json:"compact_keep_n"`
-			CompactPrompt   string   `json:"compact_prompt"`
-			Debug           bool     `json:"debug"` // Phase 8.6
+			Provider         string   `json:"provider"` // Phase 7
+			ProviderProfile  string   `json:"provider_profile"`
+			APIKey           string   `json:"api_key"`
+			Model            string   `json:"model"`
+			BaseURL          string   `json:"base_url"`
+			SandboxMode      string   `json:"sandbox_mode"`
+			SandboxFallback  bool     `json:"sandbox_fallback"`
+			MaxTurns         int      `json:"max_turns"`
+			WorkspaceDir     string   `json:"workspace_dir"`
+			TargetScanDirs   []string `json:"target_scan_dirs"`
+			Temperature      float64  `json:"temperature"`
+			TopP             float64  `json:"top_p"`
+			TopK             int      `json:"top_k"`
+			ThinkingLevel    string   `json:"thinking_level"`
+			ProjectID        string   `json:"project_id"`
+			Region           string   `json:"region"`
+			CompactProfile   string   `json:"compact_profile"`
+			CompactProvider  string   `json:"compact_provider"`
+			CompactAPIKey    string   `json:"compact_api_key"`
+			CompactBaseURL   string   `json:"compact_base_url"`
+			CompactModel     string   `json:"compact_model"`
+			CompactTemp      float64  `json:"compact_temp"`
+			CompactProjectID string   `json:"compact_project_id"`
+			CompactRegion    string   `json:"compact_region"`
+			CompactTurns     int      `json:"compact_turns"`
+			CompactKeepN     int      `json:"compact_keep_n"`
+			CompactPrompt    string   `json:"compact_prompt"`
+			Debug            bool     `json:"debug"` // Phase 8.6
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -415,16 +418,31 @@ func StartWebGUI(port int) {
 			return
 		}
 
-		activeConfig.API.Provider = req.Provider
-		activeConfig.API.Key = req.APIKey
-		activeConfig.API.Model = req.Model
-		activeConfig.API.BaseURL = req.BaseURL
-		activeConfig.API.Temperature = req.Temperature
-		activeConfig.API.TopP = req.TopP
-		activeConfig.API.TopK = req.TopK
-		activeConfig.API.ThinkingLevel = req.ThinkingLevel
-		activeConfig.API.ProjectID = req.ProjectID
-		activeConfig.API.Region = req.Region
+		// Connection profiles take precedence over the inline fields. When a
+		// profile is selected we persist the pointer and resolve the live
+		// connection from providers.json; the inline values are kept for users
+		// who choose "inline" (empty profile).
+		activeConfig.ProviderProfile = strings.TrimSpace(req.ProviderProfile)
+		activeConfig.Compaction.ProviderProfile = strings.TrimSpace(req.CompactProfile)
+
+		if activeConfig.ProviderProfile != "" {
+			if _, err := GetProvider(activeConfig.ProviderProfile); err != nil {
+				http.Error(w, "Invalid active provider profile: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			activeConfig.API = activeConfig.ResolveAPIConfig()
+		} else {
+			activeConfig.API.Provider = req.Provider
+			activeConfig.API.Key = req.APIKey
+			activeConfig.API.Model = req.Model
+			activeConfig.API.BaseURL = req.BaseURL
+			activeConfig.API.Temperature = req.Temperature
+			activeConfig.API.TopP = req.TopP
+			activeConfig.API.TopK = req.TopK
+			activeConfig.API.ThinkingLevel = req.ThinkingLevel
+			activeConfig.API.ProjectID = req.ProjectID
+			activeConfig.API.Region = req.Region
+		}
 		activeConfig.Debug = req.Debug // Phase 8.6
 
 		activeConfig.Security.SandboxMode = req.SandboxMode
@@ -432,13 +450,22 @@ func StartWebGUI(port int) {
 		activeConfig.Agent.MaxTurns = req.MaxTurns
 		activeConfig.Agent.TargetScanDirs = req.TargetScanDirs
 
-		activeConfig.Compaction.Provider = req.CompactProvider
-		activeConfig.Compaction.Key = req.CompactAPIKey
-		activeConfig.Compaction.BaseURL = req.CompactBaseURL
-		activeConfig.Compaction.Model = req.CompactModel
-		activeConfig.Compaction.Temperature = req.CompactTemp
-		activeConfig.Compaction.ProjectID = req.CompactProjectID
-		activeConfig.Compaction.Region = req.CompactRegion
+		if activeConfig.Compaction.ProviderProfile != "" {
+			// Validate and resolve the named compaction profile; the inline
+			// compaction connection fields are ignored while a profile is set.
+			if _, err := GetProvider(activeConfig.Compaction.ProviderProfile); err != nil {
+				http.Error(w, "Invalid compaction provider profile: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+		} else {
+			activeConfig.Compaction.Provider = req.CompactProvider
+			activeConfig.Compaction.Key = req.CompactAPIKey
+			activeConfig.Compaction.BaseURL = req.CompactBaseURL
+			activeConfig.Compaction.Model = req.CompactModel
+			activeConfig.Compaction.Temperature = req.CompactTemp
+			activeConfig.Compaction.ProjectID = req.CompactProjectID
+			activeConfig.Compaction.Region = req.CompactRegion
+		}
 		activeConfig.Compaction.AutoCompactTurns = req.CompactTurns
 		activeConfig.Compaction.KeepLastN = req.CompactKeepN
 		activeConfig.Compaction.SystemPrompt = req.CompactPrompt
@@ -1422,6 +1449,147 @@ func StartWebGUI(port int) {
 			"active_workflow": req.ID,
 			"name":            name,
 		})
+	})
+
+	// =================================================================
+	// 🔌 REUSABLE PROVIDER PROFILES (providers.json)
+	// =================================================================
+
+	// GET /api/providers: list connection profiles (keys masked).
+	mux.HandleFunc("/api/providers", func(w http.ResponseWriter, r *http.Request) {
+		_ = EnsureProvidersFile()
+		pf, err := LoadProviders()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		masked := make(map[string]APIConfig, len(pf.Providers))
+		for name, p := range pf.Providers {
+			if p.Key != "" {
+				p.Key = maskSecret(p.Key)
+			}
+			masked[name] = p
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"providers":         masked,
+			"active_profile":    activeConfig.ProviderProfile,
+			"compaction_profile": activeConfig.Compaction.ProviderProfile,
+		})
+	})
+
+	// POST /api/providers/save: upsert a named profile.
+	mux.HandleFunc("/api/providers/save", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Name     string    `json:"name"`
+			Profile  APIConfig `json:"profile"`
+			IsActive bool      `json:"is_active"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		req.Name = strings.TrimSpace(req.Name)
+		if req.Name == "" {
+			http.Error(w, "Profile name is required", http.StatusBadRequest)
+			return
+		}
+
+		_ = EnsureProvidersFile()
+		pf, err := LoadProviders()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Preserve the existing key if the browser sent back the masked placeholder.
+		if existing, ok := pf.Providers[req.Name]; ok && isMaskedSecret(req.Profile.Key) {
+			req.Profile.Key = existing.Key
+		}
+		pf.Providers[req.Name] = req.Profile
+		if err := SaveProviders(pf); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if req.IsActive {
+			activeConfig.ProviderProfile = req.Name
+			activeConfig.API = activeConfig.ResolveAPIConfig()
+			_ = SaveConfig("config.json", activeConfig)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success"}`))
+	})
+
+	// POST /api/providers/delete: remove a named profile.
+	mux.HandleFunc("/api/providers/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		pf, err := LoadProviders()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		delete(pf.Providers, req.Name)
+		if err := SaveProviders(pf); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if activeConfig.ProviderProfile == req.Name {
+			activeConfig.ProviderProfile = ""
+			_ = SaveConfig("config.json", activeConfig)
+		}
+		if activeConfig.Compaction.ProviderProfile == req.Name {
+			activeConfig.Compaction.ProviderProfile = ""
+			_ = SaveConfig("config.json", activeConfig)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success"}`))
+	})
+
+	// POST /api/providers/activate: set the active chat or compaction profile.
+	mux.HandleFunc("/api/providers/activate", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Name   string `json:"name"`
+			Target string `json:"target"` // "chat" (default) or "compaction"
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.Name != "" {
+			if _, err := GetProvider(req.Name); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+		if req.Target == "compaction" {
+			activeConfig.Compaction.ProviderProfile = req.Name
+		} else {
+			activeConfig.ProviderProfile = req.Name
+			activeConfig.API = activeConfig.ResolveAPIConfig()
+		}
+		_ = SaveConfig("config.json", activeConfig)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success"}`))
 	})
 
 	// 4. Start Server and print beautiful UX logs (Phase 8.4)

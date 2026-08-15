@@ -273,33 +273,19 @@ func executeSlidingWindowCompaction(history []Message, force bool) {
 
 	compactionPrompt := fmt.Sprintf("Please summarize the following conversational execution history. Maintain a tight, bulleted summary listing (1) files created or modified, (2) current bugs resolved, and (3) the outstanding task list. Keep it highly dense.\n\nConversation Logs:\n%s", historyToCompact.String())
 
-	// Temporarily swap global API parameters with compaction parameters
+	// Temporarily swap global API parameters with the compaction connection.
+	// Resolves provider_profile from providers.json when configured; otherwise
+	// falls back to the legacy inline compaction fields.
 	parentAPI := activeConfig.API
-	compactionProvider := activeConfig.Compaction.Provider
-	if compactionProvider == "" {
-		compactionProvider = "openai"
-	}
-	activeConfig.API = APIConfig{
-		Provider:    compactionProvider,
-		Key:         activeConfig.Compaction.Key,
-		BaseURL:     activeConfig.Compaction.BaseURL,
-		Model:       activeConfig.Compaction.Model,
-		Temperature: activeConfig.Compaction.Temperature,
-		ProjectID:   activeConfig.Compaction.ProjectID,
-		Region:      activeConfig.Compaction.Region,
-		MaxTokens:   activeConfig.API.MaxTokens, // Keep standard output ceiling
-	}
-	if activeConfig.API.Key == "" {
-		activeConfig.API.Key = parentAPI.Key
-	}
+	activeConfig.API = activeConfig.ResolveCompactionConfig()
 
 	reqBody := ChatCompletionRequest{
-		Model: activeConfig.Compaction.Model,
+		Model: activeConfig.API.Model,
 		Messages: []Message{
 			{Role: "system", Content: activeConfig.Compaction.SystemPrompt},
 			{Role: "user", Content: compactionPrompt},
 		},
-		Temperature: activeConfig.Compaction.Temperature,
+		Temperature: activeConfig.API.Temperature,
 	}
 
 	respMsg, err := SendMultiProviderRequest(reqBody.Messages, nil)

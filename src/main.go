@@ -105,6 +105,26 @@ func main() {
 		fmt.Printf("%s[WARNING] Failed to seed default workflows.json: %v%s\n", ColorYellow, err, ColorReset)
 	}
 
+	// 2c. Seed providers.json (reusable connection profiles) from config.json on
+	//     first run, then apply the active chat profile (if one is set). The
+	//     profile is used directly; the inline api block only supplies
+	//     max_tokens/key fallbacks.
+	if err := EnsureProvidersFile(); err != nil {
+		fmt.Printf("%s[WARNING] Failed to seed providers.json: %v%s\n", ColorYellow, err, ColorReset)
+	}
+	if activeConfig.ProviderProfile != "" {
+		if resolved, err := GetProvider(activeConfig.ProviderProfile); err == nil {
+			activeConfig.API = resolved
+			if activeConfig.API.MaxTokens == 0 {
+				activeConfig.API.MaxTokens = defaultCfg.API.MaxTokens
+			}
+			fmt.Printf("%s[SYSTEM] Active chat connection using provider profile: %s (%s/%s)%s\n",
+				ColorGreen, activeConfig.ProviderProfile, resolved.Provider, resolved.Model, ColorReset)
+		} else {
+			fmt.Printf("%s[WARNING] %v%s\n", ColorYellow, err, ColorReset)
+		}
+	}
+
 	// 3. Command Line Flags (Overriding config values)
 	var webMode bool
 	flag.BoolVar(&webMode, "web", activeConfig.Web.Enabled, "Start GoHarness in Web GUI & API Gateway mode")

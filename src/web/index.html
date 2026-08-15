@@ -257,6 +257,9 @@
                     <button type="button" onclick="switchSettingsTab('workflow')" id="btn-settings-tab-workflow" class="font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition">
                         <i class="fa-solid fa-wand-magic-sparkles mr-2 animate-pulse"></i> AI Workflow Lab (v2.0)
                     </button>
+                    <button type="button" onclick="switchSettingsTab('providers')" id="btn-settings-tab-providers" class="font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition">
+                        <i class="fa-solid fa-plug-circle-bolt mr-2"></i> Providers
+                    </button>
                 </div>
                 <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-white transition">
                     <i class="fa-solid fa-xmark text-sm"></i>
@@ -269,7 +272,18 @@
                 <!-- API Provider Settings -->
                 <div class="space-y-3">
                     <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">API Provider Configurations</div>
-                    <div class="grid grid-cols-2 gap-4">
+
+                    <!-- Connection profile selector (providers.json) -->
+                    <div class="bg-slate-900/40 p-2.5 rounded border border-amber-500/30">
+                        <label class="block text-slate-300 font-bold mb-1.5 flex items-center">
+                            <i class="fa-solid fa-plug-circle-bolt text-amber-400 mr-1.5"></i> Connection Profile
+                            <span class="ml-2 text-[9px] font-normal text-slate-500">— choose a saved profile from providers.json, or “inline” to edit fields below</span>
+                        </label>
+                        <select id="input-provider-profile" onchange="onChatProfileChange(this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
+                            <option value="">— inline (use fields below) —</option>
+                        </select>
+                    </div>
+                    <div id="inline-api-fields" class="space-y-3">
                         <div>
                             <label class="block text-slate-300 font-bold mb-1.5">API Provider</label>
                             <select id="input-provider" onchange="suggestBaseURL(this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500">
@@ -307,6 +321,7 @@
                             <input type="text" id="input-region" placeholder="us-central1" class="w-full bg-[#0f172a] border border-[#334155] rounded px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
                         </div>
                     </div>
+                    </div><!-- /#inline-api-fields -->
                 </div>
 
                 <!-- Advanced Model Sampling Parameters (Phase 8.6) -->
@@ -348,7 +363,18 @@
                 <!-- Advanced Context Compaction Section -->
                 <div class="space-y-3">
                     <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">Advanced Context Compaction (Memory Management)</div>
-                    
+
+                    <!-- Compaction connection profile -->
+                    <div class="bg-slate-900/40 p-2.5 rounded border border-amber-500/30">
+                        <label class="block text-slate-300 font-bold mb-1.5 flex items-center text-[11px]">
+                            <i class="fa-solid fa-plug-circle-bolt text-amber-400 mr-1.5"></i> Compaction Profile
+                        </label>
+                        <select id="input-compact-profile" onchange="onCompactProfileChange(this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
+                            <option value="">— inline (use fields below) —</option>
+                        </select>
+                    </div>
+                    <div id="inline-compact-fields" class="space-y-3">
+
                     <div class="grid grid-cols-2 gap-4 bg-slate-900/40 p-3 rounded border border-[#334155]/50 space-y-2">
                         <div class="col-span-2 text-[10px] font-bold text-slate-400 uppercase">Compaction API Provider Configurations</div>
                         <div>
@@ -405,6 +431,7 @@
                         <label class="block text-slate-300 font-bold mb-1.5">Compaction System Prompt</label>
                         <textarea id="input-compact-prompt" rows="5" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono text-[11px] leading-normal placeholder-slate-600 resize-y" placeholder="System prompt directives..."></textarea>
                     </div>
+                    </div><!-- /#inline-compact-fields -->
                 </div>
 
                 <!-- Runner & Sandbox Section -->
@@ -570,6 +597,99 @@
                         <button type="button" onclick="closeSettingsModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Cancel</button>
                         <button type="button" onclick="saveWorkflowConfigurations()" class="px-5 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white transition font-bold text-xs shadow-md">Compile &amp; Apply</button>
                     </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: PROVIDER PROFILES (reusable connections) -->
+            <div id="settings-panel-providers" class="hidden p-6 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="font-bold text-slate-200 flex items-center"><i class="fa-solid fa-plug-circle-bolt mr-2 text-amber-400"></i> Connection Profiles</div>
+                        <p class="text-slate-500 mt-1">Named API connections reusable across the active chat, the compaction engine, and every workflow node. Stored in <code class="text-slate-400">providers.json</code> (git-ignored).</p>
+                    </div>
+                    <button type="button" onclick="newProviderForm()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-3 rounded text-xs transition flex items-center space-x-1">
+                        <i class="fa-solid fa-plus"></i><span>New Profile</span>
+                    </button>
+                </div>
+
+                <!-- Active assignment row -->
+                <div class="grid grid-cols-2 gap-3 bg-slate-900/30 p-3 rounded border border-[#334155]/50">
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1">Active Chat Profile</label>
+                        <select id="active-chat-profile" onchange="setActiveProfile(this.value, 'chat')" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
+                            <option value="">— inline config.api —</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1">Compaction Profile</label>
+                        <select id="active-compaction-profile" onchange="setActiveProfile(this.value, 'compaction')" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
+                            <option value="">— inline compaction —</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Profile editor form (hidden until New/Edit) -->
+                <div id="provider-editor" class="hidden bg-slate-900/40 border border-[#334155] rounded-lg p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span id="provider-editor-title" class="font-bold text-slate-200">New Profile</span>
+                        <button type="button" onclick="closeProviderForm()" class="text-slate-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Profile Name</label>
+                            <input type="text" id="pe-name" placeholder="e.g. cheap, smart, local" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Provider</label>
+                            <select id="pe-provider" onchange="suggestProviderBaseUrl(this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500">
+                                <option value="openai">OpenAI (DeepSeek/Groq/Ollama)</option>
+                                <option value="anthropic">Anthropic (Claude)</option>
+                                <option value="gemini">Google Gemini (AI Studio)</option>
+                                <option value="vertex">Google Gemini (Vertex)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Model</label>
+                            <input type="text" id="pe-model" placeholder="gpt-4o-mini" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Temperature</label>
+                            <input type="number" id="pe-temperature" min="0" max="2" step="0.1" value="0.2" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">API Key / Access Token</label>
+                        <input type="password" id="pe-key" placeholder="sk-... (leave blank to keep existing when editing)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Base URL (optional)</label>
+                        <input type="text" id="pe-base-url" placeholder="https://api.openai.com/v1/chat/completions" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                    </div>
+                    <div id="pe-vertex-fields" class="hidden grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-400 mb-1">GCP Project ID</label>
+                            <input type="text" id="pe-project-id" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">GCP Region</label>
+                            <input type="text" id="pe-region" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="pe-is-active" class="rounded bg-[#0f172a] border-[#334155] text-blue-500 h-4 w-4">
+                        <label for="pe-is-active" class="text-slate-300">Set as active chat profile</label>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-[#334155]">
+                        <button type="button" onclick="closeProviderForm()" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 font-bold text-xs">Cancel</button>
+                        <button type="button" onclick="saveProvider()" class="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs">Save Profile</button>
+                    </div>
+                </div>
+
+                <!-- Profiles list -->
+                <div id="providers-list" class="space-y-2">
+                    <div class="text-slate-500 italic text-xs">Loading profiles...</div>
                 </div>
             </div>
         </div>
@@ -1119,6 +1239,9 @@
 
                     // Fetch MCP servers
                     fetchMCPServers();
+
+                    // Populate the two profile selectors and set active values.
+                    populateProfileSelectors(cfg.provider_profile, cfg.compaction ? cfg.compaction.provider_profile : "");
                     
                     document.getElementById("settings-modal").classList.remove("hidden");
                 })
@@ -1135,6 +1258,7 @@
             
             const payload = {
                 provider: document.getElementById("input-provider").value,
+                provider_profile: document.getElementById("input-provider-profile").value,
                 api_key: document.getElementById("input-api-key").value.trim(),
                 model: document.getElementById("input-model").value.trim(),
                 base_url: document.getElementById("input-base-url").value.trim(),
@@ -1145,6 +1269,7 @@
                 target_scan_dirs: document.getElementById("input-target-scan-dirs").value.split(",").map(s => s.trim()).filter(s => s),
 
                 // Compaction parameters
+                compact_profile: document.getElementById("input-compact-profile").value,
                 compact_provider: document.getElementById("input-compact-provider").value,
                 compact_api_key: document.getElementById("input-compact-api-key").value.trim(),
                 compact_base_url: document.getElementById("input-compact-base-url").value.trim(),
@@ -2153,25 +2278,26 @@
             }
         }
 
-        // WORKFLOW TAB SWAPPING & RENDERING LIFECYCLES
+        // SETTINGS TAB SWAPPING & RENDERING LIFECYCLES
         function switchSettingsTab(tabName) {
-            const standardPanel = document.getElementById("settings-panel-standard");
-            const workflowPanel = document.getElementById("settings-panel-workflow");
-            const btnStandard = document.getElementById("btn-settings-tab-standard");
-            const btnWorkflow = document.getElementById("btn-settings-tab-workflow");
-
-            if (tabName === "standard") {
-                standardPanel.classList.remove("hidden");
-                workflowPanel.classList.add("hidden");
-                btnStandard.className = "font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition";
-                btnWorkflow.className = "font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition";
-            } else {
-                standardPanel.classList.add("hidden");
-                workflowPanel.classList.remove("hidden");
-                btnStandard.className = "font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition";
-                btnWorkflow.className = "font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition";
-                loadWorkflowsSchema();
-            }
+            const panels = {
+                standard: document.getElementById("settings-panel-standard"),
+                workflow: document.getElementById("settings-panel-workflow"),
+                providers: document.getElementById("settings-panel-providers"),
+            };
+            const buttons = {
+                standard: document.getElementById("btn-settings-tab-standard"),
+                workflow: document.getElementById("btn-settings-tab-workflow"),
+                providers: document.getElementById("btn-settings-tab-providers"),
+            };
+            Object.keys(panels).forEach(k => panels[k].classList.add("hidden"));
+            Object.keys(buttons).forEach(k => {
+                buttons[k].className = "font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition";
+            });
+            panels[tabName].classList.remove("hidden");
+            buttons[tabName].className = "font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition";
+            if (tabName === "workflow") loadWorkflowsSchema();
+            if (tabName === "providers") fetchProviders();
         }
 
         function loadWorkflowsSchema() {
@@ -2412,6 +2538,226 @@
                 alert("Failed to switch workflow: " + err.message);
                 loadWorkflowSelector(); // revert dropdown to server state
             });
+        }
+
+        // ===== REUSABLE PROVIDER PROFILES =====
+        let editingProviderName = null;
+
+        function fetchProviders() {
+            fetch("/api/providers")
+                .then(res => res.json())
+                .then(data => {
+                    const profiles = data.providers || {};
+                    const names = Object.keys(profiles);
+
+                    // Populate active-profile dropdowns.
+                    const chatSel = document.getElementById("active-chat-profile");
+                    const compSel = document.getElementById("active-compaction-profile");
+                    [chatSel, compSel].forEach(sel => {
+                        if (!sel) return;
+                        const current = sel.value;
+                        sel.innerHTML = '<option value="">— ' + (sel === chatSel ? "inline config.api" : "inline compaction") + " —</option>";
+                        names.forEach(n => {
+                            sel.innerHTML += `<option value="${n}">${n} (${profiles[n].provider}/${profiles[n].model})</option>`;
+                        });
+                    });
+                    if (chatSel) chatSel.value = data.active_profile || "";
+                    if (compSel) compSel.value = data.compaction_profile || "";
+
+                    // Render the profile cards.
+                    const list = document.getElementById("providers-list");
+                    if (names.length === 0) {
+                        list.innerHTML = '<div class="text-slate-500 italic text-xs">No profiles yet. Click "New Profile" to create one.</div>';
+                        return;
+                    }
+                    let html = "";
+                    names.forEach(name => {
+                        const p = profiles[name];
+                        const activeBadge = name === data.active_profile ? '<span class="ml-2 text-[9px] bg-blue-900 text-blue-300 px-1.5 py-0.5 rounded font-bold">CHAT</span>' : '';
+                        const compBadge = name === data.compaction_profile ? '<span class="ml-2 text-[9px] bg-indigo-900 text-indigo-300 px-1.5 py-0.5 rounded font-bold">COMPACTION</span>' : '';
+                        html += `
+                            <div class="p-3 bg-slate-900/30 border border-[#334155] rounded-lg">
+                                <div class="flex items-center justify-between">
+                                    <div class="font-bold text-slate-200 flex items-center">
+                                        <i class="fa-solid fa-bolt text-amber-400 mr-2 text-xs"></i>${name}
+                                        ${activeBadge}${compBadge}
+                                    </div>
+                                    <div class="space-x-1">
+                                        <button onclick="editProvider('${name}')" class="text-slate-400 hover:text-white p-1" title="Edit"><i class="fa-solid fa-pen text-[10px]"></i></button>
+                                        <button onclick="deleteProvider('${name}')" class="text-slate-400 hover:text-red-400 p-1" title="Delete"><i class="fa-solid fa-trash text-[10px]"></i></button>
+                                    </div>
+                                </div>
+                                <div class="text-[10px] text-slate-400 mt-1 font-mono">${p.provider} · ${p.model}${p.base_url ? " · " + p.base_url : ""}</div>
+                            </div>`;
+                    });
+                    list.innerHTML = html;
+                })
+                .catch(err => {
+                    document.getElementById("providers-list").innerHTML = `<div class="text-red-400 text-xs">Failed to load profiles: ${err}</div>`;
+                });
+        }
+
+        function newProviderForm() {
+            editingProviderName = null;
+            document.getElementById("provider-editor-title").textContent = "New Profile";
+            document.getElementById("pe-name").value = "";
+            document.getElementById("pe-name").disabled = false;
+            document.getElementById("pe-provider").value = "openai";
+            document.getElementById("pe-model").value = "";
+            document.getElementById("pe-temperature").value = "0.2";
+            document.getElementById("pe-key").value = "";
+            document.getElementById("pe-base-url").value = "";
+            document.getElementById("pe-project-id").value = "";
+            document.getElementById("pe-region").value = "";
+            document.getElementById("pe-is-active").checked = false;
+            suggestProviderBaseUrl("openai");
+            document.getElementById("provider-editor").classList.remove("hidden");
+        }
+
+        function editProvider(name) {
+            fetch("/api/providers")
+                .then(res => res.json())
+                .then(data => {
+                    const p = (data.providers || {})[name];
+                    if (!p) return;
+                    editingProviderName = name;
+                    document.getElementById("provider-editor-title").textContent = "Edit Profile: " + name;
+                    document.getElementById("pe-name").value = name;
+                    document.getElementById("pe-name").disabled = true;
+                    document.getElementById("pe-provider").value = p.provider || "openai";
+                    document.getElementById("pe-model").value = p.model || "";
+                    document.getElementById("pe-temperature").value = p.temperature != null ? p.temperature : 0.2;
+                    document.getElementById("pe-key").value = "";
+                    document.getElementById("pe-key").placeholder = "••••••" + (p.key ? p.key.slice(-4) : " (set a new key to replace)");
+                    document.getElementById("pe-base-url").value = p.base_url || "";
+                    document.getElementById("pe-project-id").value = p.project_id || "";
+                    document.getElementById("pe-region").value = p.region || "";
+                    document.getElementById("pe-is-active").checked = (name === data.active_profile);
+                    suggestProviderBaseUrl(p.provider || "openai");
+                    document.getElementById("provider-editor").classList.remove("hidden");
+                });
+        }
+
+        function closeProviderForm() {
+            document.getElementById("provider-editor").classList.add("hidden");
+        }
+
+        function suggestProviderBaseUrl(provider) {
+            const urlEl = document.getElementById("pe-base-url");
+            const modelEl = document.getElementById("pe-model");
+            const vFields = document.getElementById("pe-vertex-fields");
+            if (provider === "vertex") {
+                vFields.classList.remove("hidden");
+                urlEl.value = "";
+                modelEl.placeholder = "gemini-1.5-flash";
+            } else {
+                vFields.classList.add("hidden");
+                if (provider === "anthropic") {
+                    urlEl.placeholder = "https://api.anthropic.com/v1/messages";
+                    modelEl.placeholder = "claude-3-5-sonnet-latest";
+                } else if (provider === "gemini") {
+                    urlEl.placeholder = "(auto-built by backend)";
+                    modelEl.placeholder = "gemini-1.5-flash";
+                } else {
+                    urlEl.placeholder = "https://api.openai.com/v1/chat/completions";
+                    modelEl.placeholder = "gpt-4o-mini";
+                }
+            }
+        }
+
+        function saveProvider() {
+            const name = document.getElementById("pe-name").value.trim();
+            if (!name) { alert("Profile name is required."); return; }
+            const profile = {
+                provider: document.getElementById("pe-provider").value,
+                model: document.getElementById("pe-model").value.trim(),
+                temperature: parseFloat(document.getElementById("pe-temperature").value) || 0,
+                key: document.getElementById("pe-key").value,
+                base_url: document.getElementById("pe-base-url").value.trim(),
+                project_id: document.getElementById("pe-project-id").value.trim(),
+                region: document.getElementById("pe-region").value.trim(),
+                max_tokens: 4096,
+            };
+            // When editing and the key field is empty, send the masked value so
+            // the backend preserves the existing key.
+            if (editingProviderName && profile.key === "") {
+                // Send the backend's masked-key sentinel so it preserves the existing key.
+                profile.key = "••••";
+            }
+            fetch("/api/providers/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: editingProviderName || name,
+                    profile: profile,
+                    is_active: document.getElementById("pe-is-active").checked,
+                }),
+            })
+            .then(async res => {
+                if (!res.ok) { const t = await res.text(); throw new Error(t); }
+                return res.json();
+            })
+            .then(() => {
+                closeProviderForm();
+                fetchProviders();
+                fetchConfig();
+                appendSystemAlert("Profile Saved", `Connection profile '${editingProviderName || name}' saved.`, "fa-plug-circle-check text-green-400");
+            })
+            .catch(err => alert("Failed to save profile: " + err.message));
+        }
+
+        function deleteProvider(name) {
+            if (!confirm(`Delete provider profile '${name}'? Nodes referencing it will fall back to inline settings.`)) return;
+            fetch("/api/providers/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name }),
+            })
+            .then(res => { if (!res.ok) throw new Error("delete failed"); return res.json(); })
+            .then(() => { fetchProviders(); fetchConfig(); })
+            .catch(err => alert("Failed to delete profile: " + err));
+        }
+
+        function setActiveProfile(name, target) {
+            fetch("/api/providers/activate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, target }),
+            })
+            .then(res => { if (!res.ok) throw new Error("activate failed"); return res.json(); })
+            .then(() => {
+                fetchProviders();
+                fetchConfig();
+                const which = target === "compaction" ? "Compaction" : "Active chat";
+                appendSystemAlert("Profile Activated", `${which} connection ${name ? "set to '" + name + "'" : "reset to inline config"}.`, "fa-bolt text-amber-400");
+            })
+            .catch(err => { alert("Failed to activate profile: " + err); fetchProviders(); });
+        }
+
+        // ===== Settings-tab profile selectors (providers.json) =====
+        function populateProfileSelectors(activeChat, activeCompaction) {
+            fetch("/api/providers")
+                .then(res => res.json())
+                .then(data => {
+                    const profiles = data.providers || {};
+                    const opts = '<option value="">— inline (use fields below) —</option>' +
+                        Object.keys(profiles).map(n => `<option value="${n}">${n} (${profiles[n].provider}/${profiles[n].model})</option>`).join("");
+                    const chat = document.getElementById("input-provider-profile");
+                    const comp = document.getElementById("input-compact-profile");
+                    if (chat) { chat.innerHTML = opts; chat.value = activeChat || ""; onChatProfileChange(chat.value); }
+                    if (comp) { comp.innerHTML = opts; comp.value = activeCompaction || ""; onCompactProfileChange(comp.value); }
+                })
+                .catch(err => console.error("Failed to load profiles for settings:", err));
+        }
+
+        function onChatProfileChange(value) {
+            const inline = document.getElementById("inline-api-fields");
+            if (inline) inline.style.display = value ? "none" : "";
+        }
+
+        function onCompactProfileChange(value) {
+            const inline = document.getElementById("inline-compact-fields");
+            if (inline) inline.style.display = value ? "none" : "";
         }
 
         function toggleCardMetrics(e, turnNum) {

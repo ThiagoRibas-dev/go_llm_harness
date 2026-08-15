@@ -1,0 +1,44 @@
+{
+  "providers": {
+    "default": {
+      "provider": "openai",
+      "key": "sk-your-openai-key-here",
+      "base_url": "https://api.openai.com/v1/chat/completions",
+      "model": "gpt-4o",
+      "temperature": 0.0,
+      "max_tokens": 4096
+    },
+    "cheap": {
+      "provider": "openai",
+      "key": "sk-your-openai-key-here",
+      "base_url": "",
+      "model": "gpt-4o-mini",
+      "temperature": 0.1,
+      "max_tokens": 4096
+    },
+    "smart": {
+      "provider": "anthropic",
+      "key": "sk-ant-your-anthropic-key-here",
+      "base_url": "https://api.anthropic.com/v1/messages",
+      "model": "claude-3-5-sonnet-latest",
+      "temperature": 0.2,
+      "max_tokens": 8192
+    },
+    "local": {
+      "provider": "openai",
+      "key": "ollama",
+      "base_url": "http://localhost:11434/v1/chat/completions",
+      "model": "llama-3.1-8b",
+      "temperature": 0.0,
+      "max_tokens": 4096
+    },
+    "compaction": {
+      "provider": "openai",
+      "key": "sk-your-openai-key-here",
+      "base_url": "",
+      "model": "gpt-4o-mini",
+      "temperature": 0.2,
+      "max_tokens": 4096
+    }
+  }
+}

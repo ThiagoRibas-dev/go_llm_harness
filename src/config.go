@@ -21,14 +21,15 @@ const (
 
 // Config holds the complete GoHarness configuration layout
 type Config struct {
-	API           APIConfig                  `json:"api"`
-	Agent         AgentConfig                `json:"agent"`
-	Security      SecurityConfig             `json:"security"`
-	DirectoryScan DirectoryScanConfig        `json:"directory_scan"`
-	Compaction    CompactionConfig           `json:"compaction"`
-	MCPServers    map[string]MCPServerConfig `json:"mcp_servers"`
-	Web           WebConfig                  `json:"web"`
-	Debug         bool                       `json:"debug"` // Toggle verbose diagnostic logs (Phase 8.6)
+	API             APIConfig                  `json:"api"`
+	ProviderProfile string                     `json:"provider_profile,omitempty"` // Named profile from providers.json for the active chat connection
+	Agent           AgentConfig                `json:"agent"`
+	Security        SecurityConfig             `json:"security"`
+	DirectoryScan   DirectoryScanConfig        `json:"directory_scan"`
+	Compaction      CompactionConfig           `json:"compaction"`
+	MCPServers      map[string]MCPServerConfig `json:"mcp_servers"`
+	Web             WebConfig                  `json:"web"`
+	Debug           bool                       `json:"debug"` // Toggle verbose diagnostic logs (Phase 8.6)
 }
 
 type APIConfig struct {
@@ -70,16 +71,75 @@ type DirectoryScanConfig struct {
 }
 
 type CompactionConfig struct {
-	Provider         string  `json:"provider"`         // Compaction API Provider: "openai", "anthropic", "gemini", "vertex" (Default: global API)
-	Key              string  `json:"key"`              // Compaction API Key (Default: global API)
-	BaseURL          string  `json:"base_url"`         // Compaction Base Endpoint URL (Default: global API)
-	Model            string  `json:"model"`            // Compaction Model Target
-	Temperature      float64 `json:"temperature"`      // Compaction Temperature
-	ProjectID        string  `json:"project_id,omitempty"` // GCP Project ID for Vertex Compaction
-	Region           string  `json:"region,omitempty"`     // GCP Region for Vertex Compaction
+	ProviderProfile  string  `json:"provider_profile,omitempty"` // Named profile from providers.json (takes precedence over the inline fields below)
+	Provider         string  `json:"provider"`                   // Compaction API Provider: "openai", "anthropic", "gemini", "vertex" (Default: global API)
+	Key              string  `json:"key"`                        // Compaction API Key (Default: global API)
+	BaseURL          string  `json:"base_url"`                   // Compaction Base Endpoint URL (Default: global API)
+	Model            string  `json:"model"`                      // Compaction Model Target
+	Temperature      float64 `json:"temperature"`                // Compaction Temperature
+	ProjectID        string  `json:"project_id,omitempty"`       // GCP Project ID for Vertex Compaction
+	Region           string  `json:"region,omitempty"`           // GCP Region for Vertex Compaction
 	AutoCompactTurns int     `json:"auto_compact_turns"`
 	KeepLastN        int     `json:"keep_last_n"`
 	SystemPrompt     string  `json:"system_prompt"`
+}
+
+// ResolveAPIConfig returns the API connection the active chat loop should use.
+// If provider_profile is set, that named profile is loaded from providers.json
+// and used directly (max_tokens/key fall back to the inline api block only when
+// absent from the profile). Otherwise the inline api block is returned as-is.
+func (c *Config) ResolveAPIConfig() APIConfig {
+	if c.ProviderProfile != "" {
+		if profile, err := GetProvider(c.ProviderProfile); err == nil {
+			// Only the api block's MaxTokens and Key act as fallbacks for the
+			// profile; its model/temperature/base_url must NOT override the
+			// profile (otherwise selecting a profile would have no effect).
+			resolved := profile
+			if resolved.MaxTokens == 0 {
+				resolved.MaxTokens = c.API.MaxTokens
+			}
+			if resolved.Key == "" {
+				resolved.Key = c.API.Key
+			}
+			return resolved
+		}
+	}
+	return c.API
+}
+
+// ResolveCompactionConfig returns the API connection the compaction/summary
+// engine should use, resolving provider_profile from providers.json when set.
+// With a profile active, the profile is used directly; the inline compaction
+// fields are only used when no profile is configured.
+func (c *Config) ResolveCompactionConfig() APIConfig {
+	if c.Compaction.ProviderProfile != "" {
+		if profile, err := GetProvider(c.Compaction.ProviderProfile); err == nil {
+			resolved := profile
+			if resolved.MaxTokens == 0 {
+				resolved.MaxTokens = c.API.MaxTokens
+			}
+			if resolved.Key == "" {
+				resolved.Key = c.API.Key
+			}
+			return resolved
+		}
+	}
+
+	comp := c.Compaction
+	provider := comp.Provider
+	if provider == "" {
+		provider = "openai"
+	}
+	return APIConfig{
+		Provider:    provider,
+		Key:         comp.Key,
+		BaseURL:     comp.BaseURL,
+		Model:       comp.Model,
+		Temperature: comp.Temperature,
+		ProjectID:   comp.ProjectID,
+		Region:      comp.Region,
+		MaxTokens:   c.API.MaxTokens,
+	}
 }
 
 type MCPServerConfig struct {

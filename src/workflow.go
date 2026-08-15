@@ -407,7 +407,9 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, rawUserPrompt string) er
 			continue
 		}
 		label := ""
-		if model, ok := n.Properties["model"].(string); ok {
+		if p, ok := n.Properties["provider_profile"].(string); ok && p != "" {
+			label = "@" + p
+		} else if model, ok := n.Properties["model"].(string); ok {
 			label = model
 		} else if tool, ok := n.Properties["tool_name"].(string); ok {
 			label = tool
@@ -632,7 +634,9 @@ func (e *WorkflowExecutor) broadcastNode(n *RuntimeNode, status string, startTim
 	}
 
 	label := ""
-	if model, ok := n.Properties["model"].(string); ok {
+	if p, ok := n.Properties["provider_profile"].(string); ok && p != "" {
+		label = "@" + p
+	} else if model, ok := n.Properties["model"].(string); ok {
 		label = model
 	} else if tool, ok := n.Properties["tool_name"].(string); ok {
 		label = tool
@@ -665,13 +669,40 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 		return nil
 
 	case "llm_query", "llm_synthesis":
-		provider, _ := n.Properties["provider"].(string)
-		model, _ := n.Properties["model"].(string)
-		tempVal, _ := n.Properties["temperature"]
-		temperature := 0.2
-		if t, ok := tempVal.(float64); ok {
-			temperature = t
+		// Resolve the connection: a named provider_profile from providers.json
+		// wins, with any inline provider/model/temperature overrides layered on
+		// top. Falls back to the legacy inline fields for backward compatibility.
+		parentAPI := activeConfig.API
+		var nodeAPI APIConfig
+
+		if profileName, ok := n.Properties["provider_profile"].(string); ok && profileName != "" {
+			profile, err := GetProvider(profileName)
+			if err != nil {
+				return fmt.Errorf("node %s: %w", n.ID, err)
+			}
+			nodeAPI = mergeProfileWithFills(profile, n.Properties, parentAPI)
+			writeDebugLog("[WORKFLOW NODE %s] Using provider profile '%s' (%s/%s)", n.ID, profileName, nodeAPI.Provider, nodeAPI.Model)
+		} else {
+			provider, _ := n.Properties["provider"].(string)
+			model, _ := n.Properties["model"].(string)
+			tempVal, _ := n.Properties["temperature"]
+			temperature := 0.2
+			if t, ok := tempVal.(float64); ok {
+				temperature = t
+			}
+			nodeAPI = APIConfig{
+				Provider:    provider,
+				Key:         parentAPI.Key, // Falls back to global API Key
+				BaseURL:     "",            // Auto built by backend
+				Model:       model,
+				Temperature: temperature,
+				MaxTokens:   parentAPI.MaxTokens,
+			}
+			if provider == "openai" && nodeAPI.Key == "" {
+				nodeAPI.Key = parentAPI.Key
+			}
 		}
+
 		systemPrompt, _ := n.Properties["system_prompt"].(string)
 
 		promptText := ""
@@ -686,32 +717,18 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 			promptText = "Process baseline context."
 		}
 
-		writeDebugLog("[WORKFLOW NODE %s] LLM query requested: provider: %s, model: %s", n.ID, provider, model)
+		writeDebugLog("[WORKFLOW NODE %s] LLM query requested: provider: %s, model: %s", n.ID, nodeAPI.Provider, nodeAPI.Model)
 
-		// Temporarily hot-swap global API settings for this node execution!
-		parentAPI := activeConfig.API
-		activeConfig.API = APIConfig{
-			Provider:    provider,
-			Key:         activeConfig.API.Key, // Falls back to global API Key
-			BaseURL:     "",                    // Auto built by backend
-			Model:       model,
-			Temperature: temperature,
-			MaxTokens:   activeConfig.API.MaxTokens,
-		}
-
-		// Check if specialized compaction credentials are set
-		if provider == "openai" && activeConfig.API.Key == "" {
-			activeConfig.API.Key = parentAPI.Key
-		}
-
+		// Temporarily hot-swap global API settings for this node execution.
+		activeConfig.API = nodeAPI
 		reqMessages := []Message{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: promptText},
 		}
 
 		respMsg, err := SendMultiProviderRequest(reqMessages, nil)
-		
-		// Restore parent global settings immediately on return
+
+		// Restore parent global settings immediately on return.
 		activeConfig.API = parentAPI
 
 		if err != nil {
