@@ -1332,6 +1332,52 @@ func StartWebGUI(port int) {
 		_, _ = w.Write([]byte(`{"status":"success"}`))
 	})
 
+	// Serve workflows.json from disk
+	mux.HandleFunc("/workflows.json", func(w http.ResponseWriter, r *http.Request) {
+		bytes, err := os.ReadFile(GetSystemPath("workflows.json"))
+		if err != nil {
+			// If file missing on disk, return default template
+			defaultSchema := `{"active_workflow": "linear_chat"}`
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(defaultSchema))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(bytes)
+	})
+
+	// POST /api/workflows/save: Overwrites workflows.json on-disk and hot-swaps the active pipeline!
+	mux.HandleFunc("/api/workflows/save", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		bytes, _ := json.MarshalIndent(req, "", "  ")
+		err := os.WriteFile(GetSystemPath("workflows.json"), bytes, 0644)
+		if err != nil {
+			http.Error(w, "Failed to write workflows.json", http.StatusInternalServerError)
+			return
+		}
+
+		// Hot-swap SSE session broadcast warning card!
+		activeId := req["active_workflow"].(string)
+		BroadcastSSE("turn_secured", map[string]interface{}{
+			"turn_number": 0,
+			"role":        "system",
+			"name":        "system",
+			"content":     fmt.Sprintf("🔄 **[WORKFLOW HOT-SWAPPED]** GoHarness execution core has compiled and hot-swapped to active pipeline: `%s`!", activeId),
+		})
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success"}`))
+	})
+
 	// 4. Start Server and print beautiful UX logs (Phase 8.4)
 	serverAddr := fmt.Sprintf("0.0.0.0:%d", port)
 	

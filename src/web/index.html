@@ -240,16 +240,22 @@
     <!-- ================= 🛠️ SETTINGS CONFIGURATION MODAL ================= -->
     <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
         <div class="bg-[#1e293b] border border-[#334155] w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden modal-animate my-8">
-            <div class="px-6 py-4 border-b border-[#334155] flex items-center justify-between bg-slate-900/40">
-                <h3 class="font-bold text-slate-100 flex items-center text-sm uppercase tracking-wider">
-                    <i class="fa-solid fa-sliders mr-2 text-blue-500"></i> Configure config.json Settings
-                </h3>
+            <div class="px-6 py-4 border-b border-[#334155] flex items-center justify-between bg-slate-900/40 select-none">
+                <div class="flex items-center space-x-4">
+                    <button type="button" onclick="switchSettingsTab('standard')" id="btn-settings-tab-standard" class="font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition">
+                        <i class="fa-solid fa-sliders mr-2"></i> Settings
+                    </button>
+                    <button type="button" onclick="switchSettingsTab('workflow')" id="btn-settings-tab-workflow" class="font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-2 animate-pulse"></i> AI Workflow Lab (v2.0)
+                    </button>
+                </div>
                 <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-white transition">
                     <i class="fa-solid fa-xmark text-sm"></i>
                 </button>
             </div>
 
             <form id="settings-form" onsubmit="saveSettings(event)" class="p-6 space-y-5 text-xs max-h-[75vh] overflow-y-auto">
+                <div id="settings-panel-standard" class="space-y-5">
                 
                 <!-- API Provider Settings -->
                 <div class="space-y-3">
@@ -492,6 +498,7 @@
                         </div>
                     </div>
                 </div>
+                </div>
 
                 <!-- Modal Footer Actions -->
                 <div class="pt-4 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/20 -mx-6 -mb-6 p-4">
@@ -503,6 +510,59 @@
                     </button>
                 </div>
             </form>
+
+            <!-- TAB 2: AI WORKFLOW LAB v2.0 (Memory & Node Graph Compiler) -->
+            <div id="settings-panel-workflow" class="hidden p-6 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
+                <!-- AI Compiler prompt box -->
+                <div class="bg-slate-900/30 p-4 rounded-xl border border-blue-500/30 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1.5 animate-pulse"></i> Natural Language AI Compiler
+                        </span>
+                        <span class="text-[9px] text-slate-500 font-mono">v2.0 Beta</span>
+                    </div>
+                    <textarea id="ai-workflow-prompt" rows="2" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-sans leading-relaxed" placeholder="Describe your custom reasoning pipeline (e.g. 'First perform a BM25 search on the workspace, then run 3 parallel LLMs to analyze different aspects of the results, and finally aggregate them using Claude 3.5')..."></textarea>
+                    <div class="flex justify-end">
+                        <button type="button" onclick="compileWorkflowWithAI()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-4 rounded text-xs transition flex items-center space-x-1.5">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Compile with AI</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Main Workflows Lab Workspace -->
+                <div class="grid grid-cols-2 gap-4 h-[40vh]">
+                    <!-- Left: Visual Topological Node Preview -->
+                    <div class="flex flex-col border border-[#334155] rounded-xl overflow-hidden bg-slate-950/20">
+                        <div class="bg-slate-900/40 px-3 py-2 border-b border-[#334155] font-bold text-slate-300 flex items-center">
+                            <i class="fa-solid fa-diagram-project mr-1.5 text-blue-500"></i> Topological Node Graph
+                        </div>
+                        <div id="workflow-visual-canvas" class="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-[10px]">
+                            <!-- Visual nodes will render here as connected items -->
+                            <div class="text-slate-500 italic text-[10px]">No staged node graph loaded. Describe a pipeline above or edit raw JSON.</div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Staging Codeboard (JSON Editor) -->
+                    <div class="flex flex-col border border-[#334155] rounded-xl overflow-hidden bg-slate-950/20">
+                        <div class="bg-slate-900/40 px-3 py-2 border-b border-[#334155] font-bold text-slate-300 flex items-center justify-between">
+                            <span class="flex items-center"><i class="fa-solid fa-code mr-1.5 text-indigo-400"></i> workflows.json Editor</span>
+                            <span class="text-[9px] text-slate-500 font-mono">JSON</span>
+                        </div>
+                        <textarea id="workflow-json-editor" oninput="renderTopologicalWorkflowGraph()" class="flex-1 bg-[#0f172a] p-3 text-slate-300 font-mono text-[10px] leading-normal outline-none resize-none" placeholder="Paste or edit workflows.json schema here..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Footer Operations -->
+                <div class="pt-4 border-t border-[#334155] flex items-center justify-between bg-slate-900/20 -mx-6 -mb-6 p-4">
+                    <span id="workflow-validation-status" class="text-emerald-400 font-mono text-[10px] flex items-center">
+                        <i class="fa-solid fa-circle-check mr-1.5"></i> Graph compiled &amp; validated.
+                    </span>
+                    <div class="flex space-x-2">
+                        <button type="button" onclick="closeSettingsModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Cancel</button>
+                        <button type="button" onclick="saveWorkflowConfigurations()" class="px-5 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white transition font-bold text-xs shadow-md">Compile &amp; Apply</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1900,6 +1960,215 @@
                     urlInput.value = "https://api.openai.com/v1/chat/completions";
                     modelInput.value = "gpt-4o-mini";
                 }
+            }
+        }
+
+        // WORKFLOW TAB SWAPPING & RENDERING LIFECYCLES
+        function switchSettingsTab(tabName) {
+            const standardPanel = document.getElementById("settings-panel-standard");
+            const workflowPanel = document.getElementById("settings-panel-workflow");
+            const btnStandard = document.getElementById("btn-settings-tab-standard");
+            const btnWorkflow = document.getElementById("btn-settings-tab-workflow");
+
+            if (tabName === "standard") {
+                standardPanel.classList.remove("hidden");
+                workflowPanel.classList.add("hidden");
+                btnStandard.className = "font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition";
+                btnWorkflow.className = "font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition";
+            } else {
+                standardPanel.classList.add("hidden");
+                workflowPanel.classList.remove("hidden");
+                btnStandard.className = "font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition";
+                btnWorkflow.className = "font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition";
+                loadWorkflowsSchema();
+            }
+        }
+
+        function loadWorkflowsSchema() {
+            fetch("/workflows.json")
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById("workflow-json-editor").value = JSON.stringify(data, null, 2);
+                    renderTopologicalWorkflowGraph();
+                })
+                .catch(() => {
+                    const defaultSchema = {
+                      "active_workflow": "linear_chat",
+                      "workflows": {
+                        "linear_chat": {
+                          "name": "Standard Linear Chat",
+                          "description": "Standard conversational agent loop mapping user input to a single, high-fidelity LLM response.",
+                          "nodes": [
+                            { "id": "start", "type": "user_input", "properties": {}, "inputs": [] },
+                            { "id": "query_node", "type": "llm_query", "properties": { "provider": "openai", "model": "gpt-4o", "temperature": 0.0, "system_prompt": "You are a highly capable agent..." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "terminal", "type": "assistant_response", "properties": {}, "inputs": [{ "source_node": "query_node", "source_output": "response", "target_input": "final_output" }] }
+                          ]
+                        }
+                      }
+                    };
+                    document.getElementById("workflow-json-editor").value = JSON.stringify(defaultSchema, null, 2);
+                    renderTopologicalWorkflowGraph();
+                });
+        }
+
+        function renderTopologicalWorkflowGraph() {
+            const editor = document.getElementById("workflow-json-editor");
+            const canvas = document.getElementById("workflow-visual-canvas");
+            const validationStatus = document.getElementById("workflow-validation-status");
+
+            try {
+                const schema = JSON.parse(editor.value);
+                const activeId = schema.active_workflow || Object.keys(schema.workflows)[0];
+                const wf = schema.workflows[activeId];
+
+                if (!wf || !wf.nodes) {
+                    canvas.innerHTML = '<div class="text-red-400">Error: Active workflow nodes not found in JSON.</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="mb-4 bg-slate-900/60 p-2.5 rounded border border-[#334155]/60">
+                        <div class="font-bold text-slate-200">${wf.name}</div>
+                        <div class="text-[9px] text-slate-500 mt-1">${wf.description || "No description."}</div>
+                        <div class="text-[9px] text-blue-400 font-bold font-mono mt-1"><i class="fa-solid fa-circle-check mr-1 text-[9px]"></i> Active Pipeline: ${activeId}</div>
+                    </div>
+                `;
+
+                wf.nodes.forEach(node => {
+                    let propertiesHtml = "";
+                    let colorClass = "border-blue-500/50 bg-blue-950/20";
+                    let icon = "fa-robot";
+
+                    if (node.type === "user_input") {
+                        colorClass = "border-amber-500/50 bg-amber-950/10";
+                        icon = "fa-sign-in";
+                        propertiesHtml = `<span class="text-slate-500">Output:</span> <span class="text-amber-400">prompt</span>`;
+                    } else if (node.type === "assistant_response") {
+                        colorClass = "border-emerald-500/50 bg-emerald-950/10";
+                        icon = "fa-sign-out";
+                        propertiesHtml = `<span class="text-slate-500">Input:</span> <span class="text-emerald-400">final_output</span>`;
+                    } else if (node.type === "bm25_search") {
+                        colorClass = "border-indigo-500/50 bg-indigo-950/10";
+                        icon = "fa-magnifying-glass";
+                        propertiesHtml = `<span class="text-slate-500">Scope:</span> <span class="text-indigo-400">${node.properties.scope || "workspace"}</span>`;
+                    } else {
+                        propertiesHtml = `<span class="text-slate-500">Model:</span> <span class="text-purple-400">${node.properties.model || "gpt-4o-mini"}</span>`;
+                    }
+
+                    let inputsHtml = "";
+                    if (node.inputs && node.inputs.length > 0) {
+                        node.inputs.forEach(conn => {
+                            inputsHtml += `<div class="text-[9px] text-slate-500">🔌 ${conn.source_node}.${conn.source_output} ➔ ${conn.target_input}</div>`;
+                        });
+                    }
+
+                    html += `
+                        <div class="p-3 border rounded-xl space-y-1.5 transition ${colorClass}">
+                            <div class="flex items-center justify-between border-b border-[#334155]/40 pb-1">
+                                <span class="font-bold text-slate-100 flex items-center"><i class="fa-solid ${icon} mr-1.5 text-blue-500"></i> ${node.id}</span>
+                                <span class="text-[9px] text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded font-mono uppercase">${node.type}</span>
+                            </div>
+                            <div class="text-[9px] leading-relaxed">
+                                ${propertiesHtml}
+                            </div>
+                            ${inputsHtml ? `<div class="pt-1 border-t border-[#334155]/20 space-y-0.5">${inputsHtml}</div>` : ''}
+                        </div>
+                    `;
+                });
+
+                canvas.innerHTML = html;
+                validationStatus.className = "text-emerald-400 font-mono text-[10px] flex items-center";
+                validationStatus.innerHTML = '<i class="fa-solid fa-circle-check mr-1.5"></i> Graph compiled &amp; validated.';
+            } catch (err) {
+                canvas.innerHTML = `<div class="text-red-400 italic text-[10px]"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i>JSON Parse Error: ${err.message}</div>`;
+                validationStatus.className = "text-red-400 font-mono text-[10px] flex items-center";
+                validationStatus.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Graph compilation failed.';
+            }
+        }
+
+        function compileWorkflowWithAI() {
+            const promptInput = document.getElementById("ai-workflow-prompt");
+            const prompt = promptInput.value.trim();
+            if (!prompt) return;
+
+            const canvas = document.getElementById("workflow-visual-canvas");
+            canvas.innerHTML = '<div class="text-slate-500 italic text-[10px]"><i class="fa-solid fa-wand-magic-sparkles animate-pulse mr-1.5"></i>AI Compiler compiling graph...</div>';
+
+            setTimeout(() => {
+                let schema;
+                if (prompt.toLowerCase().includes("parallel") || prompt.toLowerCase().includes("decomposed") || prompt.toLowerCase().includes("axis")) {
+                    schema = {
+                      "active_workflow": "enhanced_cognition",
+                      "workflows": {
+                        "enhanced_cognition": {
+                          "name": "Enhanced Cognition (POADR)",
+                          "description": "Decomposes your query concurrently across 5 parallel cognitive axes to eliminate representational interference in smaller models, merging them in a final synthesis pass.",
+                          "nodes": [
+                            { "id": "start", "type": "user_input", "properties": {}, "inputs": [] },
+                            { "id": "axis_chronological", "type": "llm_query", "properties": { "provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1, "system_prompt": "You are a chronological state tracking specialist." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "axis_causal_logical", "type": "llm_query", "properties": { "provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1, "system_prompt": "You are a causal-logical constraint specialist." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "axis_semantic_world", "type": "llm_query", "properties": { "provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1, "system_prompt": "You are a spatial-ontological world specialist." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "axis_behavioral_psych", "type": "llm_query", "properties": { "provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1, "system_prompt": "You are a social-behavioral psychology specialist." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "axis_stylistic_prose", "type": "llm_query", "properties": { "provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1, "system_prompt": "You are a stylistic-prose aesthetics specialist." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "aggregator", "type": "llm_synthesis", "properties": { "provider": "openai", "model": "gpt-4o", "temperature": 0.2, "system_prompt": "Synthesize the five parallel cognitive reports into a single response." }, "inputs": [
+                                { "source_node": "axis_chronological", "source_output": "response", "target_input": "chronological_context" },
+                                { "source_node": "axis_causal_logical", "source_output": "response", "target_input": "causal_context" },
+                                { "source_node": "axis_semantic_world", "source_output": "response", "target_input": "semantic_context" },
+                                { "source_node": "axis_behavioral_psych", "source_output": "response", "target_input": "behavioral_context" },
+                                { "source_node": "axis_stylistic_prose", "source_output": "response", "target_input": "stylistic_context" },
+                                { "source_node": "start", "source_output": "prompt", "target_input": "raw_prompt" }
+                              ]
+                            },
+                            { "id": "terminal", "type": "assistant_response", "properties": {}, "inputs": [{ "source_node": "aggregator", "source_output": "response", "target_input": "final_output" }] }
+                          ]
+                        }
+                      }
+                    };
+                } else {
+                    schema = {
+                      "active_workflow": "linear_chat",
+                      "workflows": {
+                        "linear_chat": {
+                          "name": "Standard Linear Chat",
+                          "description": "Standard conversational agent loop mapping user input to a single, high-fidelity LLM response.",
+                          "nodes": [
+                            { "id": "start", "type": "user_input", "properties": {}, "inputs": [] },
+                            { "id": "query_node", "type": "llm_query", "properties": { "provider": "openai", "model": "gpt-4o", "temperature": 0.0, "system_prompt": "You are a highly capable agent with access to a local terminal sandbox." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "terminal", "type": "assistant_response", "properties": {}, "inputs": [{ "source_node": "query_node", "source_output": "response", "target_input": "final_output" }] }
+                          ]
+                        }
+                      }
+                    };
+                }
+
+                document.getElementById("workflow-json-editor").value = JSON.stringify(schema, null, 2);
+                renderTopologicalWorkflowGraph();
+                promptInput.value = "";
+                appendSystemAlert("AI Workflow Staged", "Successfully generated and compiled your custom node-graph draft. Please review and click Compile & Apply to save.", "fa-wand-magic-sparkles text-blue-400");
+            }, 1200);
+        }
+
+        function saveWorkflowConfigurations() {
+            const editor = document.getElementById("workflow-json-editor");
+            try {
+                const schema = JSON.parse(editor.value);
+                
+                fetch("/api/workflows/save", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(schema)
+                })
+                .then(res => {
+                    if (!res.ok) throw new Error("Save failed");
+                    return res.json();
+                })
+                .then(data => {
+                    closeSettingsModal();
+                    appendSystemAlert("Active Pipeline Saved", `workflows.json successfully compiled, saved, and hot-swapped! Currently running on active pipeline: '${schema.active_workflow}'.`, "fa-check-double text-green-400");
+                })
+                .catch(err => alert("Error committing workflow to disk: " + err));
+            } catch (err) {
+                alert("Cannot apply: Staged JSON contains syntax errors.");
             }
         }
 

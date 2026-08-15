@@ -377,6 +377,19 @@ func runAgentLoop(userPrompt string) string {
 	userMsg := Message{Role: "user", Content: userPrompt}
 	saveMessageTurn(userMsg)
 
+	// 1. Try to route execution through GoHarness v2.0 Dynamic Node Workflow Engine!
+	workflowsPath := GetSystemPath("workflows.json")
+	if _, errStat := os.Stat(workflowsPath); errStat == nil {
+		cfg, err := LoadWorkflowConfig()
+		if err == nil && cfg.ActiveWorkflow != "" && cfg.ActiveWorkflow != "linear_chat" {
+			answer, errExec := ExecuteActiveWorkflow(userPrompt)
+			if errExec == nil {
+				return answer
+			}
+			fmt.Printf("%s[WORKFLOW EXECUTION ERROR] %v. Falling back to native tools loop.%s\n", ColorRed, errExec, ColorReset)
+		}
+	}
+
 	history := loadHistoryFromFiles()
 
 	// Count actual user prompts to decide if we should trigger compaction

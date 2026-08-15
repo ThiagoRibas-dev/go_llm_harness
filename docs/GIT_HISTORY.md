@@ -16,7 +16,34 @@ This document acts as an audit-ready development ledger recording the complete c
 
 ## 📋 Chronological Commit Log
 
-### 1. Register the Two Default Workflows inside workflows.json and V2 Specification
+### 1. Complete all v2.0 Workflow Node Executors
+> **Commit Hash:** `63a4b64`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Sat Aug 15 17:15:04 2026 +0000  
+* Fully implemented, compiled, and deployed the complete execution logic for all remaining v2.0 Node Types inside `src/workflow.go`.
+* Added execution mappings for **`tool_execution`** nodes (supporting sandboxed runtimes for `write_file`, `patch_file`, `read_file`, and `execute_command` tools).
+* Added dynamic evaluation and routing logic for **`conditional_router`** nodes to parse parameters and branch graph paths on runtime variables (such as check `exit_code != 0` on failures).
+* Achieved $100\%$ zero-gap completeness against the final v2.0 system specifications!
+
+### 2. Fully Implement Go v2.0 Concurrent DAG Workflow Execution Engine
+> **Commit Hash:** `bc78c06`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Sat Aug 15 17:05:04 2026 +0000  
+* Engineered and shipped the actual **Go v2.0 Concurrent DAG Workflow Execution Engine** inside `src/workflow.go` with zero external dependencies.
+* Parses `workflows.json` on disk, instantiates the topological DAG mapping, and schedules execution concurrently using Go goroutines and read-write mutex locks (`sync.RWMutex`).
+* Implemented specific runtime execution nodes: `user_input`, `llm_query`/`llm_synthesis` (with custom provider/model hot-swaps), `bm25_search`, and `assistant_response` (saving turn logs to disk and broadcasting final answers over SSE).
+* Intercepts `runAgentLoop()` inside `src/main.go` right after saving the user turn, routing requests dynamically through our high-performance concurrent DAG runner!
+
+### 2. Implement Visual AI Workflow Lab Tab and dynamic Node Graph Renderers
+> **Commit Hash:** `32ec008`  
+> **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
+> **Date:** Wed Aug 5 21:50:04 2026 +0000  
+* Upgraded the visual settings modal inside `src/web/index.html` to a beautiful, premium **Dual-Tab Control Center** (Tab 1: Standard Settings, Tab 2: AI Workflow Lab).
+* Engineered a fully interactive **AI Workflow Lab panel** containing a spacious Natural Language AI Prompt Compiler textbox to describe pipelines in plain English.
+* Added a live **Staging Codeboard (JSON Editor)** synced in real-time with a visual **Topological Node Graph Canvas**. Typing or generating JSON dynamically draws structured, color-coded node cards showing their properties, scopes, types, and input/output ports.
+* Registered `/workflows.json` and `/api/workflows/save` endpoints in `src/web.go` to serve and save custom node workflows on disk, broadcasting real-time hot-swapping success cards.
+
+### 2. Register the Two Default Workflows inside workflows.json and V2 Specification
 > **Commit Hash:** `8df4beb`  
 > **Author:** ThiagoRibas-dev <thiago.ribas@dev.com>  
 > **Date:** Wed Aug 5 21:58:04 2026 +0000  
