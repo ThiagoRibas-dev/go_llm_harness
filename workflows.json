@@ -8,13 +8,15 @@
         {
           "id": "start",
           "type": "user_input",
-          "properties": {},
+          "properties": { "x": 40, "y": 60 },
           "inputs": []
         },
         {
           "id": "query_node",
-          "type": "llm_query",
+          "type": "llm",
           "properties": {
+            "x": 310,
+            "y": 60,
             "provider": "openai",
             "model": "gpt-4o",
             "temperature": 0.0,
@@ -27,7 +29,7 @@
         {
           "id": "terminal",
           "type": "assistant_response",
-          "properties": {},
+          "properties": { "x": 580, "y": 60 },
           "inputs": [
             { "source_node": "query_node", "source_output": "response", "target_input": "final_output" }
           ]
@@ -41,13 +43,15 @@
         {
           "id": "start",
           "type": "user_input",
-          "properties": {},
+          "properties": { "x": 40, "y": 220 },
           "inputs": []
         },
         {
           "id": "axis_chronological",
-          "type": "llm_query",
+          "type": "llm",
           "properties": {
+            "x": 310,
+            "y": 20,
             "provider": "openai",
             "model": "gpt-4o-mini",
             "temperature": 0.1,
@@ -59,8 +63,10 @@
         },
         {
           "id": "axis_causal_logical",
-          "type": "llm_query",
+          "type": "llm",
           "properties": {
+            "x": 310,
+            "y": 126,
             "provider": "openai",
             "model": "gpt-4o-mini",
             "temperature": 0.1,
@@ -72,8 +78,10 @@
         },
         {
           "id": "axis_semantic_world",
-          "type": "llm_query",
+          "type": "llm",
           "properties": {
+            "x": 310,
+            "y": 232,
             "provider": "openai",
             "model": "gpt-4o-mini",
             "temperature": 0.1,
@@ -85,8 +93,10 @@
         },
         {
           "id": "axis_behavioral_psych",
-          "type": "llm_query",
+          "type": "llm",
           "properties": {
+            "x": 310,
+            "y": 338,
             "provider": "openai",
             "model": "gpt-4o-mini",
             "temperature": 0.1,
@@ -98,8 +108,10 @@
         },
         {
           "id": "axis_stylistic_prose",
-          "type": "llm_query",
+          "type": "llm",
           "properties": {
+            "x": 310,
+            "y": 444,
             "provider": "openai",
             "model": "gpt-4o-mini",
             "temperature": 0.1,
@@ -111,11 +123,14 @@
         },
         {
           "id": "aggregator",
-          "type": "llm_synthesis",
+          "type": "llm",
           "properties": {
+            "x": 580,
+            "y": 150,
             "provider": "openai",
             "model": "gpt-4o",
             "temperature": 0.2,
+            "input_ports": ["chronological_context", "causal_context", "semantic_context", "behavioral_context", "stylistic_context", "raw_prompt"],
             "system_prompt": "You are the master aggregator. Synthesize the five parallel cognitive reports (Chronological, Causal, Semantic, Behavioral, Stylistic) into a single, high-fidelity response answering the user prompt."
           },
           "inputs": [
@@ -130,7 +145,7 @@
         {
           "id": "terminal",
           "type": "assistant_response",
-          "properties": {},
+          "properties": { "x": 850, "y": 220 },
           "inputs": [
             { "source_node": "aggregator", "source_output": "response", "target_input": "final_output" }
           ]

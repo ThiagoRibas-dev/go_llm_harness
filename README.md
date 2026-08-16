@@ -25,7 +25,7 @@ GoHarness is engineered to be as **lightweight and secure** as possible, avoidin
 
 1. **🕸️ Node-Based DAG Workflow Engine (v2.0):** A pure-Go, standard-library concurrent DAG runtime. Independent nodes execute in parallel goroutines; edges carry typed data between ports; every branch is wrapped in a `context.WithTimeout` so a single hanging node can never bottleneck a response.
 2. **🧠 Enhanced Cognition (POADR):** The flagship default workflow decomposes a query across **5 parallel cognitive axes** — ⏳ Chronological, ⛓️ Causal-Logical, 🗺️ Semantic-World, 🧠 Behavioral-Psychological, 🎭 Stylistic-Prose — then synthesizes the reports. This eliminates representational interference in smaller models and is designed to maximize prompt-cache prefix sharing across the parallel branches. See the research in [`docs/COGNITIVE_AXES_ANALYSIS.md`](docs/COGNITIVE_AXES_ANALYSIS.md).
-3. **🧪 AI Workflow Lab:** Describe a pipeline in plain English and compile it to a valid `workflows.json` schema; review a live topological node graph alongside an editable JSON codeboard; validate for cycles, mismatched ports, and missing anchors; then hot-swap it into the running engine with one click.
+3. **🧪 AI Workflow Lab:** A drag-and-drop **visual node-graph editor** — drag nodes, wire output ports to input ports, edit properties in an inspector, and auto-layout graphs. Describe a pipeline in plain English to compile a draft, or fine-tune in a collapsible Advanced/JSON panel. Validation catches cycles, missing anchors, and disconnected ports; **Compile & Apply** hot-swaps the workflow into the running engine. See [`docs/V2_VISUAL_EDITOR.md`](docs/V2_VISUAL_EDITOR.md).
 4. **🔒 Bare-Metal Native Sandboxing:** Enforces security at the operating-system kernel level, with no Docker or VM required:
    * **Linux:** **Landlock LSM** (kernel 5.13+) to isolate filesystem access without root/sudo.
    * **macOS:** Dynamic **Sandbox Profile Language (SBPL)** profiles via Apple's native `sandbox-exec`.
@@ -52,36 +52,77 @@ GoHarness is engineered to be as **lightweight and secure** as possible, avoidin
 
 ## 🕸️ The v2.0 Workflow Engine
 
-Workflows are declared in **`workflows.json`** next to the binary. Each workflow is a DAG of typed nodes connected by directed edges that route named output ports to named input ports. Every graph is bounded by two anchors:
+Workflows are declared in **`workflows.json`** next to the binary. Each workflow is a DAG of typed nodes connected by directed edges that route named output ports to named input ports. The engine runs independent nodes concurrently in goroutines, synchronizes data over channels, and enforces a per-run timeout. Every graph is bounded by two anchors:
 
 * **`start`** (`user_input`) — captures the raw user prompt.
 * **`terminal`** (`assistant_response`) — emits the final answer to the Web Console and persists it to the session.
+
+```mermaid
+flowchart LR
+    S([start]) --> A1[axis: chronological]
+    S --> A2[axis: causal-logical]
+    S --> A3[axis: semantic-world]
+    S --> A4[axis: behavioral-psych]
+    S --> A5[axis: stylistic-prose]
+    A1 & A2 & A3 & A4 & A5 --> G[aggregator LLM]
+    S -->|raw prompt| G
+    G --> T([terminal])
+
+    classDef anchor fill:#1e293b,stroke:#10b981,color:#fff;
+    classDef llm fill:#1e293b,stroke:#a855f7,color:#fff;
+    class S,T anchor;
+    class A1,A2,A3,A4,A5,G llm;
+```
+
+*The `enhanced_cognition` (POADR) workflow: one prompt fans out across five parallel LLM specialists; all five reports plus the raw prompt are merged by an aggregator LLM before reaching the terminal.*
 
 ### Node Types
 
 | Node Type | Purpose | Key Properties | Inputs → Outputs |
 | :-- | :-- | :-- | :-- |
 | `user_input` | Start anchor. Captures the prompt. | — | → `prompt` |
-| `llm_query` | Single-purpose LLM call. | `provider`, `model`, `temperature`, `system_prompt` | `prompt` → `response` |
-| `llm_synthesis` | Aggregator LLM call (merges many inputs). | same as `llm_query` | many named contexts → `response` |
+| `llm` | An LLM call. A specialist (one input) **or** an aggregator (many named inputs). | `provider_profile` *(or* `provider`/`model`/`temperature`*)*, `system_prompt` | one or more named inputs → `response` |
 | `tool_execution` | Runs a native sandboxed tool. | `tool_name` | `arguments` (JSON) → `stdout`, `exit_code` |
 | `bm25_search` | Queries the local BM25 engine. | `scope`, `limit` | `query` → `search_results` |
 | `conditional_router` | Branches on an evaluated condition. | `condition` (e.g. `on_error`) | `eval_var` → `route_branch` |
 | `assistant_response` | Terminal anchor. Streams and saves output. | — | `final_output` → |
 
-Per-node `provider`/`model` settings are hot-swapped into the global API config for the duration of that node's execution and restored immediately on return, so a single graph can mix providers and models freely (e.g. cheap `gpt-4o-mini` specialists feeding a `claude-3-5-sonnet` aggregator).
+> An `llm` node can have any number of **named input ports** (managed in the visual inspector or via `properties.input_ports`). Each connected input becomes a labeled section in the assembled prompt — so an aggregator node naturally merges `chronological_context`, `causal_context`, etc. The legacy `llm_query`/`llm_synthesis` type names are accepted as aliases and normalized to `llm`.
+
+Each LLM node can either reference a reusable **Connection Profile** by name (`provider_profile`) or carry inline `provider`/`model`/`temperature` settings. Either way, the connection is hot-swapped into the global API config for the duration of that node's execution and restored immediately on return, so a single graph can mix providers and models freely (e.g. cheap `gpt-4o-mini` specialists feeding a `claude-3-5-sonnet` aggregator).
+
+### 🔌 Connection Profiles (`providers.json`)
+
+Named, reusable API connections live in **`providers.json`** (git-ignored; seeded automatically on first run from your current `config.json`):
+
+```json
+{
+  "profiles": {
+    "cheap":  { "provider": "openai",    "model": "gpt-4o-mini", "key": "sk-...", "max_tokens": 4096 },
+    "smart":  { "provider": "anthropic", "model": "claude-3-5-sonnet-latest", "key": "sk-ant-..." },
+    "local":  { "provider": "openai",    "model": "llama3",     "base_url": "http://localhost:11434/v1" }
+  }
+}
+```
+
+Profiles are referenced by:
+* **LLM workflow nodes** — set `properties.provider_profile` to the profile name (pick it from the inspector's Connection Profile dropdown).
+* **The active chat connection** — `config.json` → `api.provider_profile`.
+* **The compaction connection** — `config.json` → `compaction.provider_profile`.
+
+Manage profiles in **Settings → Providers**, or assign them as the active chat/compaction profile from the Settings tab. A template ships as `providers.example.json`.
 
 ### Default Workflows
 
-1. **`linear_chat`** — `start → llm_query → terminal`. The standard conversational agent loop with full tool access. Active by default.
-2. **`enhanced_cognition`** (POADR) — `start` fans out to **five parallel `llm_query` specialists** (chronological, causal-logical, semantic-world, behavioral-psych, stylistic-prose); all five reports plus the raw prompt feed an `llm_synthesis` aggregator, which produces the final answer at `terminal`.
+1. **`linear_chat`** — `start → llm → terminal`. The standard conversational agent loop with full tool access. Active by default.
+2. **`enhanced_cognition`** (POADR) — `start` fans out to **five parallel `llm` specialists** (chronological, causal-logical, semantic-world, behavioral-psych, stylistic-prose); all five reports plus the raw prompt feed an `llm` aggregator, which produces the final answer at `terminal`.
 
-The active workflow is selected by the top-level `"active_workflow"` key. Setting it to anything other than `linear_chat` routes execution through `ExecuteActiveWorkflow()` in `src/workflow.go`; if the workflow engine errors, the system transparently falls back to the native linear tools loop.
+The active workflow is selected by the top-level `"active_workflow"` key. Setting it to anything other than `linear_chat` routes execution through `ExecuteActiveWorkflow()` in `src/workflow.go`; if the workflow engine errors, the system transparently falls back to the native linear tools loop. Switch workflows instantly from the header **Workflow** dropdown, the `/workflow <id>` chat command, or Settings -> AI Workflow Lab.
 
 ### Designing Workflows
 
-* **By hand** — edit `workflows.json` directly (the schema is documented in [`docs/V2_SPECIFICATION.md`](docs/V2_SPECIFICATION.md)).
-* **In the browser** — open **Settings → AI Workflow Lab (v2.0)**. Edit JSON on the right and watch the topological graph re-render on the left, or type a plain-English description and click **Compile with AI** to generate a draft. The lab validates for cycles, port mismatches, and missing anchors; **Compile & Apply** writes to disk and hot-swaps the running engine.
+* **By hand** - edit `workflows.json` directly (the schema is documented in [`docs/V2_SPECIFICATION.md`](docs/V2_SPECIFICATION.md)).
+* **Visually** - open **Settings -> AI Workflow Lab**. Drag nodes onto the canvas, drag from output pins (right) to input pins (left) to connect, click a node to edit its profile/model/system-prompt in the inspector, and use the toolbar to add nodes or auto-layout. A collapsible Advanced/JSON panel is available for power users. The lab validates anchors, cycles, required inputs, and reachability; **Compile & Apply** writes to disk and hot-swaps the running engine.
 * The LLM-assisted compiler prompt and staging lifecycle are specified in [`docs/V2_LLM_ASSISTED_WORKFLOW_SPEC.md`](docs/V2_LLM_ASSISTED_WORKFLOW_SPEC.md).
 
 > **Prompt-cache note:** to maximize prefix caching across parallel LLM nodes, keep shared system/context instructions identical at the top of each node's prompt and append the axis-specific instruction at the bottom.
@@ -96,12 +137,14 @@ The active workflow is selected by the top-level `"active_workflow"` key. Settin
 ├── .gitignore          # Version-control exclusions
 ├── README.md           # This documentation guide
 ├── config.example.json # Public version-controlled configuration template
+├── providers.example.json # Template for reusable connection profiles
 ├── workflows.json      # v2.0 DAG workflow index (linear_chat + enhanced_cognition)
 ├── go.mod              # Go module descriptor (standard library only; no go.sum deps)
 │
 ├── src/                # All Go source files & embedded web assets
 │   ├── main.go         # CLI shell, flag parser, linear agent loop, tool dispatch
 │   ├── workflow.go     # v2.0 concurrent DAG workflow executor & node runners
+│   ├── providers.go    # Reusable connection profiles (providers.json) & resolution
 │   ├── config.go       # Configuration structures, session meta, load/save helpers
 │   ├── agent.go        # History persistence, compaction, rollbacks, BM25, sub-agents
 │   ├── bm25.go         # Zero-dependency BM25 lexical ranking engine
@@ -118,11 +161,12 @@ The active workflow is selected by the top-level `"active_workflow"` key. Settin
 │   ├── sandbox_fallback.go   # Fallback executor for other unmapped OSes
 │   │
 │   └── web/
-│       ├── index.html    # Responsive SPA (chat, settings, AI Workflow Lab, fork modal)
+│       ├── index.html    # Responsive SPA (chat, settings, visual Workflow Lab, fork modal)
 │       └── tailwind.min.js
 │
 └── docs/
-    ├── V2_SPECIFICATION.md               # DAG engine, node types, schema, UI spec
+    ├── V2_SPECIFICATION.md               # DAG engine, node types, schema
+    ├── V2_VISUAL_EDITOR.md               # Drag-and-drop node-graph editor guide
     ├── V2_LLM_ASSISTED_WORKFLOW_SPEC.md  # AI Workflow Lab & staged-commit compiler
     ├── COGNITIVE_AXES_ANALYSIS.md        # The 5 cognitive axes & model-scale mapping
     ├── COGNITIVE_THEORIES_BIBLIOGRAPHY.md# Cross-disciplinary cognitive-science refs
@@ -135,6 +179,8 @@ The active workflow is selected by the top-level `"active_workflow"` key. Settin
     ├── GIT_HISTORY.md                    # Development ledger
     └── assets/                           # harness_architecture.svg, scale_comparison.svg
 ```
+
+> At runtime, GoHarness also reads/writes a git-ignored `providers.json` (reusable connections) next to the binary. Copy `providers.example.json` to get started, or let it auto-seed from your `config.json` on first run.
 
 > Binaries are produced under `bin/` on build but are intentionally git-ignored. Cross-compile targets are listed below.
 
@@ -168,12 +214,13 @@ GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent_linux ./src
 
 ### 2. Configure Your Environment
 
-On first run, GoHarness generates a default **`config.json`** next to the executable (see `config.example.json` for the template):
+On first run, GoHarness generates a default **`config.json`** and **`providers.json`** next to the executable (see the `*.example.json` templates):
 
-1. Open `config.json`.
-2. Add your API credentials and set `"api.provider"` (`openai`, `anthropic`, `gemini`, or `vertex`).
-3. For a local model, point `"base_url"` at your router (e.g. `http://localhost:11434/v1` for Ollama).
-4. (Optional) Review `workflows.json` — it ships with `linear_chat` active. Switch `"active_workflow"` to `"enhanced_cognition"` to enable parallel 5-axis reasoning.
+1. Open **Settings** in the Web Console, or edit `config.json` directly.
+2. Add your API credentials. The easiest path is **Settings -> Providers -> New Profile**: create a named connection (e.g. `smart`, `cheap`, `local`), then pick it as the **Active Chat Profile**.
+   * Alternatively, set `"api.provider"` (`openai`, `anthropic`, `gemini`, or `vertex`) and `"api.key"` inline in `config.json`.
+3. For a local model, point a profile's (or the inline) `"base_url"` at your router (e.g. `http://localhost:11434/v1` for Ollama).
+4. (Optional) Review `workflows.json` — it ships with `linear_chat` active. Switch `"active_workflow"` to `"enhanced_cognition"` (or use the header **Workflow** dropdown) to enable parallel 5-axis reasoning. Workflow LLM nodes can each reference a different connection profile.
 
 ### 3. Run the App
 
@@ -252,7 +299,8 @@ Inspired by progressive memory layering, GoHarness maximizes recall while minimi
 
 | Block | Parameter | Description |
 | :-- | :-- | :-- |
-| **`api`** | `provider` | `openai`, `anthropic`, `gemini`, or `vertex`. |
+| **`api`** | `provider_profile` | Name of a reusable connection in `providers.json` to use for chat. When set, the inline `provider`/`model`/`key` fields are hidden in the UI. |
+| | `provider` | `openai`, `anthropic`, `gemini`, or `vertex` (used when no profile is selected). |
 | | `key` | API secret key (or GCP access token for Vertex). |
 | | `base_url` | Completions endpoint override (defaults to the provider's). |
 | | `model` | Target model (e.g. `gpt-4o`, `claude-3-5-sonnet-latest`). |
@@ -273,7 +321,8 @@ Inspired by progressive memory layering, GoHarness maximizes recall while minimi
 | | `allowed_tools`, `blocked_patterns` | Tool allowlist and blacklisted command substrings. |
 | **`directory_scan`** | `max_depth`, `max_files_per_directory` | Tree-walk bounds. |
 | | `ignored_patterns`, `collapsed_patterns` | Folders to skip or collapse in the auto-LS tree. |
-| **`compaction`** | `provider`/`key`/`base_url`/`model`/`temperature` | Dedicated, cheap model for summarization. |
+| **`compaction`** | `provider_profile` | Name of a reusable connection in `providers.json` to use for summarization. |
+| | `provider`/`key`/`base_url`/`model`/`temperature` | Dedicated, cheap model for summarization (inline fallback). |
 | | `auto_compact_turns` | User-turn count that triggers compaction. |
 | | `keep_last_n` | Recent turns preserved fully uncompacted. |
 | | `system_prompt` | Compaction synthesis instructions. |
@@ -299,7 +348,8 @@ Inspired by progressive memory layering, GoHarness maximizes recall while minimi
 
 | Document | Topic |
 | :-- | :-- |
-| [`V2_SPECIFICATION.md`](docs/V2_SPECIFICATION.md) | DAG engine architecture, `workflows.json` schema, node types, concurrency model, and visual editor design. |
+| [`V2_SPECIFICATION.md`](docs/V2_SPECIFICATION.md) | DAG engine architecture, `workflows.json` schema, node types, and concurrency model. |
+| [`V2_VISUAL_EDITOR.md`](docs/V2_VISUAL_EDITOR.md) | Drag-and-drop node-graph editor: node types, ports, wiring, inspector, validation, and the JSON model. |
 | [`V2_LLM_ASSISTED_WORKFLOW_SPEC.md`](docs/V2_LLM_ASSISTED_WORKFLOW_SPEC.md) | AI Workflow Lab, cookbook compiler prompt, staged-commit verification screen. |
 | [`COGNITIVE_AXES_ANALYSIS.md`](docs/COGNITIVE_AXES_ANALYSIS.md) | The 5 cognitive axes and how model scale (width/depth/attention) governs cognitive load. |
 | [`COGNITIVE_THEORIES_BIBLIOGRAPHY.md`](docs/COGNITIVE_THEORIES_BIBLIOGRAPHY.md) | Mapping the axes to Baddeley, Kahneman, Kant/Kosslyn, Dunbar, Chomsky/Fodor. |

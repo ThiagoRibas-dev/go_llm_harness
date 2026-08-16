@@ -106,7 +106,7 @@ func DefaultWorkflowConfig() *WorkflowConfig {
 					},
 					{
 						ID:   "query_node",
-						Type: "llm_query",
+						Type: "llm",
 						Properties: map[string]interface{}{
 							"provider":      "openai",
 							"model":         "gpt-4o",
@@ -139,7 +139,7 @@ func DefaultWorkflowConfig() *WorkflowConfig {
 					},
 					{
 						ID:   "axis_chronological",
-						Type: "llm_query",
+						Type: "llm",
 						Properties: map[string]interface{}{
 							"provider":      "openai",
 							"model":         "gpt-4o-mini",
@@ -152,7 +152,7 @@ func DefaultWorkflowConfig() *WorkflowConfig {
 					},
 					{
 						ID:   "axis_causal_logical",
-						Type: "llm_query",
+						Type: "llm",
 						Properties: map[string]interface{}{
 							"provider":      "openai",
 							"model":         "gpt-4o-mini",
@@ -165,7 +165,7 @@ func DefaultWorkflowConfig() *WorkflowConfig {
 					},
 					{
 						ID:   "axis_semantic_world",
-						Type: "llm_query",
+						Type: "llm",
 						Properties: map[string]interface{}{
 							"provider":      "openai",
 							"model":         "gpt-4o-mini",
@@ -178,7 +178,7 @@ func DefaultWorkflowConfig() *WorkflowConfig {
 					},
 					{
 						ID:   "axis_behavioral_psych",
-						Type: "llm_query",
+						Type: "llm",
 						Properties: map[string]interface{}{
 							"provider":      "openai",
 							"model":         "gpt-4o-mini",
@@ -191,7 +191,7 @@ func DefaultWorkflowConfig() *WorkflowConfig {
 					},
 					{
 						ID:   "axis_stylistic_prose",
-						Type: "llm_query",
+						Type: "llm",
 						Properties: map[string]interface{}{
 							"provider":      "openai",
 							"model":         "gpt-4o-mini",
@@ -204,7 +204,7 @@ func DefaultWorkflowConfig() *WorkflowConfig {
 					},
 					{
 						ID:   "aggregator",
-						Type: "llm_synthesis",
+						Type: "llm",
 						Properties: map[string]interface{}{
 							"provider":      "openai",
 							"model":         "gpt-4o",
@@ -596,7 +596,7 @@ func (e *WorkflowExecutor) nodePreview(n *RuntimeNode) string {
 
 	var raw string
 	switch n.Type {
-	case "llm_query", "llm_synthesis":
+	case "llm", "llm_query", "llm_synthesis":
 		if v, ok := n.Outputs["response"].(string); ok {
 			raw = v
 		}
@@ -668,7 +668,7 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 	case "user_input":
 		return nil
 
-	case "llm_query", "llm_synthesis":
+	case "llm", "llm_query", "llm_synthesis":
 		// Resolve the connection: a named provider_profile from providers.json
 		// wins, with any inline provider/model/temperature overrides layered on
 		// top. Falls back to the legacy inline fields for backward compatibility.
