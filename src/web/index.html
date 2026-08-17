@@ -30,6 +30,18 @@
         .modal-animate {
             animation: fadeIn 0.15s ease-out forwards;
         }
+        /* Rotate the chevron in collapsible tool-call/result <details> */
+        details[open] > summary .details-arrow {
+            transform: rotate(90deg);
+        }
+        details.tool-call-group > summary,
+        details.tool-result-group > summary {
+            list-style: none;
+        }
+        details.tool-call-group > summary::-webkit-details-marker,
+        details.tool-result-group > summary::-webkit-details-marker {
+            display: none;
+        }
     </style>
 </head>
 <body class="bg-[#0f172a] text-slate-100 font-sans h-full flex flex-col overflow-hidden">
@@ -565,7 +577,7 @@
                 </div>
 
                 <!-- Toolbar -->
-                <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center justify-between mb-2 gap-2">
                     <div class="flex items-center space-x-2">
                         <div class="relative">
                             <button type="button" onclick="toggleAddNodeMenu()" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 font-bold py-1.5 px-3 rounded text-xs flex items-center space-x-1">
@@ -585,7 +597,18 @@
                             <i class="fa-solid fa-arrows-rotate text-[10px]"></i><span>Reload JSON</span>
                         </button>
                     </div>
-                    <span id="workflow-active-name" class="text-[10px] text-slate-400 font-mono"></span>
+                    <div class="flex items-center gap-2">
+                        <select id="wf-lab-selector" onchange="switchLabWorkflow(this.value)" class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono text-xs rounded px-2 py-1.5 outline-none focus:border-purple-500 cursor-pointer" title="Switch workflow to edit"></select>
+                        <button type="button" onclick="newWorkflow()" title="Create a new blank workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-file-circle-plus text-[10px] text-emerald-400"></i><span class="hidden sm:inline">New</span>
+                        </button>
+                        <button type="button" onclick="cloneWorkflow()" title="Clone the current workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-copy text-[10px] text-blue-400"></i><span class="hidden sm:inline">Clone</span>
+                        </button>
+                        <button type="button" onclick="deleteWorkflow()" title="Delete the current workflow" class="bg-slate-800 hover:bg-red-900 border border-[#334155] hover:border-red-700 text-slate-400 hover:text-red-300 py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-trash text-[10px]"></i><span class="hidden sm:inline">Delete</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Canvas + Inspector -->
@@ -692,15 +715,20 @@
                             <label class="block text-slate-400 mb-1">Model</label>
                             <input type="text" id="pe-model" placeholder="gpt-4o-mini" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
                         </div>
-                        <div>
-                            <label class="block text-slate-400 mb-1">Temperature</label>
-                            <input type="number" id="pe-temperature" min="0" max="2" step="0.1" value="0.2" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
-                        </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Temperature</label>
+                        <input type="number" id="pe-temperature" min="0" max="2" step="0.1" value="0.2" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
                     </div>
                     <div>
-                        <label class="block text-slate-400 mb-1">API Key / Access Token</label>
-                        <input type="password" id="pe-key" placeholder="sk-... (leave blank to keep existing when editing)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        <label class="block text-slate-400 mb-1" title="Max simultaneous LLM requests for this profile across parallel workflow nodes. 0 = unlimited.">Max Parallel Requests</label>
+                        <input type="number" id="pe-max-concurrency" min="0" max="64" step="1" value="0" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
                     </div>
+                </div>
+                <p class="text-[10px] text-slate-500 italic -mt-1">Max parallel requests caps concurrent LLM calls to this profile across parallel workflow nodes (0 = unlimited). Use it for providers with low concurrency limits so overflow queues instead of erroring.</p>
+                <div>
+                    <label class="block text-slate-400 mb-1">API Key / Access Token</label>
+                    <input type="password" id="pe-key" placeholder="sk-... (leave blank to keep existing when editing)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                </div>
                     <div>
                         <label class="block text-slate-400 mb-1">Base URL (optional)</label>
                         <input type="text" id="pe-base-url" placeholder="https://api.openai.com/v1/chat/completions" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
@@ -1545,25 +1573,37 @@
             let textHtml = "";
             if (turn.role === "assistant" && turn.tool_calls) {
                 textHtml += `<div id="turn-text-${turn.turn_number}" class="text-slate-300 text-sm font-sans mb-2">${turn.content || "Calling tools..."}</div>`;
-                turn.tool_calls.forEach(tc => {
+                turn.tool_calls.forEach((tc, i) => {
+                    // Foldable by default: a one-line title + expandable arguments.
+                    const title = toolCallTitle(tc);
                     textHtml += `
-                        <div class="mt-2 bg-slate-950 border border-[#334155] rounded-md p-3 font-mono text-[11px] text-slate-300">
-                            <div class="text-cyan-400 font-bold mb-1"><i class="fa-solid fa-code mr-1"></i> Calling Function: ${tc.function.name}</div>
-                            <pre class="overflow-x-auto whitespace-pre-wrap">${tc.function.arguments}</pre>
-                        </div>
+                        <details class="tool-call-group mt-2 group/details bg-slate-950 border border-[#334155] rounded-md overflow-hidden">
+                            <summary class="cursor-pointer select-none px-3 py-1.5 text-cyan-400 font-bold font-mono text-[11px] hover:bg-slate-900/60 flex items-center">
+                                <i class="fa-solid fa-chevron-right fa-2xs mr-2 transition-transform details-arrow"></i>
+                                <i class="fa-solid fa-code mr-2"></i>
+                                <span class="truncate">${escapeHtml(title)}</span>
+                            </summary>
+                            <div class="px-3 pb-2 pt-1 border-t border-slate-800/70">
+                                <div class="text-[9px] uppercase tracking-wider text-slate-500 mb-1">Arguments</div>
+                                <pre class="overflow-x-auto whitespace-pre-wrap text-slate-300 font-mono text-[11px]">${escapeHtml(tc.function.arguments || "")}</pre>
+                            </div>
+                        </details>
                     `;
                 });
             } else if (turn.role === "tool") {
-                let snippet = turn.content;
-                let truncatedSuffix = "";
-                if (snippet.length > 800) {
-                    snippet = snippet.substring(0, 800);
-                    truncatedSuffix = `\n... [TRUNCATED] ...`;
-                }
+                // Foldable tool result: collapsed by default, title shows a
+                // short preview + size. Full content is kept in the DOM.
+                const full = turn.content || "";
+                const title = toolResultTitle(turn.name, full);
                 textHtml = `
-                    <div class="bg-slate-950 border border-slate-800 rounded-md p-3 font-mono text-[11px] text-emerald-400">
-                        <pre class="overflow-x-auto whitespace-pre-wrap">${snippet}${truncatedSuffix}</pre>
-                    </div>
+                    <details class="tool-result-group bg-slate-950 border border-slate-800 rounded-md overflow-hidden">
+                        <summary class="cursor-pointer select-none px-3 py-1.5 text-emerald-400 font-mono text-[11px] hover:bg-slate-900/60 flex items-center">
+                            <i class="fa-solid fa-chevron-right fa-2xs mr-2 transition-transform details-arrow"></i>
+                            <i class="fa-solid fa-terminal mr-2"></i>
+                            <span class="truncate">${escapeHtml(title)}</span>
+                        </summary>
+                        <pre class="overflow-x-auto whitespace-pre-wrap text-emerald-300/90 font-mono text-[11px] px-3 pb-2 pt-1 border-t border-slate-800/70">${escapeHtml(full)}</pre>
+                    </details>
                 `;
             } else {
                 textHtml = `<div id="turn-text-${turn.turn_number}" class="text-slate-300 text-sm whitespace-pre-wrap font-sans">${turn.content}</div>`;
@@ -1740,8 +1780,46 @@
 
         function escapeHtml(str) {
             const div = document.createElement("div");
-            div.textContent = str;
+            div.textContent = str == null ? "" : String(str);
             return div.innerHTML;
+        }
+
+        // ---- Collapsible tool-call / tool-result titles ----
+        // One-line summary used as the <summary> for an assistant tool call.
+        // Tries to surface the most salient argument (path/command/query) and
+        // falls back to the raw JSON snippet.
+        function toolCallTitle(tc) {
+            const name = (tc && tc.function && tc.function.name) || "tool";
+            let summary = "";
+            try {
+                const args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {};
+                if (args.path) summary = args.path;
+                else if (args.command) summary = args.command;
+                else if (args.query) summary = args.query;
+                else {
+                    // First string value we find, truncated.
+                    for (const k of Object.keys(args)) {
+                        if (typeof args[k] === "string") { summary = args[k]; break; }
+                    }
+                }
+            } catch {
+                summary = (tc.function.arguments || "").trim();
+            }
+            summary = (summary || "").replace(/\s+/g, " ").trim();
+            if (summary.length > 60) summary = summary.slice(0, 57) + "…";
+            return summary ? `${name} · ${summary}` : name;
+        }
+
+        // One-line summary for a tool result: tool name, status if visible,
+        // size in chars/bytes, and a short first-line preview.
+        function toolResultTitle(name, content) {
+            const len = (content || "").length;
+            let firstLine = (content || "").split(/\r?\n/).find(l => l.trim().length > 0) || "";
+            firstLine = firstLine.replace(/\s+/g, " ").trim();
+            if (firstLine.length > 50) firstLine = firstLine.slice(0, 47) + "…";
+            const sizeLabel = len < 1024 ? `${len} ch` : `${(len / 1024).toFixed(1)} KB`;
+            const base = `result · ${name || "tool"} · ${sizeLabel}`;
+            return firstLine ? `${base} — ${firstLine}` : base;
         }
 
         // =============================================================
@@ -1845,8 +1923,12 @@
         function nodeById(id) { return wfModel.nodes.find(n => n.id === id); }
 
         // ---- Load / normalize ----
-        function loadWorkflowIntoModel(schema) {
-            const activeId = schema.active_workflow || Object.keys(schema.workflows || {})[0];
+        // Loads a specific workflow (or the schema's active_workflow) into the
+        // graph model. Does NOT mutate schema.active_workflow; switching which
+        // workflow you edit in the Lab is separate from activating it.
+        function loadWorkflowIntoModel(schema, workflowId) {
+            const ids = Object.keys(schema.workflows || {});
+            const activeId = workflowId || schema.active_workflow || ids[0];
             const wf = schema.workflows ? schema.workflows[activeId] : null;
             const rawNodes = (wf && wf.nodes) ? JSON.parse(JSON.stringify(wf.nodes)) : [];
 
@@ -1866,6 +1948,23 @@
             wfModel = { workflowId: activeId, workflow: wf, nodes, selected: null };
             if (nodes.some(n => n._needsLayout)) autoLayout();
             renderGraph();
+            refreshLabSelector(schema);
+        }
+
+        // Populate the Lab's workflow dropdown and keep it in sync with the
+        // currently-edited workflow.
+        function refreshLabSelector(schema) {
+            const sel = document.getElementById("wf-lab-selector");
+            if (!sel) return;
+            const wfs = (schema && schema.workflows) || {};
+            const current = wfModel.workflowId;
+            let html = "";
+            Object.keys(wfs).forEach(id => {
+                const name = wfs[id].name || id;
+                html += `<option value="${escapeHtml(id)}" ${id === current ? "selected" : ""}>${escapeHtml(name)} (${escapeHtml(id)})</option>`;
+            });
+            sel.innerHTML = html;
+            sel.value = current || "";
         }
 
         // ---- Auto-layout: topological depth -> column ----
@@ -1927,8 +2026,9 @@
             // Clear node layer (keep the two SVGs).
             Array.from(canvas.querySelectorAll(".wf-node")).forEach(el => el.remove());
 
-            if (wfModel.workflow) {
-                document.getElementById("workflow-active-name").textContent =
+            const activeNameEl = document.getElementById("workflow-active-name");
+            if (activeNameEl && wfModel.workflow) {
+                activeNameEl.textContent =
                     `${wfModel.workflowId} — ${wfModel.workflow.name || wfModel.workflowId}`;
             }
 
@@ -3427,6 +3527,110 @@
             .catch(err => alert("Error committing workflow to disk: " + err));
         }
 
+        // ---- Workflow lifecycle: new / clone / delete / switch ----
+        function readSchemaFromEditor() {
+            try {
+                return JSON.parse(document.getElementById("workflow-json-editor").value || "{}");
+            } catch (err) {
+                alert("The Advanced/JSON panel contains invalid JSON:\n" + err.message);
+                return null;
+            }
+        }
+
+        // Switch which workflow is being edited WITHOUT changing the active
+        // (running) workflow. Pending edits are preserved in the JSON panel.
+        function switchLabWorkflow(id) {
+            if (!id) return;
+            const schema = readSchemaFromEditor();
+            if (!schema) return;
+            if (!schema.workflows || !schema.workflows[id]) {
+                alert("Workflow '" + id + "' not found in the JSON.");
+                return;
+            }
+            loadWorkflowIntoModel(schema, id);
+            setValidation(true, `Editing '${id}'. Click Compile & Apply to save/activate.`);
+        }
+
+        // Create a brand-new blank workflow with start + llm + terminal.
+        function newWorkflow() {
+            const schema = readSchemaFromEditor();
+            if (!schema) return;
+            schema.workflows = schema.workflows || {};
+            const id = uniqueWorkflowId(schema, "new_workflow");
+            const display = prompt("Name for the new workflow (id):", id);
+            if (display === null) return;
+            const clean = (display.trim() || id).replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "");
+            if (!clean) { alert("Invalid workflow id."); return; }
+            if (schema.workflows[clean]) { alert("A workflow with that id already exists."); return; }
+            schema.workflows[clean] = {
+                name: display.trim() || clean,
+                description: "Custom workflow.",
+                nodes: [
+                    { id: "start", type: "user_input", properties: { x: 40, y: 40 }, inputs: [] },
+                    { id: "query_node", type: "llm", properties: { x: 310, y: 40, provider: "openai", model: "gpt-4o-mini", temperature: 0.2, system_prompt: "" }, inputs: [{ source_node: "start", source_output: "prompt", target_input: "prompt" }] },
+                    { id: "terminal", type: "assistant_response", properties: { x: 580, y: 40 }, inputs: [{ source_node: "query_node", source_output: "response", target_input: "final_output" }] },
+                ],
+            };
+            document.getElementById("workflow-json-editor").value = JSON.stringify(schema, null, 2);
+            loadWorkflowIntoModel(schema, clean);
+            setValidation(true, `New workflow '${clean}' staged. Click Compile & Apply to save.`);
+        }
+
+        // Deep-clone the currently edited workflow under a new id.
+        function cloneWorkflow() {
+            const schema = readSchemaFromEditor();
+            if (!schema) return;
+            const srcId = wfModel.workflowId;
+            if (!srcId || !schema.workflows || !schema.workflows[srcId]) {
+                alert("No workflow selected to clone.");
+                return;
+            }
+            const cloneId = uniqueWorkflowId(schema, srcId + "_clone");
+            const display = prompt("Name for the cloned workflow (id):", cloneId);
+            if (display === null) return;
+            const clean = (display.trim() || cloneId).replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "");
+            if (!clean) { alert("Invalid workflow id."); return; }
+            if (schema.workflows[clean]) { alert("A workflow with that id already exists."); return; }
+            // Deep copy via JSON so nodes/edges are independent.
+            schema.workflows[clean] = JSON.parse(JSON.stringify(schema.workflows[srcId]));
+            schema.workflows[clean].name = (schema.workflows[clean].name || srcId) + " (copy)";
+            document.getElementById("workflow-json-editor").value = JSON.stringify(schema, null, 2);
+            loadWorkflowIntoModel(schema, clean);
+            setValidation(true, `Cloned '${srcId}' to '${clean}'. Click Compile & Apply to save.`);
+        }
+
+        // Delete the currently edited workflow (refuses if it is the last one
+        // or one of the built-ins without confirmation).
+        function deleteWorkflow() {
+            const schema = readSchemaFromEditor();
+            if (!schema) return;
+            const id = wfModel.workflowId;
+            if (!id || !schema.workflows || !schema.workflows[id]) {
+                alert("No workflow selected.");
+                return;
+            }
+            const ids = Object.keys(schema.workflows);
+            if (ids.length <= 1) {
+                alert("You cannot delete the last workflow.");
+                return;
+            }
+            if (!confirm(`Delete workflow '${id}'? This cannot be undone after you click Compile & Apply.`)) return;
+            delete schema.workflows[id];
+            if (schema.active_workflow === id) {
+                schema.active_workflow = Object.keys(schema.workflows)[0];
+            }
+            document.getElementById("workflow-json-editor").value = JSON.stringify(schema, null, 2);
+            loadWorkflowIntoModel(schema, schema.active_workflow);
+            setValidation(true, `Deleted '${id}'. Click Compile & Apply to save.`);
+        }
+
+        function uniqueWorkflowId(schema, base) {
+            if (!schema.workflows[base]) return base;
+            let n = 2;
+            while (schema.workflows[`${base}_${n}`]) n++;
+            return `${base}_${n}`;
+        }
+
         // ---- Structural validation ----
         function validateGraph(model) {
             const errors = [];
@@ -3637,6 +3841,7 @@
             document.getElementById("pe-provider").value = "openai";
             document.getElementById("pe-model").value = "";
             document.getElementById("pe-temperature").value = "0.2";
+            document.getElementById("pe-max-concurrency").value = "0";
             document.getElementById("pe-key").value = "";
             document.getElementById("pe-base-url").value = "";
             document.getElementById("pe-project-id").value = "";
@@ -3659,6 +3864,7 @@
                     document.getElementById("pe-provider").value = p.provider || "openai";
                     document.getElementById("pe-model").value = p.model || "";
                     document.getElementById("pe-temperature").value = p.temperature != null ? p.temperature : 0.2;
+                    document.getElementById("pe-max-concurrency").value = p.max_concurrency || 0;
                     document.getElementById("pe-key").value = "";
                     document.getElementById("pe-key").placeholder = "••••••" + (p.key ? p.key.slice(-4) : " (set a new key to replace)");
                     document.getElementById("pe-base-url").value = p.base_url || "";
@@ -3704,6 +3910,7 @@
                 provider: document.getElementById("pe-provider").value,
                 model: document.getElementById("pe-model").value.trim(),
                 temperature: parseFloat(document.getElementById("pe-temperature").value) || 0,
+                max_concurrency: parseInt(document.getElementById("pe-max-concurrency").value, 10) || 0,
                 key: document.getElementById("pe-key").value,
                 base_url: document.getElementById("pe-base-url").value.trim(),
                 project_id: document.getElementById("pe-project-id").value.trim(),

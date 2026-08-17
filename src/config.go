@@ -44,6 +44,12 @@ type APIConfig struct {
 	ThinkingLevel string  `json:"thinking_level"` // Thinking / Reasoning level: "off", "low", "medium", "high" (Phase 8.6)
 	ProjectID     string  `json:"project_id"`     // GCP Project ID for Vertex AI (Phase 8.6)
 	Region        string  `json:"region"`         // GCP Region for Vertex AI (Phase 8.6)
+	// MaxConcurrency caps how many LLM HTTP requests targeting this connection
+	// profile may be in flight at once within a single workflow run. 0 means
+	// unlimited. Parallel DAG nodes sharing a profile queue behind the same
+	// semaphore so a provider that only allows N concurrent calls does not
+	// reject the overflow.
+	MaxConcurrency int `json:"max_concurrency,omitempty"`
 }
 
 type AgentConfig struct {

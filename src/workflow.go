@@ -69,6 +69,53 @@ type WorkflowExecutor struct {
 	NodeOrder    []string     // Node ids in declaration order (for stable UI rendering)
 	Nodes        map[string]*RuntimeNode
 	Timeout      time.Duration
+
+	// Per-profile concurrency throttles. Lazily created the first time a node
+	// targets a profile with MaxConcurrency > 0. Keyed by throttleKey() so
+	// that parallel nodes sharing a profile (or inline provider/model) queue
+	// instead of firing N simultaneous requests at a rate-limited provider.
+	throttlers map[string]chan struct{}
+	throttleMu sync.Mutex
+}
+
+// throttleKey identifies which concurrency bucket a node belongs to. A named
+// provider profile wins; otherwise we fall back to "provider/model" so inline
+// nodes hitting the same endpoint also share a limit.
+func throttleKey(profileName string, cfg APIConfig) string {
+	if profileName != "" {
+		return "profile:" + profileName
+	}
+	return "inline:" + cfg.Provider + "/" + cfg.Model
+}
+
+// acquireThrottle blocks until a slot is free for the node's connection
+// bucket, returning a release function. If the resolved connection has
+// MaxConcurrency <= 0 the call is a no-op (unlimited).
+func (e *WorkflowExecutor) acquireThrottle(ctx context.Context, profileName string, cfg APIConfig) func() {
+	limit := cfg.MaxConcurrency
+	if limit <= 0 {
+		return func() {}
+	}
+	key := throttleKey(profileName, cfg)
+	e.throttleMu.Lock()
+	if e.throttlers == nil {
+		e.throttlers = make(map[string]chan struct{})
+	}
+	ch, ok := e.throttlers[key]
+	if !ok {
+		ch = make(chan struct{}, limit)
+		e.throttlers[key] = ch
+	}
+	e.throttleMu.Unlock()
+
+	select {
+	case ch <- struct{}{}:
+		return func() { <-ch }
+	case <-ctx.Done():
+		// Context cancelled while queued; return a no-op release so the caller's
+		// defer doesn't block/panic. The node will see ctx.Err() on its request.
+		return func() {}
+	}
 }
 
 // LoadWorkflowConfig reads the workflows.json file from disk
@@ -786,28 +833,45 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 // resolveNodeAPI builds the APIConfig for an llm node: a named provider
 // profile wins, otherwise inline provider/model/temperature properties are
 // used (legacy behavior). The global config is used for key/max_tokens fallbacks.
+//
+// If a node references a profile that no longer exists (e.g. it was deleted),
+// we do NOT fail the whole run. We fall back to the node's inline settings and
+// then the global connection, and broadcast a warning SSE event so the live
+// trace surfaces the broken link. This makes the Providers-tab delete confirm
+// ("nodes referencing it will fall back to inline settings") truthful.
 func (e *WorkflowExecutor) resolveNodeAPI(n *RuntimeNode) (APIConfig, error) {
 	parentAPI := activeConfig.API
 	if profileName, ok := n.Properties["provider_profile"].(string); ok && profileName != "" {
 		profile, err := GetProvider(profileName)
-		if err != nil {
-			return APIConfig{}, fmt.Errorf("node %s: %w", n.ID, err)
+		if err == nil {
+			cfg := mergeProfileWithFills(profile, n.Properties, parentAPI)
+			writeDebugLog("[WORKFLOW NODE %s] Using provider profile '%s' (%s/%s)", n.ID, profileName, cfg.Provider, cfg.Model)
+			return cfg, nil
 		}
-		cfg := mergeProfileWithFills(profile, n.Properties, parentAPI)
-		writeDebugLog("[WORKFLOW NODE %s] Using provider profile '%s' (%s/%s)", n.ID, profileName, cfg.Provider, cfg.Model)
-		return cfg, nil
+		// Fail-soft: the referenced profile is missing. Warn and fall through
+		// to inline/global settings rather than aborting the workflow run.
+		warn := fmt.Sprintf("provider profile %q not found (%v); falling back to inline/global connection", profileName, err)
+		writeDebugLog("[WORKFLOW NODE %s WARNING] %s", n.ID, warn)
+		e.broadcastNodeWarning(n.ID, warn)
 	}
 
 	provider, _ := n.Properties["provider"].(string)
+	if provider == "" {
+		provider = parentAPI.Provider
+	}
 	model, _ := n.Properties["model"].(string)
-	temperature := 0.2
+	if model == "" {
+		model = parentAPI.Model
+	}
+	temperature := parentAPI.Temperature
 	if t, ok := n.Properties["temperature"].(float64); ok {
 		temperature = t
 	}
+	baseURL, _ := n.Properties["base_url"].(string)
 	cfg := APIConfig{
 		Provider:    provider,
 		Key:         parentAPI.Key,
-		BaseURL:     "",
+		BaseURL:     baseURL,
 		Model:       model,
 		Temperature: temperature,
 		MaxTokens:   parentAPI.MaxTokens,
@@ -816,6 +880,18 @@ func (e *WorkflowExecutor) resolveNodeAPI(n *RuntimeNode) (APIConfig, error) {
 		cfg.Key = parentAPI.Key
 	}
 	return cfg, nil
+}
+
+// broadcastNodeWarning pushes a one-off system alert to the Web Console about
+// a non-fatal node issue (e.g. a missing provider profile). It does not change
+// node state — the node continues running on its fallback connection.
+func (e *WorkflowExecutor) broadcastNodeWarning(nodeID, message string) {
+	BroadcastSSE("turn_secured", map[string]interface{}{
+		"turn_number": 0,
+		"role":        "system",
+		"name":        "system",
+		"content":     fmt.Sprintf("⚠️ **[WORKFLOW NODE `%s` WARNING]** %s", nodeID, message),
+	})
 }
 
 // assemblePrompt joins all incoming edge data into a single prompt string,
@@ -892,18 +968,35 @@ func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, input
 
 	writeDebugLog("[WORKFLOW NODE %s] LLM query requested: provider: %s, model: %s", n.ID, nodeAPI.Provider, nodeAPI.Model)
 
+	// Tell the model about the real OS/shell so it doesn't emit `ls` on a
+	// Windows host, etc. Injected before the node's own system prompt so the
+	// node's specialized instructions (e.g. "you are a chronological
+	// specialist") still take precedence in tone/role.
+	envContext := buildEnvironmentSystemPrompt()
+
 	// Temporarily hot-swap global API settings for this node's requests.
 	parentAPI := activeConfig.API
 	activeConfig.API = nodeAPI
 	defer func() { activeConfig.API = parentAPI }()
 
+	// Per-profile concurrency limit: parallel nodes targeting the same
+	// provider profile queue behind its semaphore so we don't exceed the
+	// provider's max concurrent requests and trigger 429s/overload errors.
+	profileName, _ := n.Properties["provider_profile"].(string)
+	callLLM := func(msgs []Message, tl []Tool) (*Message, error) {
+		release := e.acquireThrottle(ctx, profileName, nodeAPI)
+		defer release()
+		return SendMultiProviderRequest(msgs, tl)
+	}
+
 	if !boolProp(n, "tools_enabled") {
 		// Single-shot mode (original behavior): one request, no tools.
 		reqMessages := []Message{
+			{Role: "system", Content: envContext},
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: promptText},
 		}
-		respMsg, err := SendMultiProviderRequest(reqMessages, nil)
+		respMsg, err := callLLM(reqMessages, nil)
 		if err != nil {
 			writeDebugLog("[WORKFLOW NODE %s ERROR] LLM Query failed: %v", n.ID, err)
 			return err
@@ -932,6 +1025,7 @@ func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, input
 		sysContent = "You are a highly capable agent with access to a local terminal sandbox. Use your tools to read files, run commands, and solve the user's request. When you are done, respond with your final answer and no further tool calls."
 	}
 	messages := []Message{
+		{Role: "system", Content: envContext},
 		{Role: "system", Content: sysContent},
 		{Role: "user", Content: promptText},
 	}
@@ -940,7 +1034,7 @@ func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, input
 	for turn := 1; turn <= maxTurns; turn++ {
 		writeDebugLog("[WORKFLOW NODE %s] ReAct turn %d/%d (%d tools available)", n.ID, turn, maxTurns, len(tools))
 
-		respMsg, err := SendMultiProviderRequest(messages, tools)
+		respMsg, err := callLLM(messages, tools)
 		if err != nil {
 			writeDebugLog("[WORKFLOW NODE %s ERROR] LLM call failed on turn %d: %v", n.ID, turn, err)
 			return err

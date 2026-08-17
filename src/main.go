@@ -294,9 +294,14 @@ func runAgentLoop(userPrompt string) string {
 	}
 
 	systemBase := "You are a highly capable agent with access to a local terminal sandbox. Use your tools to write files, patch code, run scripts, compile binaries, and solve the user's request. When you run a script, check its output to ensure it succeeded. If it failed, fix it and try again."
-	
+
+	// Tell the model exactly which OS/shell execute_command lands in, so it
+	// emits `dir`/`type` on Windows cmd.exe instead of blindly using `ls`/`cat`.
+	envContext := buildEnvironmentSystemPrompt()
+
 	fullSystemPrompt := strings.Join([]string{
 		systemBase,
+		envContext,
 		localInstructions,
 		"\n" + workspaceTree,
 		"\nIMPORTANT SAFETY RESTRICTION: You cannot write or modify files starting with '.goharness' or any system directories outside the authorized workspace.",
