@@ -535,8 +535,8 @@
                 </div>
                 </div>
 
-                <!-- Modal Footer Actions (standard settings) -->
-                <div class="pt-4 mt-2 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/40 -mx-6 px-6 py-3 shrink-0">
+                <!-- Modal Footer Actions (standard settings only) -->
+                <div id="settings-standard-footer" class="pt-4 mt-2 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/40 -mx-6 px-6 py-3 shrink-0">
                     <button type="button" onclick="closeSettingsModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
                         Cancel
                     </button>
@@ -3281,6 +3281,8 @@
                 workflow: document.getElementById("settings-panel-workflow"),
                 providers: document.getElementById("settings-panel-providers"),
             };
+            const stdFooter = document.getElementById("settings-standard-footer");
+            if (stdFooter) stdFooter.classList.toggle("hidden", tabName !== "standard");
             const buttons = {
                 standard: document.getElementById("btn-settings-tab-standard"),
                 workflow: document.getElementById("btn-settings-tab-workflow"),
