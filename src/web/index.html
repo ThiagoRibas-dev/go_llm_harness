@@ -1769,7 +1769,7 @@
             llm: {
                 title: "LLM", icon: "fa-robot", color: "purple",
                 inputs: [], outputs: [{ port: "response", label: "response" }],
-                defaults: { temperature: 0.2, system_prompt: "", provider_profile: "", provider: "openai", model: "gpt-4o-mini" },
+                defaults: { temperature: 0.2, system_prompt: "", provider_profile: "", provider: "openai", model: "gpt-4o-mini", tools_enabled: false, mcp_tools: true, max_turns: 15, allowed_tools: [] },
                 fields: ["llm_profile", "temperature", "system_prompt"],
             },
             llm_query: { aliasOf: "llm" },
@@ -2294,6 +2294,40 @@
         }
 
         // Write a property change back to the model and refresh the node card.
+        // Toggle the ReAct/tool-calling loop on an llm node and refresh the card.
+        function toggleNodeTools(id, enabled) {
+            const n = nodeById(id);
+            if (!n) return;
+            n.properties = n.properties || {};
+            n.properties.tools_enabled = !!enabled;
+            if (enabled) {
+                if (!("mcp_tools" in n.properties)) n.properties.mcp_tools = true;
+                if (!("max_turns" in n.properties)) n.properties.max_turns = 15;
+                if (!Array.isArray(n.properties.allowed_tools)) n.properties.allowed_tools = [];
+            }
+            syncJsonFromModel();
+            renderGraph();
+            selectNode(id);
+        }
+
+        // Add/remove a single built-in tool from an llm node's allow-list.
+        function toggleNodeTool(id, toolName, enabled) {
+            const n = nodeById(id);
+            if (!n) return;
+            n.properties = n.properties || {};
+            let list = Array.isArray(n.properties.allowed_tools) ? n.properties.allowed_tools.slice() : [];
+            if (enabled) {
+                if (!list.includes(toolName)) list.push(toolName);
+            } else {
+                list = list.filter(t => t !== toolName);
+            }
+            n.properties.allowed_tools = list;
+            syncJsonFromModel();
+            // Re-render but keep the inspector open on this node.
+            renderGraph();
+            selectNode(id);
+        }
+
         function updateNodeProp(id, key, value) {
             const n = nodeById(id);
             if (!n) return;
@@ -2391,6 +2425,33 @@
                     <div>
                         <label class="block text-slate-400 mb-1">System Prompt</label>
                         <textarea rows="4" onchange="updateNodeProp('${escapeHtml(n.id)}','system_prompt',this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono text-[10px] leading-snug">${escapeHtml(p.system_prompt || "")}</textarea>
+                    </div>
+                    <div class="rounded border border-[#334155] p-2 space-y-2">
+                        <label class="flex items-center gap-2 text-slate-300">
+                            <input type="checkbox" ${p.tools_enabled ? "checked" : ""} onchange="toggleNodeTools('${escapeHtml(n.id)}', this.checked)" class="accent-blue-500">
+                            <span class="font-bold">Enable tool calling (ReAct loop)</span>
+                        </label>
+                        ${p.tools_enabled ? `
+                        <div class="pl-4 space-y-2">
+                            <label class="flex items-center gap-2 text-slate-400">
+                                <input type="checkbox" ${p.mcp_tools !== false ? "checked" : ""} onchange="updateNodeProp('${escapeHtml(n.id)}','mcp_tools',this.checked)" class="accent-blue-500">
+                                <span>Include MCP server tools</span>
+                            </label>
+                            <div>
+                                <label class="block text-slate-400 mb-1">Max turns</label>
+                                <input type="number" min="1" max="50" value="${p.max_turns ?? 15}" onchange="updateNodeProp('${escapeHtml(n.id)}','max_turns',parseInt(this.value)||15)" class="w-20 bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono text-[10px]">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-1">Allowed built-in tools (blank = all)</label>
+                                <div class="grid grid-cols-2 gap-1">
+                                    ${["read_file","write_file","patch_file","execute_command","spawn_sub_agent","bm25_search"].map(t => {
+                                        const list = Array.isArray(p.allowed_tools) ? p.allowed_tools : [];
+                                        const allowed = list.length===0 || list.includes(t);
+                                        return `<label class="flex items-center gap-1 text-slate-400 text-[10px]"><input type="checkbox" ${allowed ? "checked" : ""} onchange="toggleNodeTool('${escapeHtml(n.id)}','${t}',this.checked)" class="accent-blue-500 scale-90"><span>${t}</span></label>`;
+                                    }).join("")}
+                                </div>
+                            </div>
+                        </div>` : ""}
                     </div>
                     <div>
                         <div class="flex items-center justify-between mb-1">

@@ -3,12 +3,15 @@
   "workflows": {
     "linear_chat": {
       "name": "Standard Linear Chat",
-      "description": "Standard conversational agent loop mapping user input to a single, high-fidelity LLM response.",
+      "description": "The standard tool-capable conversational agent loop (read/write/patch/commands/BM25 + MCP). The LLM node runs a multi-turn ReAct loop with tools enabled.",
       "nodes": [
         {
           "id": "start",
           "type": "user_input",
-          "properties": { "x": 40, "y": 60 },
+          "properties": {
+            "x": 40,
+            "y": 60
+          },
           "inputs": []
         },
         {
@@ -20,18 +23,40 @@
             "provider": "openai",
             "model": "gpt-4o",
             "temperature": 0.0,
-            "system_prompt": "You are a highly capable agent with access to a local terminal sandbox. Use your tools to solve the user's request."
+            "system_prompt": "You are a highly capable agent with access to a local terminal sandbox. Use your tools to solve the user's request.",
+            "tools_enabled": true,
+            "allowed_tools": [
+              "read_file",
+              "write_file",
+              "patch_file",
+              "execute_command",
+              "spawn_sub_agent",
+              "bm25_search"
+            ],
+            "mcp_tools": true,
+            "max_turns": 15
           },
           "inputs": [
-            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+            {
+              "source_node": "start",
+              "source_output": "prompt",
+              "target_input": "prompt"
+            }
           ]
         },
         {
           "id": "terminal",
           "type": "assistant_response",
-          "properties": { "x": 580, "y": 60 },
+          "properties": {
+            "x": 580,
+            "y": 60
+          },
           "inputs": [
-            { "source_node": "query_node", "source_output": "response", "target_input": "final_output" }
+            {
+              "source_node": "query_node",
+              "source_output": "response",
+              "target_input": "final_output"
+            }
           ]
         }
       ]
@@ -43,7 +68,10 @@
         {
           "id": "start",
           "type": "user_input",
-          "properties": { "x": 40, "y": 220 },
+          "properties": {
+            "x": 40,
+            "y": 220
+          },
           "inputs": []
         },
         {
@@ -58,7 +86,11 @@
             "system_prompt": "You are a chronological state tracking specialist. Analyze the query and history, tracking timelines, mutable states, and temporal continuity."
           },
           "inputs": [
-            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+            {
+              "source_node": "start",
+              "source_output": "prompt",
+              "target_input": "prompt"
+            }
           ]
         },
         {
@@ -73,7 +105,11 @@
             "system_prompt": "You are a causal-logical constraint specialist. Obey rules, compile bounds, check for logical fallacies and conditional requirements."
           },
           "inputs": [
-            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+            {
+              "source_node": "start",
+              "source_output": "prompt",
+              "target_input": "prompt"
+            }
           ]
         },
         {
@@ -88,7 +124,11 @@
             "system_prompt": "You are a spatial-ontological world specialist. Analyze directory hierarchies, visual layout environments, and ontological coordinates."
           },
           "inputs": [
-            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+            {
+              "source_node": "start",
+              "source_output": "prompt",
+              "target_input": "prompt"
+            }
           ]
         },
         {
@@ -103,7 +143,11 @@
             "system_prompt": "You are a social-behavioral psychology specialist. Track characters motivations, parent/sub-agent objectives, secrets, and Theory of Mind."
           },
           "inputs": [
-            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+            {
+              "source_node": "start",
+              "source_output": "prompt",
+              "target_input": "prompt"
+            }
           ]
         },
         {
@@ -118,7 +162,11 @@
             "system_prompt": "You are a stylistic-prose aesthetics specialist. Analyze dialogue dialect, grammar flow, syntax conventions, and output formatting."
           },
           "inputs": [
-            { "source_node": "start", "source_output": "prompt", "target_input": "prompt" }
+            {
+              "source_node": "start",
+              "source_output": "prompt",
+              "target_input": "prompt"
+            }
           ]
         },
         {
@@ -130,24 +178,62 @@
             "provider": "openai",
             "model": "gpt-4o",
             "temperature": 0.2,
-            "input_ports": ["chronological_context", "causal_context", "semantic_context", "behavioral_context", "stylistic_context", "raw_prompt"],
+            "input_ports": [
+              "chronological_context",
+              "causal_context",
+              "semantic_context",
+              "behavioral_context",
+              "stylistic_context",
+              "raw_prompt"
+            ],
             "system_prompt": "You are the master aggregator. Synthesize the five parallel cognitive reports (Chronological, Causal, Semantic, Behavioral, Stylistic) into a single, high-fidelity response answering the user prompt."
           },
           "inputs": [
-            { "source_node": "axis_chronological", "source_output": "response", "target_input": "chronological_context" },
-            { "source_node": "axis_causal_logical", "source_output": "response", "target_input": "causal_context" },
-            { "source_node": "axis_semantic_world", "source_output": "response", "target_input": "semantic_context" },
-            { "source_node": "axis_behavioral_psych", "source_output": "response", "target_input": "behavioral_context" },
-            { "source_node": "axis_stylistic_prose", "source_output": "response", "target_input": "stylistic_context" },
-            { "source_node": "start", "source_output": "prompt", "target_input": "raw_prompt" }
+            {
+              "source_node": "axis_chronological",
+              "source_output": "response",
+              "target_input": "chronological_context"
+            },
+            {
+              "source_node": "axis_causal_logical",
+              "source_output": "response",
+              "target_input": "causal_context"
+            },
+            {
+              "source_node": "axis_semantic_world",
+              "source_output": "response",
+              "target_input": "semantic_context"
+            },
+            {
+              "source_node": "axis_behavioral_psych",
+              "source_output": "response",
+              "target_input": "behavioral_context"
+            },
+            {
+              "source_node": "axis_stylistic_prose",
+              "source_output": "response",
+              "target_input": "stylistic_context"
+            },
+            {
+              "source_node": "start",
+              "source_output": "prompt",
+              "target_input": "raw_prompt"
+            }
           ]
         },
         {
           "id": "terminal",
           "type": "assistant_response",
-          "properties": { "x": 850, "y": 220 },
+          "properties": {
+            "x": 850,
+            "y": 220
+          },
           "inputs": [
-            { "source_node": "aggregator", "source_output": "response", "target_input": "final_output" }
+            {
+              "source_node": "aggregator",
+              "source_output": "response",
+              "target_input": "final_output"
+            }
           ]
         }
       ]

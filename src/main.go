@@ -283,147 +283,11 @@ func printBanner() {
 }
 
 func runAgentLoop(userPrompt string) string {
-	agentTools := []Tool{
-		{
-			Type: "function",
-			Function: FunctionDescriptor{
-				Name:        "read_file",
-				Description: "Read the contents of a file inside the workspace. For large files, you can specify specific start and end line ranges to prevent token blowouts.",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"path": map[string]interface{}{
-							"type":        "string",
-							"description": "Relative file path of the file to read (e.g. src/app.js).",
-						},
-						"start_line": map[string]interface{}{
-							"type":        "integer",
-							"description": "Optional 1-based line number to start reading from (default: 1).",
-						},
-						"end_line": map[string]interface{}{
-							"type":        "integer",
-							"description": "Optional 1-based line number to stop reading at (inclusive, default: end of file).",
-						},
-					},
-					"required": []string{"path"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: FunctionDescriptor{
-				Name:        "write_file",
-				Description: "Write or overwrite a file in the workspace directory. Paths must be relative.",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"path": map[string]interface{}{
-							"type":        "string",
-							"description": "The relative file path inside the workspace (e.g., script.py).",
-						},
-						"content": map[string]interface{}{
-							"type":        "string",
-							"description": "The complete text content of the file.",
-						},
-					},
-					"required": []string{"path", "content"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: FunctionDescriptor{
-				Name:        "patch_file",
-				Description: "Perform a fast semantic search-and-replace edit on an existing file. Avoids rewriting the entire file.",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"path": map[string]interface{}{
-							"type":        "string",
-							"description": "Relative file path of the code file to patch.",
-						},
-						"search": map[string]interface{}{
-							"type":        "string",
-							"description": "The EXACT lines of original code to find. Keep spacing, tabs, and lines identical.",
-						},
-						"replace": map[string]interface{}{
-							"type":        "string",
-							"description": "The replacement lines of code to write in its place.",
-						},
-					},
-					"required": []string{"path", "search", "replace"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: FunctionDescriptor{
-				Name:        "execute_command",
-				Description: "Run a terminal bash/cmd command inside the workspace directory.",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"command": map[string]interface{}{
-							"type":        "string",
-							"description": "The command line string to run.",
-						},
-					},
-					"required": []string{"command"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: FunctionDescriptor{
-				Name:        "spawn_sub_agent",
-				Description: "Spawn a specialized background sub-agent to perform complex file searches, code analysis, or parallel research in the workspace or session archives, returning a dense final summary report.",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"prompt": map[string]interface{}{
-							"type":        "string",
-							"description": "The precise task, file-search query, or instruction for the sub-agent (e.g., 'Find the postgres credentials in the archived turns in compacted_summary_up_to_turn_046/').",
-						},
-					},
-					"required": []string{"prompt"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: FunctionDescriptor{
-				Name:        "bm25_search",
-				Description: "Index and search files inside the workspace or session chat archives using standard BM25 lexical ranking. Highly recommended over raw terminal searches for code, facts, or context retrieval in large directories.",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"query": map[string]interface{}{
-							"type":        "string",
-							"description": "The keywords or query terms to search for (e.g. 'postgres database credentials').",
-						},
-						"scope": map[string]interface{}{
-							"type":        "string",
-							"description": "Scope of search: 'workspace' (to search active repository files) or 'session' (to search previous chat/tool logs).",
-							"enum":        []string{"workspace", "session"},
-						},
-						"limit": map[string]interface{}{
-							"type":        "integer",
-							"description": "Maximum number of scored results to return (default 5).",
-						},
-					},
-					"required": []string{"query"},
-				},
-			},
-		},
-	}
-
-	mcpTools := discoverMCPTools()
-	if len(mcpTools) > 0 {
-		agentTools = append(agentTools, mcpTools...)
-	}
+	// Tool schemas are shared with the DAG workflow engine (see tools.go).
+	// Passing nil/true means: all built-in tools plus any MCP-discovered tools.
+	agentTools := selectTools(nil, true)
 
 	localInstructions := LoadLocalInstructions()
-
 	workspaceTree, err := GenerateWorkspaceTree(activeConfig.Agent.WorkspaceDir, activeConfig.DirectoryScan)
 	if err != nil {
 		fmt.Printf("%s[WARNING] Failed to scan workspace tree: %v%s\n", ColorYellow, err, ColorReset)
@@ -441,11 +305,13 @@ func runAgentLoop(userPrompt string) string {
 	userMsg := Message{Role: "user", Content: userPrompt}
 	saveMessageTurn(userMsg)
 
-	// 1. Try to route execution through GoHarness v2.0 Dynamic Node Workflow Engine!
+	// 1. Route execution through the DAG workflow engine. This now powers
+	//    every workflow, including linear_chat (whose llm node has
+	//    tools_enabled=true and behaves like the original ReAct loop).
 	workflowsPath := GetSystemPath("workflows.json")
 	if _, errStat := os.Stat(workflowsPath); errStat == nil {
 		cfg, err := LoadWorkflowConfig()
-		if err == nil && cfg.ActiveWorkflow != "" && cfg.ActiveWorkflow != "linear_chat" {
+		if err == nil && cfg.ActiveWorkflow != "" {
 			answer, errExec := ExecuteActiveWorkflow(userPrompt)
 			if errExec == nil {
 				return answer
@@ -549,130 +415,7 @@ func runAgentLoop(userPrompt string) string {
 
 		for _, toolCall := range responseMsg.ToolCalls {
 			fmt.Printf("\n%s🛠️ [TOOL CALL] Invoking: %s%s\n", ColorBold+ColorCyan, toolCall.Function.Name, ColorReset)
-
-			var result string
-			
-			toolStart := time.Now()
-			
-			if mcpServerName, isMCP := mcpToolsMap[toolCall.Function.Name]; isMCP {
-				fmt.Printf("  ↳ Routing tool execution to MCP Server: '%s'\n", mcpServerName)
-				result = executeMCPToolCall(mcpServerName, toolCall.Function.Name, toolCall.Function.Arguments)
-				LogExecutionTrace(turn, "tool_mcp_call", toolStart, "success", map[string]interface{}{
-					"mcp_server": mcpServerName,
-					"tool_name":  toolCall.Function.Name,
-				})
-			} else {
-				if toolCall.Function.Name == "read_file" {
-					var args struct {
-						Path      string `json:"path"`
-						StartLine int    `json:"start_line"`
-						EndLine   int    `json:"end_line"`
-					}
-					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
-						if args.StartLine <= 0 {
-							args.StartLine = 1
-						}
-						fmt.Printf("  ↳ Reading file: %s (Lines: %d to %d)\n", args.Path, args.StartLine, args.EndLine)
-						writeDebugLog("[TOOL] read_file requested for path: %s (start: %d, end: %d)", args.Path, args.StartLine, args.EndLine)
-						result = executeReadFile(args.Path, args.StartLine, args.EndLine)
-						LogExecutionTrace(turn, "tool_read_file", toolStart, "success", map[string]interface{}{
-							"path":       args.Path,
-							"start_line": args.StartLine,
-							"end_line":   args.EndLine,
-						})
-					} else {
-						result = fmt.Sprintf("Error parsing tool arguments: %v", err)
-						LogExecutionTrace(turn, "tool_read_file", toolStart, "failed", map[string]interface{}{"error": err.Error()})
-					}
-				} else if toolCall.Function.Name == "write_file" {
-					var args struct {
-						Path    string `json:"path"`
-						Content string `json:"content"`
-					}
-					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
-						fmt.Printf("  ↳ Writing %d bytes to: %s\n", len(args.Content), args.Path)
-						writeDebugLog("[TOOL] write_file requested for path: %s (%d bytes)", args.Path, len(args.Content))
-						result = executeWriteFile(args.Path, args.Content)
-						LogExecutionTrace(turn, "tool_write_file", toolStart, "success", map[string]interface{}{
-							"path":          args.Path,
-							"bytes_written": len(args.Content),
-						})
-					} else {
-						result = fmt.Sprintf("Error parsing tool arguments: %v", err)
-						LogExecutionTrace(turn, "tool_write_file", toolStart, "failed", map[string]interface{}{"error": err.Error()})
-					}
-				} else if toolCall.Function.Name == "patch_file" {
-					var args struct {
-						Path    string `json:"path"`
-						Search  string `json:"search"`
-						Replace string `json:"replace"`
-					}
-					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
-						fmt.Printf("  ↳ Patching file: %s\n", args.Path)
-						result = executePatchFile(args.Path, args.Search, args.Replace)
-						LogExecutionTrace(turn, "tool_patch_file", toolStart, "success", map[string]interface{}{
-							"path": args.Path,
-						})
-					} else {
-						result = fmt.Sprintf("Error parsing tool arguments: %v", err)
-						LogExecutionTrace(turn, "tool_patch_file", toolStart, "failed", map[string]interface{}{"error": err.Error()})
-					}
-				} else if toolCall.Function.Name == "execute_command" {
-					var args struct {
-						Command string `json:"command"`
-					}
-					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
-						fmt.Printf("  ↳ Running command: %s\n", args.Command)
-						result = executeTerminalCommand(args.Command)
-						LogExecutionTrace(turn, "tool_execute_command", toolStart, "success", map[string]interface{}{
-							"command": args.Command,
-						})
-					} else {
-						result = fmt.Sprintf("Error parsing tool arguments: %v", err)
-						LogExecutionTrace(turn, "tool_execute_command", toolStart, "failed", map[string]interface{}{"error": err.Error()})
-					}
-				} else if toolCall.Function.Name == "spawn_sub_agent" {
-					var args struct {
-						Prompt string `json:"prompt"`
-					}
-					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
-						fmt.Printf("  ↳ Spawning specialized sub-agent for: %s\n", args.Prompt)
-						result = executeSubAgent(args.Prompt)
-						LogExecutionTrace(turn, "tool_spawn_sub_agent", toolStart, "success", map[string]interface{}{
-							"prompt": args.Prompt,
-						})
-					} else {
-						result = fmt.Sprintf("Error parsing tool arguments: %v", err)
-						LogExecutionTrace(turn, "tool_spawn_sub_agent", toolStart, "failed", map[string]interface{}{"error": err.Error()})
-					}
-				} else if toolCall.Function.Name == "bm25_search" {
-					var args struct {
-						Query string `json:"query"`
-						Scope string `json:"scope"`
-						Limit int    `json:"limit"`
-					}
-					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
-						if args.Limit <= 0 {
-							args.Limit = 5
-						}
-						if args.Scope == "" {
-							args.Scope = "workspace"
-						}
-						fmt.Printf("  ↳ Executing BM25 Search (Query: '%s', Scope: %s)\n", args.Query, args.Scope)
-						result = executeBM25Search(args.Query, args.Scope, args.Limit)
-						LogExecutionTrace(turn, "tool_bm25_search", toolStart, "success", map[string]interface{}{
-							"query": args.Query,
-							"scope": args.Scope,
-						})
-					} else {
-						result = fmt.Sprintf("Error parsing tool arguments: %v", err)
-						LogExecutionTrace(turn, "tool_bm25_search", toolStart, "failed", map[string]interface{}{"error": err.Error()})
-					}
-				} else {
-					result = fmt.Sprintf("Unknown tool name: %s", toolCall.Function.Name)
-					LogExecutionTrace(turn, "tool_unknown", toolStart, "failed", map[string]interface{}{"tool": toolCall.Function.Name})
-				}
-			}
+			result := executeToolCall(turn, toolCall)
 
 			snippet := result
 			if len(snippet) > 400 {

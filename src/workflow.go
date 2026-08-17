@@ -669,79 +669,7 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 		return nil
 
 	case "llm", "llm_query", "llm_synthesis":
-		// Resolve the connection: a named provider_profile from providers.json
-		// wins, with any inline provider/model/temperature overrides layered on
-		// top. Falls back to the legacy inline fields for backward compatibility.
-		parentAPI := activeConfig.API
-		var nodeAPI APIConfig
-
-		if profileName, ok := n.Properties["provider_profile"].(string); ok && profileName != "" {
-			profile, err := GetProvider(profileName)
-			if err != nil {
-				return fmt.Errorf("node %s: %w", n.ID, err)
-			}
-			nodeAPI = mergeProfileWithFills(profile, n.Properties, parentAPI)
-			writeDebugLog("[WORKFLOW NODE %s] Using provider profile '%s' (%s/%s)", n.ID, profileName, nodeAPI.Provider, nodeAPI.Model)
-		} else {
-			provider, _ := n.Properties["provider"].(string)
-			model, _ := n.Properties["model"].(string)
-			tempVal, _ := n.Properties["temperature"]
-			temperature := 0.2
-			if t, ok := tempVal.(float64); ok {
-				temperature = t
-			}
-			nodeAPI = APIConfig{
-				Provider:    provider,
-				Key:         parentAPI.Key, // Falls back to global API Key
-				BaseURL:     "",            // Auto built by backend
-				Model:       model,
-				Temperature: temperature,
-				MaxTokens:   parentAPI.MaxTokens,
-			}
-			if provider == "openai" && nodeAPI.Key == "" {
-				nodeAPI.Key = parentAPI.Key
-			}
-		}
-
-		systemPrompt, _ := n.Properties["system_prompt"].(string)
-
-		promptText := ""
-		// Accumulate inputs into the final prompt text
-		var inputParts []string
-		for k, v := range inputs {
-			inputParts = append(inputParts, fmt.Sprintf("%s:\n%v", k, v))
-		}
-		if len(inputParts) > 0 {
-			promptText = strings.Join(inputParts, "\n\n")
-		} else {
-			promptText = "Process baseline context."
-		}
-
-		writeDebugLog("[WORKFLOW NODE %s] LLM query requested: provider: %s, model: %s", n.ID, nodeAPI.Provider, nodeAPI.Model)
-
-		// Temporarily hot-swap global API settings for this node execution.
-		activeConfig.API = nodeAPI
-		reqMessages := []Message{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: promptText},
-		}
-
-		respMsg, err := SendMultiProviderRequest(reqMessages, nil)
-
-		// Restore parent global settings immediately on return.
-		activeConfig.API = parentAPI
-
-		if err != nil {
-			writeDebugLog("[WORKFLOW NODE %s ERROR] LLM Query failed: %v", n.ID, err)
-			return err
-		}
-
-		n.mu.Lock()
-		n.Outputs["response"] = respMsg.Content
-		n.mu.Unlock()
-
-		writeDebugLog("[WORKFLOW NODE %s] LLM Query completed successfully (%d bytes returned)", n.ID, len(respMsg.Content))
-		return nil
+		return e.runLLMNode(ctx, n, inputs)
 
 	case "bm25_search":
 		query, _ := inputs["query"].(string)
@@ -853,4 +781,209 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 	default:
 		return fmt.Errorf("unknown node type: %s", n.Type)
 	}
+}
+
+// resolveNodeAPI builds the APIConfig for an llm node: a named provider
+// profile wins, otherwise inline provider/model/temperature properties are
+// used (legacy behavior). The global config is used for key/max_tokens fallbacks.
+func (e *WorkflowExecutor) resolveNodeAPI(n *RuntimeNode) (APIConfig, error) {
+	parentAPI := activeConfig.API
+	if profileName, ok := n.Properties["provider_profile"].(string); ok && profileName != "" {
+		profile, err := GetProvider(profileName)
+		if err != nil {
+			return APIConfig{}, fmt.Errorf("node %s: %w", n.ID, err)
+		}
+		cfg := mergeProfileWithFills(profile, n.Properties, parentAPI)
+		writeDebugLog("[WORKFLOW NODE %s] Using provider profile '%s' (%s/%s)", n.ID, profileName, cfg.Provider, cfg.Model)
+		return cfg, nil
+	}
+
+	provider, _ := n.Properties["provider"].(string)
+	model, _ := n.Properties["model"].(string)
+	temperature := 0.2
+	if t, ok := n.Properties["temperature"].(float64); ok {
+		temperature = t
+	}
+	cfg := APIConfig{
+		Provider:    provider,
+		Key:         parentAPI.Key,
+		BaseURL:     "",
+		Model:       model,
+		Temperature: temperature,
+		MaxTokens:   parentAPI.MaxTokens,
+	}
+	if provider == "openai" && cfg.Key == "" {
+		cfg.Key = parentAPI.Key
+	}
+	return cfg, nil
+}
+
+// assemblePrompt joins all incoming edge data into a single prompt string,
+// labeling each section by its target input name.
+func assemblePrompt(inputs map[string]interface{}) string {
+	if len(inputs) == 0 {
+		return "Process baseline context."
+	}
+	var parts []string
+	for k, v := range inputs {
+		parts = append(parts, fmt.Sprintf("%s:\n%v", k, v))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// boolProp reads a boolean node property, tolerating bool/string/float64.
+func boolProp(n *RuntimeNode, key string) bool {
+	switch v := n.Properties[key].(type) {
+	case bool:
+		return v
+	case string:
+		return v == "true" || v == "1"
+	case float64:
+		return v != 0
+	}
+	return false
+}
+
+// intProp reads an integer node property with a default.
+func intProp(n *RuntimeNode, key string, def int) int {
+	if v, ok := n.Properties[key].(float64); ok {
+		return int(v)
+	}
+	return def
+}
+
+// stringSliceProp reads a []interface{} property as a []string.
+func stringSliceProp(n *RuntimeNode, key string) []string {
+	raw, ok := n.Properties[key].([]interface{})
+	if !ok {
+		// Also accept []string if present.
+		if s, ok := n.Properties[key].([]string); ok {
+			return s
+		}
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, r := range raw {
+		if s, ok := r.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// runLLMNode executes an llm node. By default it is single-shot (one request,
+// text on the "response" output). When tools_enabled is true, it instead runs a
+// multi-turn ReAct loop exactly like the legacy linear agent: the model may
+// call built-in and/or MCP tools, results are fed back, until it returns text.
+//
+// Per-node tool control:
+//   - tools_enabled (bool)   turn on the ReAct loop
+//   - allowed_tools ([]str)  restrict which built-in tools are exposed
+//                            (empty/nil = all built-ins)
+//   - mcp_tools (bool)       also expose tools discovered from MCP servers
+//   - max_turns (int)        loop cap (default: global Agent.MaxTurns)
+func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, inputs map[string]interface{}) error {
+	nodeAPI, err := e.resolveNodeAPI(n)
+	if err != nil {
+		return err
+	}
+	systemPrompt, _ := n.Properties["system_prompt"].(string)
+	promptText := assemblePrompt(inputs)
+
+	writeDebugLog("[WORKFLOW NODE %s] LLM query requested: provider: %s, model: %s", n.ID, nodeAPI.Provider, nodeAPI.Model)
+
+	// Temporarily hot-swap global API settings for this node's requests.
+	parentAPI := activeConfig.API
+	activeConfig.API = nodeAPI
+	defer func() { activeConfig.API = parentAPI }()
+
+	if !boolProp(n, "tools_enabled") {
+		// Single-shot mode (original behavior): one request, no tools.
+		reqMessages := []Message{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: promptText},
+		}
+		respMsg, err := SendMultiProviderRequest(reqMessages, nil)
+		if err != nil {
+			writeDebugLog("[WORKFLOW NODE %s ERROR] LLM Query failed: %v", n.ID, err)
+			return err
+		}
+		n.mu.Lock()
+		n.Outputs["response"] = respMsg.Content
+		n.mu.Unlock()
+		writeDebugLog("[WORKFLOW NODE %s] LLM Query completed successfully (%d bytes returned)", n.ID, len(respMsg.Content))
+		return nil
+	}
+
+	// Tool-enabled ReAct mode.
+	allowedTools := stringSliceProp(n, "allowed_tools")
+	includeMCP := boolProp(n, "mcp_tools")
+	tools := selectTools(allowedTools, includeMCP)
+
+	maxTurns := intProp(n, "max_turns", activeConfig.Agent.MaxTurns)
+	if maxTurns <= 0 {
+		maxTurns = 15
+	}
+
+	// Build the system prompt. For tool nodes we prepend a capable-agent
+	// preamble if the node didn't define a custom system prompt.
+	sysContent := systemPrompt
+	if sysContent == "" {
+		sysContent = "You are a highly capable agent with access to a local terminal sandbox. Use your tools to read files, run commands, and solve the user's request. When you are done, respond with your final answer and no further tool calls."
+	}
+	messages := []Message{
+		{Role: "system", Content: sysContent},
+		{Role: "user", Content: promptText},
+	}
+
+	var lastTextAnswer string
+	for turn := 1; turn <= maxTurns; turn++ {
+		writeDebugLog("[WORKFLOW NODE %s] ReAct turn %d/%d (%d tools available)", n.ID, turn, maxTurns, len(tools))
+
+		respMsg, err := SendMultiProviderRequest(messages, tools)
+		if err != nil {
+			writeDebugLog("[WORKFLOW NODE %s ERROR] LLM call failed on turn %d: %v", n.ID, turn, err)
+			return err
+		}
+
+		// Persist the assistant turn so rollbacks/history see it.
+		saveMessageTurn(*respMsg)
+		messages = append(messages, *respMsg)
+
+		if respMsg.Content != "" {
+			lastTextAnswer = respMsg.Content
+		}
+
+		// No tool calls => done; the final text is the node's output.
+		if len(respMsg.ToolCalls) == 0 {
+			writeDebugLog("[WORKFLOW NODE %s] Tool loop complete after %d turn(s)", n.ID, turn)
+			n.mu.Lock()
+			n.Outputs["response"] = lastTextAnswer
+			n.mu.Unlock()
+			return nil
+		}
+
+		// Execute each requested tool and append its result.
+		for _, toolCall := range respMsg.ToolCalls {
+			writeDebugLog("[WORKFLOW NODE %s] Invoking tool: %s", n.ID, toolCall.Function.Name)
+			result := executeToolCall(turn, toolCall)
+			writeDebugLog("[WORKFLOW NODE %s] Tool result: %s", n.ID, truncateResult(result))
+			toolMsg := Message{
+				Role:       "tool",
+				ToolCallID: toolCall.ID,
+				Name:       toolCall.Function.Name,
+				Content:    result,
+			}
+			saveMessageTurn(toolMsg)
+			messages = append(messages, toolMsg)
+		}
+	}
+
+	if lastTextAnswer == "" {
+		lastTextAnswer = "Reached maximum tool turns without a final answer."
+	}
+	n.mu.Lock()
+	n.Outputs["response"] = lastTextAnswer
+	n.mu.Unlock()
+	return nil
 }
