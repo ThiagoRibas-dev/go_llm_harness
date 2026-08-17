@@ -1,10 +1,11 @@
 name: CI
 
-# Runs on every push to main (builds artifacts) and on pull requests
-# (lint + test, no artifacts needed for review).
+# Runs on every push to main (builds artifacts), on pull requests
+# (lint + test), and on version tags (creates a GitHub Release with binaries).
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -44,7 +45,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Cross-compile release binaries and attach them to the workflow run.
-  # Only on pushes to main (not PRs) to avoid redundant artifact uploads.
+  # Runs on every push to main (not PRs). For tagged releases, the `release`
+  # job below reuses these same build steps and attaches binaries to a Release.
   # ---------------------------------------------------------------------------
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
@@ -93,3 +95,55 @@ jobs:
           path: bin/${{ matrix.artifact }}
           if-no-files-found: error
           retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # Tagged release: build all four binaries in one job and publish them as a
+  # GitHub Release. Trigger by pushing a tag like v1.0.0:
+  #
+  #   git tag v1.0.0 && git push origin v1.0.0
+  #
+  # The release title and notes come from the tag annotation if present,
+  # otherwise they default to the tag name.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Release
+    needs: lint-test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to create the release and upload assets
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: Cross-compile all targets
+        env:
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p release
+          targets=(
+            "linux/amd64/agent_linux"
+            "windows/amd64/agent.exe"
+            "darwin/amd64/agent_mac_amd"
+            "darwin/arm64/agent_mac_arm"
+          )
+          for t in "${targets[@]}"; do
+            IFS=/ read -r goos goarch out <<<"$t"
+            echo "Building $goos/$goarch -> $out"
+            GOOS="$goos" GOARCH="$goarch" go build -ldflags="-s -w" \
+              -o "release/$out" ./src
+          done
+          ls -lh release/
+
+      - name: Create GitHub Release and upload binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

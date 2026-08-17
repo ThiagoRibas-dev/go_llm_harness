@@ -92,6 +92,7 @@ Go embeds everything:
 | Event    | Behavior                                        |
 | -------- | ----------------------------------------------- |
 | push to `main` | Run lint + test, then build 4 binaries, upload artifacts |
+| push tag `v*`  | Run lint + test, build 4 binaries, publish a GitHub Release |
 | PR to `main`  | Run lint + test (no artifact upload)            |
 
 ### Pipeline: `lint-test` job
@@ -106,9 +107,29 @@ Go embeds everything:
 ### Pipeline: `build` job (matrix)
 
 - Depends on `lint-test` passing.
+- Runs only on pushes to `main` (not PRs).
 - Matrix: `linux/amd64`, `windows/amd64`, `darwin/amd64`, `darwin/arm64`.
 - `CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/<artifact> ./src`
 - Upload each binary as a workflow artifact (30-day retention).
+
+### Pipeline: `release` job (tagged)
+
+- Triggers on tags matching `v*` (e.g. `v1.0.0`).
+- Depends on `lint-test` passing.
+- Runs a single job that cross-compiles all four targets into `release/`.
+- Uses `softprops/action-gh-release` to create a GitHub Release and attach all
+  four binaries, with auto-generated release notes from merged PRs/commits.
+- Requires the `contents: write` permission (declared on the job).
+
+**Cutting a release:**
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+If the tag is annotated (`git tag -a v1.0.0 -m "Release notes"`) its message
+becomes the release body; otherwise the action generates notes from commits.
 
 ### The HTML linter (`scripts/lint-html.js`)
 
