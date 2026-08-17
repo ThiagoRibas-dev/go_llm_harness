@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 )
@@ -44,7 +45,22 @@ func TestWorkflowLiveTraceEvents(t *testing.T) {
 	activeConfig = &Config{}
 	activeSessionID = "test_session"
 	currentTurnNumber = 0
-	activeConfig.Agent.WorkspaceDir = t.TempDir()
+
+	// Use a manually-managed temp dir instead of t.TempDir(). The test runs a
+	// sandboxed tool that writes turn files into the workspace; on some CI
+	// runners the automatic TempDir cleanup then fails with "permission denied"
+	// even though the test itself passed. We remove what we can and log (but
+	// do not fail) if cleanup is blocked.
+	workspaceDir, err := os.MkdirTemp("", "goharness-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp workspace: %v", err)
+	}
+	defer func() {
+		if rmErr := os.RemoveAll(workspaceDir); rmErr != nil {
+			t.Logf("warning: could not fully clean up temp workspace %s: %v", workspaceDir, rmErr)
+		}
+	}()
+	activeConfig.Agent.WorkspaceDir = workspaceDir
 
 	executor := &WorkflowExecutor{
 		SessionID:    activeSessionID,
