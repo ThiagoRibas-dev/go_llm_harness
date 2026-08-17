@@ -247,9 +247,9 @@
     </div>
 
     <!-- ================= 🛠️ SETTINGS CONFIGURATION MODAL ================= -->
-    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-        <div id="settings-dialog" class="bg-[#1e293b] border border-[#334155] w-full max-w-6xl rounded-xl shadow-2xl overflow-hidden modal-animate my-8">
-            <div class="px-6 py-4 border-b border-[#334155] flex items-center justify-between bg-slate-900/40 select-none">
+    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 bg-black/60 backdrop-blur-sm overflow-y-auto">
+        <div id="settings-dialog" class="bg-[#1e293b] border border-[#334155] w-full max-w-6xl rounded-xl shadow-2xl overflow-hidden modal-animate my-8 flex flex-col" style="max-height:88vh;">
+            <div class="px-6 py-4 border-b border-[#334155] flex items-center justify-between bg-slate-900/40 select-none shrink-0">
                 <div class="flex items-center space-x-4">
                     <button type="button" onclick="switchSettingsTab('standard')" id="btn-settings-tab-standard" class="font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition">
                         <i class="fa-solid fa-sliders mr-2"></i> Settings
@@ -266,8 +266,8 @@
                 </button>
             </div>
 
-            <form id="settings-form" onsubmit="saveSettings(event)" class="p-6 space-y-5 text-xs max-h-[75vh] overflow-y-auto">
-                <div id="settings-panel-standard" class="space-y-5">
+            <form id="settings-form" onsubmit="saveSettings(event)" class="flex-1 min-h-0 flex flex-col text-xs">
+                <div id="settings-panel-standard" class="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
                 
                 <!-- API Provider Settings -->
                 <div class="space-y-3">
@@ -297,30 +297,29 @@
                             <label class="block text-slate-300 font-bold mb-1.5">Model Target</label>
                             <input type="text" id="input-model" placeholder="gpt-4o" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
                         </div>
-                    </div>
 
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-slate-300 font-bold mb-1.5">API Key / Access Token</label>
-                            <input type="password" id="input-api-key" placeholder="sk-proj-..." class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-mono">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-slate-300 font-bold mb-1.5">API Key / Access Token</label>
+                                <input type="password" id="input-api-key" placeholder="sk-proj-..." class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-mono">
+                            </div>
+                            <div>
+                                <label class="block text-slate-300 font-bold mb-1.5">Base Endpoint URL (Manual Override)</label>
+                                <input type="text" id="input-base-url" placeholder="https://api.openai.com/v1/chat/completions" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-slate-300 font-bold mb-1.5">Base Endpoint URL (Manual Override)</label>
-                            <input type="text" id="input-base-url" placeholder="https://api.openai.com/v1/chat/completions" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
-                        </div>
-                    </div>
 
-                    <!-- GCP Vertex Specific Fields (Dynamically revealed) -->
-                    <div id="vertex-fields" class="hidden grid grid-cols-2 gap-4 bg-slate-900/40 p-3 rounded border border-[#334155]/50">
-                        <div>
-                            <label class="block text-slate-300 font-bold mb-1.5">GCP Project ID</label>
-                            <input type="text" id="input-project-id" placeholder="my-gcp-project" class="w-full bg-[#0f172a] border border-[#334155] rounded px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
+                        <!-- GCP Vertex Specific Fields (Dynamically revealed) -->
+                        <div id="vertex-fields" class="hidden grid grid-cols-2 gap-4 bg-slate-900/40 p-3 rounded border border-[#334155]/50">
+                            <div>
+                                <label class="block text-slate-300 font-bold mb-1.5">GCP Project ID</label>
+                                <input type="text" id="input-project-id" placeholder="my-gcp-project" class="w-full bg-[#0f172a] border border-[#334155] rounded px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-slate-300 font-bold mb-1.5">GCP Region (optional)</label>
+                                <input type="text" id="input-region" placeholder="us-central1" class="w-full bg-[#0f172a] border border-[#334155] rounded px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-slate-300 font-bold mb-1.5">GCP Region (optional)</label>
-                            <input type="text" id="input-region" placeholder="us-central1" class="w-full bg-[#0f172a] border border-[#334155] rounded px-3 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
-                        </div>
-                    </div>
                     </div><!-- /#inline-api-fields -->
                 </div>
 
@@ -536,8 +535,8 @@
                 </div>
                 </div>
 
-                <!-- Modal Footer Actions -->
-                <div class="pt-4 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/20 -mx-6 -mb-6 p-4">
+                <!-- Modal Footer Actions (standard settings) -->
+                <div class="pt-4 mt-2 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/40 -mx-6 px-6 py-3 shrink-0">
                     <button type="button" onclick="closeSettingsModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
                         Cancel
                     </button>
@@ -548,7 +547,7 @@
             </form>
 
             <!-- TAB 2: AI WORKFLOW LAB v2.0 (Visual Node Graph Editor) -->
-            <div id="settings-panel-workflow" class="hidden flex flex-col text-xs" style="height:78vh;">
+            <div id="settings-panel-workflow" class="hidden flex-1 min-h-0 flex flex-col p-6 text-xs">
                 <!-- AI Compiler prompt box -->
                 <div class="bg-slate-900/30 p-3 rounded-xl border border-blue-500/30 space-y-2 mb-3">
                     <div class="flex items-center justify-between">
@@ -640,7 +639,7 @@
             </div>
 
             <!-- TAB 3: PROVIDER PROFILES (reusable connections) -->
-            <div id="settings-panel-providers" class="hidden p-6 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
+            <div id="settings-panel-providers" class="hidden flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs">
                 <div class="flex items-center justify-between">
                     <div>
                         <div class="font-bold text-slate-200 flex items-center"><i class="fa-solid fa-plug-circle-bolt mr-2 text-amber-400"></i> Connection Profiles</div>
@@ -2270,6 +2269,30 @@
             return wfProfiles;
         }
 
+        // Selecting a connection profile must clear any stale inline
+        // provider/model/temperature on the node; otherwise mergeProfileWithFills
+        // would let the old inline values (e.g. gpt-4o-mini on a Gemini profile)
+        // override the profile. Re-selecting "inline" restores sane defaults.
+        function setNodeProfile(id, profileName) {
+            const n = nodeById(id);
+            if (!n) return;
+            n.properties = n.properties || {};
+            n.properties.provider_profile = profileName;
+            if (profileName) {
+                delete n.properties.provider;
+                delete n.properties.model;
+                delete n.properties.temperature;
+            } else {
+                n.properties.provider = "openai";
+                n.properties.model = "gpt-4o-mini";
+                n.properties.temperature = 0.2;
+            }
+            syncJsonFromModel();
+            renderGraph();
+            selectNode(id);
+            setValidation(true, profileName ? `Using profile '@${profileName}'.` : "Using inline model settings.");
+        }
+
         // Write a property change back to the model and refresh the node card.
         function updateNodeProp(id, key, value) {
             const n = nodeById(id);
@@ -2353,7 +2376,7 @@
                 fields = `
                     <div>
                         <label class="block text-slate-400 mb-1">Connection Profile</label>
-                        <select onchange="updateNodeProp('${escapeHtml(n.id)}','provider_profile',this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono">${profileOpts}</select>
+                        <select onchange="setNodeProfile('${escapeHtml(n.id)}',this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono">${profileOpts}</select>
                     </div>
                     <div id="llm-inline-fields" class="space-y-2" style="${p.provider_profile ? "display:none" : ""}">
                         <div>
@@ -2493,6 +2516,17 @@
         }
 
         // ---- Add / delete nodes ----
+        function toggleAddNodeMenu() {
+            document.getElementById("add-node-menu").classList.toggle("hidden");
+        }
+
+        function autoLayoutNodes() {
+            autoLayout();
+            renderGraph();
+            syncJsonFromModel();
+            setValidation(true, "Auto-arranged nodes.");
+        }
+
         function uniqueNodeId(type) {
             if (!nodeById(type)) return type;
             let n = 1;
