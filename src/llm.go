@@ -14,10 +14,18 @@ import (
 // 🔌 UNIFIED MULTI-PROVIDER DISPATCHER
 // =================================================================
 
-// SendMultiProviderRequest detects the configured provider and routes the request.
-// It also parses usage statistics and broadcasts real-time financial tracking to the UI.
+// SendMultiProviderRequest routes a completion using the global api.
+// Prefer sendProviderRequest with an explicit APIConfig for agent runs, which is
+// safe for concurrent agents with different connections.
 func SendMultiProviderRequest(messages []Message, tools []Tool) (*Message, error) {
-	provider := strings.ToLower(activeConfig.API.Provider)
+	return sendProviderRequest(activeConfig.API, messages, tools)
+}
+
+// sendProviderRequest routes a completion to the provider named in api, using
+// an explicit connection instead of the global config. It parses usage and
+// broadcasts cost tracking to the UI.
+func sendProviderRequest(api APIConfig, messages []Message, tools []Tool) (*Message, error) {
+	provider := strings.ToLower(api.Provider)
 	if provider == "" {
 		provider = "openai"
 	}
@@ -35,27 +43,24 @@ func SendMultiProviderRequest(messages []Message, tools []Tool) (*Message, error
 
 	switch provider {
 	case "anthropic":
-		// Custom Anthropic request
 		var antResp AnthropicResponse
-		respMsg, antResp, err = sendAnthropicRequestWithUsage(messages, tools)
+		respMsg, antResp, err = sendAnthropicRequestWithUsage(api, messages, tools)
 		if err == nil {
 			promptTokens = antResp.Usage.InputTokens
 			completionTokens = antResp.Usage.OutputTokens
 			totalTokens = promptTokens + completionTokens
 		}
 	case "gemini", "vertex":
-		// Custom Gemini/Vertex request
 		var gemResp GeminiResponse
-		respMsg, gemResp, err = sendGeminiRequestWithUsage(messages, tools, provider == "vertex")
+		respMsg, gemResp, err = sendGeminiRequestWithUsage(api, messages, tools, provider == "vertex")
 		if err == nil {
 			promptTokens = gemResp.UsageMetadata.PromptTokenCount
 			completionTokens = gemResp.UsageMetadata.CandidatesTokenCount
 			totalTokens = gemResp.UsageMetadata.TotalTokenCount
 		}
 	default:
-		// Default OpenAI compatible request
 		var oaiResp ChatCompletionResponse
-		respMsg, oaiResp, err = sendOpenAIRequestWithUsage(messages, tools)
+		respMsg, oaiResp, err = sendOpenAIRequestWithUsage(api, messages, tools)
 		if err == nil {
 			promptTokens = oaiResp.Usage.PromptTokens
 			completionTokens = oaiResp.Usage.CompletionTokens
@@ -63,12 +68,9 @@ func SendMultiProviderRequest(messages []Message, tools []Tool) (*Message, error
 		}
 	}
 
-	// Calculate and broadcast real-time cost and token diagnostics (Phase 8.6)
 	if err == nil {
 		charCount += len(respMsg.Content)
-		cost := calculateActiveCost(activeConfig.API.Model, promptTokens, completionTokens)
-		
-		// Broadcast metrics to the Web Console SSE channel
+		cost := calculateCost(api, promptTokens, completionTokens)
 		BroadcastSSE("cost_update", map[string]interface{}{
 			"cost":              cost,
 			"prompt_tokens":     promptTokens,
@@ -85,9 +87,9 @@ func SendMultiProviderRequest(messages []Message, tools []Tool) (*Message, error
 // 💰 DYNAMIC MONETARY PRICING ENGINE
 // =================================================================
 
-func calculateActiveCost(model string, promptTokens, completionTokens int) float64 {
-	model = strings.ToLower(model)
-	baseURL := strings.ToLower(activeConfig.API.BaseURL)
+func calculateCost(api APIConfig, promptTokens, completionTokens int) float64 {
+	model := strings.ToLower(api.Model)
+	baseURL := strings.ToLower(api.BaseURL)
 
 	// If running fully locally via Ollama / llama-server, cost is ABSOLUTELY FREE ($0.00)!
 	if strings.Contains(baseURL, "localhost") || strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "11434") {
@@ -170,11 +172,11 @@ type AnthropicUsage struct {
 	OutputTokens int `json:"output_tokens"`
 }
 
-func sendAnthropicRequestWithUsage(messages []Message, tools []Tool) (*Message, AnthropicResponse, error) {
+func sendAnthropicRequestWithUsage(api APIConfig, messages []Message, tools []Tool) (*Message, AnthropicResponse, error) {
 	var antReq AnthropicRequest
-	antReq.Model = activeConfig.API.Model
-	antReq.MaxTokens = activeConfig.API.MaxTokens
-	antReq.Temperature = activeConfig.API.Temperature
+	antReq.Model = api.Model
+	antReq.MaxTokens = api.MaxTokens
+	antReq.Temperature = api.Temperature
 
 	// 1. Separate System Prompt from core Messages
 	var cleanMessages []Message
@@ -242,7 +244,7 @@ func sendAnthropicRequestWithUsage(messages []Message, tools []Tool) (*Message, 
 	}
 
 	// 4. Dispatch HTTP Call
-	url := activeConfig.API.BaseURL
+	url := api.BaseURL
 	if url == "" || strings.Contains(url, "api.openai.com") {
 		url = "https://api.anthropic.com/v1/messages"
 	}
@@ -253,7 +255,7 @@ func sendAnthropicRequestWithUsage(messages []Message, tools []Tool) (*Message, 
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", activeConfig.API.Key)
+	req.Header.Set("x-api-key", api.Key)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
 	client := &http.Client{}
@@ -363,7 +365,7 @@ type GeminiUsage struct {
 	TotalTokenCount      int `json:"totalTokenCount"`
 }
 
-func sendGeminiRequestWithUsage(messages []Message, tools []Tool, isVertex bool) (*Message, GeminiResponse, error) {
+func sendGeminiRequestWithUsage(api APIConfig, messages []Message, tools []Tool, isVertex bool) (*Message, GeminiResponse, error) {
 	var gemReq GeminiRequest
 
 	// 1. Separate System instruction
@@ -434,29 +436,29 @@ func sendGeminiRequestWithUsage(messages []Message, tools []Tool, isVertex bool)
 	}
 
 	// 4. Construct API Endpoint URL
-	url := activeConfig.API.BaseURL
+	url := api.BaseURL
 	if isVertex {
 		if url == "" || strings.Contains(url, "googleapis.com") {
 			endpoint := "aiplatform.googleapis.com"
-			if activeConfig.API.Region != "" {
-				endpoint = fmt.Sprintf("%s-aiplatform.googleapis.com", activeConfig.API.Region)
+			if api.Region != "" {
+				endpoint = fmt.Sprintf("%s-aiplatform.googleapis.com", api.Region)
 			}
 
-			if activeConfig.API.ProjectID != "" && activeConfig.API.Region != "" {
+			if api.ProjectID != "" && api.Region != "" {
 				url = fmt.Sprintf("https://%s/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent?key=%s", 
-					endpoint, activeConfig.API.ProjectID, activeConfig.API.Region, activeConfig.API.Model, activeConfig.API.Key)
+					endpoint, api.ProjectID, api.Region, api.Model, api.Key)
 			} else {
 				url = fmt.Sprintf("https://%s/v1/publishers/google/models/%s:generateContent?key=%s", 
-					endpoint, activeConfig.API.Model, activeConfig.API.Key)
+					endpoint, api.Model, api.Key)
 			}
-		} else if !strings.Contains(url, "?key=") && activeConfig.API.Key != "" {
-			url = fmt.Sprintf("%s?key=%s", strings.TrimSuffix(url, "/"), activeConfig.API.Key)
+		} else if !strings.Contains(url, "?key=") && api.Key != "" {
+			url = fmt.Sprintf("%s?key=%s", strings.TrimSuffix(url, "/"), api.Key)
 		}
 	} else {
 		if url == "" || strings.Contains(url, "api.openai.com") {
-			url = fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", activeConfig.API.Model, activeConfig.API.Key)
-		} else if !strings.Contains(url, "?key=") && activeConfig.API.Key != "" {
-			url = fmt.Sprintf("%s?key=%s", strings.TrimSuffix(url, "/"), activeConfig.API.Key)
+			url = fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", api.Model, api.Key)
+		} else if !strings.Contains(url, "?key=") && api.Key != "" {
+			url = fmt.Sprintf("%s?key=%s", strings.TrimSuffix(url, "/"), api.Key)
 		}
 	}
 
@@ -468,7 +470,7 @@ func sendGeminiRequestWithUsage(messages []Message, tools []Tool, isVertex bool)
 	req.Header.Set("Content-Type", "application/json")
 	
 	if isVertex && !strings.Contains(url, "?key=") {
-		req.Header.Set("Authorization", "Bearer "+activeConfig.API.Key)
+		req.Header.Set("Authorization", "Bearer "+api.Key)
 	}
 
 	client := &http.Client{}
@@ -526,12 +528,12 @@ func sendGeminiRequestWithUsage(messages []Message, tools []Tool, isVertex bool)
 // 🌐 STANDARD OPENAI (OPENAI-COMPATIBLE API) CONNECTOR
 // =================================================================
 
-func sendOpenAIRequestWithUsage(messages []Message, tools []Tool) (*Message, ChatCompletionResponse, error) {
+func sendOpenAIRequestWithUsage(api APIConfig, messages []Message, tools []Tool) (*Message, ChatCompletionResponse, error) {
 	reqBody := ChatCompletionRequest{
-		Model:       activeConfig.API.Model,
+		Model:       api.Model,
 		Messages:    messages,
 		Tools:       tools,
-		Temperature: activeConfig.API.Temperature,
+		Temperature: api.Temperature,
 	}
 
 	jsonBytes, err := json.Marshal(reqBody)
@@ -539,14 +541,14 @@ func sendOpenAIRequestWithUsage(messages []Message, tools []Tool) (*Message, Cha
 		return nil, ChatCompletionResponse{}, err
 	}
 
-	req, err := http.NewRequest("POST", activeConfig.API.BaseURL, bytes.NewBuffer(jsonBytes))
+	req, err := http.NewRequest("POST", api.BaseURL, bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		return nil, ChatCompletionResponse{}, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if activeConfig.API.Key != "" {
-		req.Header.Set("Authorization", "Bearer "+activeConfig.API.Key)
+	if api.Key != "" {
+		req.Header.Set("Authorization", "Bearer "+api.Key)
 	}
 
 	client := &http.Client{}

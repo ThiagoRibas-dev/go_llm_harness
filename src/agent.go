@@ -219,7 +219,7 @@ func executeSessionRollback(targetTurn int) {
 }
 
 // executeSlidingWindowCompaction triggers a background LLM call to compress history.
-func executeSlidingWindowCompaction(history []Message, force bool) {
+func executeSlidingWindowCompaction(a *Agent, history []Message, force bool) {
 	limit := activeConfig.Compaction.AutoCompactTurns
 	keepLastN := activeConfig.Compaction.KeepLastN
 
@@ -251,7 +251,7 @@ func executeSlidingWindowCompaction(history []Message, force bool) {
 	}
 
 	// 1. Read previous summary if it exists to accumulate knowledge recursively
-	prevSummary, _ := getCompactedSummary()
+	prevSummary, _ := a.compactionSummary()
 	
 	var historyToCompact strings.Builder
 	if prevSummary != "" {
@@ -276,28 +276,25 @@ func executeSlidingWindowCompaction(history []Message, force bool) {
 	// Temporarily swap global API parameters with the compaction connection.
 	// Resolves provider_profile from providers.json when configured; otherwise
 	// falls back to the legacy inline compaction fields.
-	parentAPI := activeConfig.API
-	activeConfig.API = activeConfig.ResolveCompactionConfig()
+	compAPI := activeConfig.ResolveCompactionConfig()
 
 	reqBody := ChatCompletionRequest{
-		Model: activeConfig.API.Model,
+		Model: compAPI.Model,
 		Messages: []Message{
 			{Role: "system", Content: activeConfig.Compaction.SystemPrompt},
 			{Role: "user", Content: compactionPrompt},
 		},
-		Temperature: activeConfig.API.Temperature,
+		Temperature: compAPI.Temperature,
 	}
 
-	respMsg, err := SendMultiProviderRequest(reqBody.Messages, nil)
+	respMsg, err := sendProviderRequest(compAPI, reqBody.Messages, nil)
 	
-	// Restore parent parameters immediately
-	activeConfig.API = parentAPI
 	if err != nil {
 		fmt.Printf("%s[WARNING] Context Compaction API call failed: %v. Skipping compaction.%s\n", ColorYellow, err, ColorReset)
 		return
 	}
 
-	sessionPath := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID))
+	sessionPath := GetSystemPath(filepath.Join(".goharness", "sessions", a.SessionID))
 	
 	// Create named compacted output file
 	summaryFilename := fmt.Sprintf("compacted_summary_up_to_turn_%03d.json", boundaryTurnNumber)
@@ -305,7 +302,7 @@ func executeSlidingWindowCompaction(history []Message, force bool) {
 	_ = os.WriteFile(summaryPath, []byte(respMsg.Content), 0644)
 
 	// Save compaction boundary directly into meta.json (replaces compaction_boundary.txt)
-	updateSessionCompactionBoundary(activeSessionID, boundaryTurnNumber)
+	updateSessionCompactionBoundary(a.SessionID, boundaryTurnNumber)
 
 	// Create sibling archive folder with exact same name base (creates a soft relation)
 	archiveFolderName := fmt.Sprintf("compacted_summary_up_to_turn_%03d", boundaryTurnNumber)
@@ -599,77 +596,31 @@ func shouldCollapse(name string, patterns []string) bool {
 	}
 	return false
 }
-
-// executeSubAgent spawns a recursively isolated background sub-agent to execute specialized research or historical searches
-func executeSubAgent(prompt string) string {
-	// Temporarily preserve parent thread context state
-	parentSessionID := activeSessionID
-	parentTurnNumber := currentTurnNumber
-
-	// Create unique sub-agent session directory
-	subAgentSessionID := fmt.Sprintf("%s_sub_agent_%d", parentSessionID, time.Now().UnixNano())
-	subAgentPath := GetSystemPath(filepath.Join(".goharness", "sessions", subAgentSessionID))
-	_ = os.MkdirAll(subAgentPath, 0755)
-
-	wsName := filepath.Base(activeConfig.Agent.WorkspaceDir)
-	createSessionMeta(subAgentSessionID, activeConfig.Agent.WorkspaceDir, parentSessionID, "Sub-Agent research: "+wsName)
-
-	// Swap globally scoped thread context to sub-agent
-	activeSessionID = subAgentSessionID
-	currentTurnNumber = 0
-
-	fmt.Printf("\n%s🤖 [SUB-AGENT] Initializing recursive execution...%s\n", ColorBold+ColorMagenta, ColorReset)
-	
-	// Broadcast sub-agent spawning activity to visual browser timeline
-	BroadcastSSE("turn_secured", map[string]interface{}{
-		"turn_number": 0,
-		"role":        "system",
-		"name":        "system",
-		"content":     fmt.Sprintf("🤖 **[SUB-AGENT ENTRUSTED]** Spawning isolated background sub-agent to search/resolve task:\n\n*\"%s\"*", prompt),
-	})
-
-	// Execute full, multi-turn tool-capable loop recursively inside the isolated folder!
-	answer := runAgentLoop(prompt)
-
-	fmt.Printf("%s🤖 [SUB-AGENT SUCCESS] Sub-agent completed task. Restoring parent thread.%s\n", ColorBold+ColorGreen, ColorReset)
-
-	// Restore parent thread context state
-	activeSessionID = parentSessionID
-	currentTurnNumber = parentTurnNumber
-
-	// Save parent session configuration persistence
-	activeConfig.Agent.LastActiveSessionID = activeSessionID
-	_ = SaveConfig("config.json", activeConfig)
-
-	// Return a beautifully structured markdown report to the parent LLM!
-	return fmt.Sprintf("=== SUB-AGENT RESEARCH REPORT ===\n\n**Requested Task:** %s\n\n**Specialized Findings:**\n%s\n\n=================================", prompt, answer)
-}
-
 // executeBM25Search indexes and queries workspace or session folder files using our custom BM25 engine
-func executeBM25Search(query, scope string, limit int) string {
+func executeBM25Search(a *Agent, query, scope string, limit int) string {
 	engine := NewBM25Engine()
 	var err error
 
 	if scope == "session" {
-		// Index all session turns
-		sessionPath := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID))
+		// Index this agent's own session turns.
+		sessionPath := GetSystemPath(filepath.Join(".goharness", "sessions", a.SessionID))
 		err = engine.IndexDirectory(sessionPath, []string{"backups", "compacted_summary_up_to_turn_"})
 	} else {
 		// Default to workspace. If TargetScanDirs is non-empty, index ONLY those subdirectories!
 		if len(activeConfig.Agent.TargetScanDirs) > 0 {
 			for _, sub := range activeConfig.Agent.TargetScanDirs {
-				subPath := filepath.Join(activeConfig.Agent.WorkspaceDir, sub)
+				subPath := filepath.Join(a.Workspace, sub)
 				if _, errStat := os.Stat(subPath); errStat == nil {
 					_ = engine.IndexDirectory(subPath, []string{".git", ".goharness", "node_modules", "venv", ".venv", "dist", "build", "target"})
 				}
 			}
 		} else {
 			// Fallback to indexing the entire workspace root
-			err = engine.IndexDirectory(activeConfig.Agent.WorkspaceDir, []string{".git", ".goharness", "node_modules", "venv", ".venv", "dist", "build", "target"})
+			err = engine.IndexDirectory(a.Workspace, []string{".git", ".goharness", "node_modules", "venv", ".venv", "dist", "build", "target"})
 		}
 
 		// Always index the session uploads folder if it exists!
-		uploadsPath := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID, "uploads"))
+		uploadsPath := GetSystemPath(filepath.Join(".goharness", "sessions", a.SessionID, "uploads"))
 		if _, errStat := os.Stat(uploadsPath); errStat == nil {
 			_ = engine.IndexDirectory(uploadsPath, []string{})
 		}

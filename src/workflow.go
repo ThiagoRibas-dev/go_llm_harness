@@ -78,16 +78,6 @@ type WorkflowExecutor struct {
 	throttleMu sync.Mutex
 }
 
-// throttleKey identifies which concurrency bucket a node belongs to. A named
-// provider profile wins; otherwise we fall back to "provider/model" so inline
-// nodes hitting the same endpoint also share a limit.
-func throttleKey(profileName string, cfg APIConfig) string {
-	if profileName != "" {
-		return "profile:" + profileName
-	}
-	return "inline:" + cfg.Provider + "/" + cfg.Model
-}
-
 // acquireThrottle blocks until a slot is free for the node's connection
 // bucket, returning a release function. If the resolved connection has
 // MaxConcurrency <= 0 the call is a no-op (unlimited).
@@ -711,6 +701,14 @@ func (e *WorkflowExecutor) broadcastNode(n *RuntimeNode, status string, startTim
 }
 
 func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inputs map[string]interface{}) error {
+	// A node-scoped agent provides session/workspace context to tool calls.
+	// DAG nodes don't persist chat turns, but write/read tools need a
+	// workspace and session path.
+	nodeAgent := &Agent{
+		SessionID:  activeSessionID,
+		Workspace:  activeConfig.Agent.WorkspaceDir,
+		throttlers: e.throttlers,
+	}
 	switch n.Type {
 	case "user_input":
 		return nil
@@ -731,7 +729,7 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 		}
 
 		writeDebugLog("[WORKFLOW NODE %s] BM25 Search requested: query: '%s', scope: %s", n.ID, query, scope)
-		result := executeBM25Search(query, scope, limit)
+		result := executeBM25Search(nodeAgent, query, scope, limit)
 
 		n.mu.Lock()
 		n.Outputs["search_results"] = result
@@ -751,11 +749,11 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 		if toolName == "write_file" {
 			var m map[string]string
 			_ = json.Unmarshal([]byte(args), &m)
-			result = executeWriteFile(m["path"], m["content"])
+			result = executeWriteFile(nodeAgent, m["path"], m["content"])
 		} else if toolName == "patch_file" {
 			var m map[string]string
 			_ = json.Unmarshal([]byte(args), &m)
-			result = executePatchFile(m["path"], m["search"], m["replace"])
+			result = executePatchFile(nodeAgent, m["path"], m["search"], m["replace"])
 		} else if toolName == "execute_command" {
 			var m map[string]string
 			_ = json.Unmarshal([]byte(args), &m)
@@ -974,19 +972,19 @@ func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, input
 	// specialist") still take precedence in tone/role.
 	envContext := buildEnvironmentSystemPrompt()
 
-	// Temporarily hot-swap global API settings for this node's requests.
-	parentAPI := activeConfig.API
-	activeConfig.API = nodeAPI
-	defer func() { activeConfig.API = parentAPI }()
-
-	// Per-profile concurrency limit: parallel nodes targeting the same
-	// provider profile queue behind its semaphore so we don't exceed the
-	// provider's max concurrent requests and trigger 429s/overload errors.
+	// Build a node-scoped agent with the resolved connection. It shares the
+	// executor's throttle map so parallel nodes on a rate-limited profile
+	// queue instead of firing N simultaneous requests.
 	profileName, _ := n.Properties["provider_profile"].(string)
+	nodeAgent := &Agent{
+		SessionID:   activeSessionID,
+		Workspace:   activeConfig.Agent.WorkspaceDir,
+		API:         nodeAPI,
+		ProfileName: profileName,
+		throttlers:  e.throttlers,
+	}
 	callLLM := func(msgs []Message, tl []Tool) (*Message, error) {
-		release := e.acquireThrottle(ctx, profileName, nodeAPI)
-		defer release()
-		return SendMultiProviderRequest(msgs, tl)
+		return nodeAgent.request(ctx, msgs, tl)
 	}
 
 	if !boolProp(n, "tools_enabled") {
@@ -1041,7 +1039,7 @@ func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, input
 		}
 
 		// Persist the assistant turn so rollbacks/history see it.
-		saveMessageTurn(*respMsg)
+		nodeAgent.saveTurn(*respMsg)
 		messages = append(messages, *respMsg)
 
 		if respMsg.Content != "" {
@@ -1060,7 +1058,7 @@ func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, input
 		// Execute each requested tool and append its result.
 		for _, toolCall := range respMsg.ToolCalls {
 			writeDebugLog("[WORKFLOW NODE %s] Invoking tool: %s", n.ID, toolCall.Function.Name)
-			result := executeToolCall(turn, toolCall)
+			result := executeToolCall(nodeAgent, turn, toolCall)
 			writeDebugLog("[WORKFLOW NODE %s] Tool result: %s", n.ID, truncateResult(result))
 			toolMsg := Message{
 				Role:       "tool",
@@ -1068,7 +1066,7 @@ func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, input
 				Name:       toolCall.Function.Name,
 				Content:    result,
 			}
-			saveMessageTurn(toolMsg)
+			nodeAgent.saveTurn(toolMsg)
 			messages = append(messages, toolMsg)
 		}
 	}

@@ -23,3 +23,6 @@ uploads/
 
 # Go specific
 go.sum
+
+# stray build output in src/
+src/src

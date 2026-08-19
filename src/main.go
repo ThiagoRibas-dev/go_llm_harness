@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -282,166 +282,15 @@ func printBanner() {
 	fmt.Printf("%s=======================================================%s\n\n", ColorBlue, ColorReset)
 }
 
+// runAgentLoop keeps the legacy global API for callers that have not
+// migrated to an *Agent. It builds a root agent and runs it. New code
+// should use NewRootAgent().Run(ctx, prompt) directly.
 func runAgentLoop(userPrompt string) string {
-	// Tool schemas are shared with the DAG workflow engine (see tools.go).
-	// Passing nil/true means: all built-in tools plus any MCP-discovered tools.
-	agentTools := selectTools(nil, true)
-
-	localInstructions := LoadLocalInstructions()
-	workspaceTree, err := GenerateWorkspaceTree(activeConfig.Agent.WorkspaceDir, activeConfig.DirectoryScan)
-	if err != nil {
-		fmt.Printf("%s[WARNING] Failed to scan workspace tree: %v%s\n", ColorYellow, err, ColorReset)
-	}
-
-	systemBase := "You are a highly capable agent with access to a local terminal sandbox. Use your tools to write files, patch code, run scripts, compile binaries, and solve the user's request. When you run a script, check its output to ensure it succeeded. If it failed, fix it and try again."
-
-	// Tell the model exactly which OS/shell execute_command lands in, so it
-	// emits `dir`/`type` on Windows cmd.exe instead of blindly using `ls`/`cat`.
-	envContext := buildEnvironmentSystemPrompt()
-
-	fullSystemPrompt := strings.Join([]string{
-		systemBase,
-		envContext,
-		localInstructions,
-		"\n" + workspaceTree,
-		"\nIMPORTANT SAFETY RESTRICTION: You cannot write or modify files starting with '.goharness' or any system directories outside the authorized workspace.",
-	}, "\n")
-
-	userMsg := Message{Role: "user", Content: userPrompt}
-	saveMessageTurn(userMsg)
-
-	// 1. Route execution through the DAG workflow engine. This now powers
-	//    every workflow, including linear_chat (whose llm node has
-	//    tools_enabled=true and behaves like the original ReAct loop).
-	workflowsPath := GetSystemPath("workflows.json")
-	if _, errStat := os.Stat(workflowsPath); errStat == nil {
-		cfg, err := LoadWorkflowConfig()
-		if err == nil && cfg.ActiveWorkflow != "" {
-			answer, errExec := ExecuteActiveWorkflow(userPrompt)
-			if errExec == nil {
-				return answer
-			}
-			fmt.Printf("%s[WORKFLOW EXECUTION ERROR] %v. Falling back to native tools loop.%s\n", ColorRed, errExec, ColorReset)
-		}
-	}
-
-	history := loadHistoryFromFiles()
-
-	// Count actual user prompts to decide if we should trigger compaction
-	userTurns := 0
-	for _, msg := range history {
-		if msg.Role == "user" {
-			userTurns++
-		}
-	}
-
-	if userTurns >= activeConfig.Compaction.AutoCompactTurns {
-		executeSlidingWindowCompaction(history, false)
-		history = loadHistoryFromFiles()
-	}
-
-	compactedSummary, compactionBoundary := getCompactedSummary()
-
-	var requestMessages []Message
-	requestMessages = append(requestMessages, Message{Role: "system", Content: fullSystemPrompt})
-
-	if compactedSummary != "" {
-		summaryState := fmt.Sprintf("=== CONTEXT COMPACTION STATE SUMMARY (Turns 1 to %d) ===\n"+
-			"Below is a dense summary of prior turns which have been archived to save tokens. Refer to this as the active task baseline:\n\n%s\n\n"+
-			"💡 RETRIEVAL INSTRUCTION: If you need to inspect the exact raw messages, tool calls, or code from these archived turns "+
-			"(e.g., to find specific technical details referenced in the summary), you have full access to their raw JSON files. "+
-			"They are stored in your active session subfolder under: '.goharness/sessions/%s/compacted_summary_up_to_turn_%03d/'. "+
-			"Use the 'execute_command' tool to read/find them if necessary.",
-			compactionBoundary, compactedSummary, activeSessionID, compactionBoundary)
-		requestMessages = append(requestMessages, Message{Role: "system", Content: summaryState})
-	}
-
-	var filteredHistory []Message
-	sessionPath := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID))
-	entries, _ := os.ReadDir(sessionPath)
-	for _, entry := range entries {
-		name := entry.Name()
-		if !entry.IsDir() && strings.HasSuffix(name, ".json") && len(name) > 3 {
-			turnIdx, _ := strconv.Atoi(name[:3])
-			if turnIdx > compactionBoundary {
-				fileBytes, err := os.ReadFile(filepath.Join(sessionPath, name))
-				if err == nil {
-					var msg Message
-					if err := json.Unmarshal(fileBytes, &msg); err == nil {
-						filteredHistory = append(filteredHistory, msg)
-					}
-				}
-			}
-		}
-	}
-
-	requestMessages = append(requestMessages, filteredHistory...)
-
-	var lastTextAnswer string
-	maxTurns := activeConfig.Agent.MaxTurns
-	for turn := 1; turn <= maxTurns; turn++ {
-		fmt.Printf("\n%s--- TURN LOOP (%d / %d) ---%s\n", ColorBold+ColorWhite, turn, maxTurns, ColorReset)
-		writeDebugLog("Entering Turn %d of %d (Active Session: %s)", turn, maxTurns, activeSessionID)
-
-		fmt.Printf("%s[LLM] Thinking...%s\n", ColorYellow, ColorReset)
-		writeDebugLog("Requesting completion from provider: %s, model: %s", activeConfig.API.Provider, activeConfig.API.Model)
-		
-		startTime := time.Now()
-		responseMsg, err := SendMultiProviderRequest(requestMessages, agentTools)
-		if err != nil {
-			LogExecutionTrace(turn, "llm_completion", startTime, "failed", map[string]interface{}{"error": err.Error()})
-			fmt.Printf("%s[ERROR] LLM API Call Failed: %v%s\n", ColorRed, err, ColorReset)
-			writeDebugLog("LLM API Call failed on Turn %d: %v", turn, err)
-			
-			// Broadcast the API error directly to the Web Console!
-			BroadcastSSE("turn_secured", map[string]interface{}{
-				"turn_number": 0,
-				"role":        "system",
-				"name":        "system",
-				"content":     fmt.Sprintf("❌ [LLM API ERROR] Request failed: %v. Please verify your API Key and Provider Base URL in the Settings modal.", err),
-			})
-			return "Error: LLM API Call Failed."
-		}
-		LogExecutionTrace(turn, "llm_completion", startTime, "success", map[string]interface{}{"model": activeConfig.API.Model, "provider": activeConfig.API.Provider})
-		writeDebugLog("LLM response received. Content length: %d bytes. Tool calls: %d", len(responseMsg.Content), len(responseMsg.ToolCalls))
-
-		saveMessageTurn(*responseMsg)
-		requestMessages = append(requestMessages, *responseMsg)
-
-		if responseMsg.Content != "" {
-			fmt.Printf("\n%s🤖 Assistant:%s\n%s\n", ColorBold+ColorYellow, ColorReset, responseMsg.Content)
-			lastTextAnswer = responseMsg.Content
-		}
-
-		if len(responseMsg.ToolCalls) == 0 {
-			fmt.Printf("\n%s[SUCCESS] Task complete. No more tools requested by the LLM.%s\n", ColorBold+ColorGreen, ColorReset)
-			return lastTextAnswer
-		}
-
-		for _, toolCall := range responseMsg.ToolCalls {
-			fmt.Printf("\n%s🛠️ [TOOL CALL] Invoking: %s%s\n", ColorBold+ColorCyan, toolCall.Function.Name, ColorReset)
-			result := executeToolCall(turn, toolCall)
-
-			snippet := result
-			if len(snippet) > 400 {
-				snippet = snippet[:400] + "\n... [TRUNCATED] ..."
-			}
-			fmt.Printf("%s[RESULT]%s\n%s\n", ColorGreen, ColorReset, snippet)
-
-			toolResponseMsg := Message{
-				Role:       "tool",
-				ToolCallID: toolCall.ID,
-				Name:       toolCall.Function.Name,
-				Content:    result,
-			}
-			saveMessageTurn(toolResponseMsg)
-			requestMessages = append(requestMessages, toolResponseMsg)
-		}
-	}
-	return lastTextAnswer
+	return NewRootAgent().Run(context.Background(), userPrompt)
 }
 
-func executeWriteFile(path, content string) string {
+
+func executeWriteFile(a *Agent, path, content string) string {
 	cleanPath := filepath.Clean(path)
 
 	if strings.Contains(cleanPath, ".goharness") || strings.Contains(cleanPath, "config.json") || strings.HasPrefix(cleanPath, "..") || filepath.IsAbs(cleanPath) {
@@ -449,61 +298,65 @@ func executeWriteFile(path, content string) string {
 		return fmt.Sprintf("Security Exception: Systemic or out-of-workspace directories are write-protected. Access denied to path: %s", path)
 	}
 
-	backupWorkspaceFile(cleanPath)
+	return withWriteLock(func() string {
+		backupWorkspaceFile(a, cleanPath)
 
-	if activeConfig.Security.SandboxMode == "docker" {
-		cmd := exec.Command("docker", "exec", "-i", activeConfig.Security.DockerContainer, "tee", path)
-		cmd.Stdin = strings.NewReader(content)
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Sprintf("Docker write failed: %v. Stderr: %s", err, stderr.String())
+		if activeConfig.Security.SandboxMode == "docker" {
+			cmd := exec.Command("docker", "exec", "-i", activeConfig.Security.DockerContainer, "tee", path)
+			cmd.Stdin = strings.NewReader(content)
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
+			if err := cmd.Run(); err != nil {
+				return fmt.Sprintf("Docker write failed: %v. Stderr: %s", err, stderr.String())
+			}
+			return fmt.Sprintf("Successfully wrote file inside Docker at %s", path)
 		}
-		return fmt.Sprintf("Successfully wrote file inside Docker at %s", path)
-	}
 
-	fullPath := filepath.Join(activeConfig.Agent.WorkspaceDir, cleanPath)
-	os.MkdirAll(filepath.Dir(fullPath), 0755)
+		fullPath := filepath.Join(a.Workspace, cleanPath)
+		os.MkdirAll(filepath.Dir(fullPath), 0755)
 
-	err := os.WriteFile(fullPath, []byte(content), 0644)
-	if err != nil {
-		return fmt.Sprintf("Failed to write file to host disk: %v", err)
-	}
-	return fmt.Sprintf("Successfully wrote file to host disk at %s", cleanPath)
+		err := os.WriteFile(fullPath, []byte(content), 0644)
+		if err != nil {
+			return fmt.Sprintf("Failed to write file to host disk: %v", err)
+		}
+		return fmt.Sprintf("Successfully wrote file to host disk at %s", cleanPath)
+	})
 }
 
-func executePatchFile(path, search, replace string) string {
+func executePatchFile(a *Agent, path, search, replace string) string {
 	cleanPath := filepath.Clean(path)
 
 	if strings.Contains(cleanPath, ".goharness") || strings.Contains(cleanPath, "config.json") || strings.HasPrefix(cleanPath, "..") || filepath.IsAbs(cleanPath) {
 		return fmt.Sprintf("Security Exception: Systemic or out-of-workspace directories are write-protected. Access denied to path: %s", path)
 	}
 
-	fullPath := filepath.Join(activeConfig.Agent.WorkspaceDir, cleanPath)
+	return withWriteLock(func() string {
+		fullPath := filepath.Join(a.Workspace, cleanPath)
 
-	originalBytes, err := os.ReadFile(fullPath)
-	if err != nil {
-		return fmt.Sprintf("Patch Error: File not found or could not be read: %s. Use write_file to create new files.", cleanPath)
-	}
-	originalContent := string(originalBytes)
+		originalBytes, err := os.ReadFile(fullPath)
+		if err != nil {
+			return fmt.Sprintf("Patch Error: File not found or could not be read: %s. Use write_file to create new files.", cleanPath)
+		}
+		originalContent := string(originalBytes)
 
-	backupWorkspaceFile(cleanPath)
+		backupWorkspaceFile(a, cleanPath)
 
-	if !strings.Contains(originalContent, search) {
-		fmt.Printf("%s[PATCH ERROR] Block to search not found in file: %s%s\n", ColorRed, cleanPath, ColorReset)
-		return fmt.Sprintf("Patch Error: The search block was not found in the file '%s'. Ensure your search string matches exactly, including spaces and indentations. File remains unmodified.", cleanPath)
-	}
+		if !strings.Contains(originalContent, search) {
+			fmt.Printf("%s[PATCH ERROR] Block to search not found in file: %s%s\n", ColorRed, cleanPath, ColorReset)
+			return fmt.Sprintf("Patch Error: The search block was not found in the file '%s'. Ensure your search string matches exactly, including spaces and indentations. File remains unmodified.", cleanPath)
+		}
 
-	patchedContent := strings.Replace(originalContent, search, replace, 1)
+		patchedContent := strings.Replace(originalContent, search, replace, 1)
 
-	err = os.WriteFile(fullPath, []byte(patchedContent), 0644)
-	if err != nil {
-		return fmt.Sprintf("Patch Error: Failed to write patched content to host disk: %v", err)
-	}
+		err = os.WriteFile(fullPath, []byte(patchedContent), 0644)
+		if err != nil {
+			return fmt.Sprintf("Patch Error: Failed to write patched content to host disk: %v", err)
+		}
 
-	diffLines := len(strings.Split(replace, "\n")) - len(strings.Split(search, "\n"))
-	fmt.Printf("%s[PATCH SUCCESS] Patched %s successfully (+%d lines changed)%s\n", ColorGreen, cleanPath, diffLines, ColorReset)
-	return fmt.Sprintf("Successfully patched file '%s'. Changes applied seamlessly.", cleanPath)
+		diffLines := len(strings.Split(replace, "\n")) - len(strings.Split(search, "\n"))
+		fmt.Printf("%s[PATCH SUCCESS] Patched %s successfully (+%d lines changed)%s\n", ColorGreen, cleanPath, diffLines, ColorReset)
+		return fmt.Sprintf("Successfully patched file '%s'. Changes applied seamlessly.", cleanPath)
+	})
 }
 
 func executeTerminalCommand(command string) string {
@@ -523,13 +376,13 @@ func executeTerminalCommand(command string) string {
 
 // backupWorkspaceFile stashes a file before we overwrite or patch it.
 // If the file doesn't exist, we write an empty ".untracked_new" marker so that the rollback engine knows to delete it! (Phase 8.5)
-func backupWorkspaceFile(relativePath string) {
-	srcPath := filepath.Join(activeConfig.Agent.WorkspaceDir, relativePath)
+func backupWorkspaceFile(a *Agent, relativePath string) {
+	srcPath := filepath.Join(a.Workspace, relativePath)
+	turn := a.turn // current (pre-increment) turn number
 
 	content, err := os.ReadFile(srcPath)
 	if err != nil {
-		// File does not exist yet. Create a ".untracked_new" marker file (Phase 8.5)
-		markerDir := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID, "backups", fmt.Sprintf("turn-%d", currentTurnNumber+1)))
+		markerDir := GetSystemPath(filepath.Join(".goharness", "sessions", a.SessionID, "backups", fmt.Sprintf("turn-%d", turn+1)))
 		os.MkdirAll(markerDir, 0755)
 		markerPath := filepath.Join(markerDir, relativePath+".untracked_new")
 		os.MkdirAll(filepath.Dir(markerPath), 0755)
@@ -537,7 +390,7 @@ func backupWorkspaceFile(relativePath string) {
 		return
 	}
 
-	backupDir := GetSystemPath(filepath.Join(".goharness", "sessions", activeSessionID, "backups", fmt.Sprintf("turn-%d", currentTurnNumber+1)))
+	backupDir := GetSystemPath(filepath.Join(".goharness", "sessions", a.SessionID, "backups", fmt.Sprintf("turn-%d", turn+1)))
 	os.MkdirAll(backupDir, 0755)
 
 	destPath := filepath.Join(backupDir, relativePath)

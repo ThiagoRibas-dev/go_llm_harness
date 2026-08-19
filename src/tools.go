@@ -104,13 +104,17 @@ func builtInToolSchemas() []Tool {
 			Type: "function",
 			Function: FunctionDescriptor{
 				Name:        "spawn_sub_agent",
-				Description: "Spawn a specialized background sub-agent to perform complex file searches, code analysis, or parallel research in the workspace or session archives, returning a dense final summary report.",
+				Description: "Spawn an isolated sub-agent to perform one focused task (research, code analysis, search) and return a dense summary. Call this tool multiple times in ONE response to run several sub-agents in parallel; their results come back together.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"prompt": map[string]interface{}{
 							"type":        "string",
-							"description": "The precise task, file-search query, or instruction for the sub-agent.",
+							"description": "The precise task or instruction for the sub-agent.",
+						},
+						"description": map[string]interface{}{
+							"type":        "string",
+							"description": "Short label for this sub-agent shown while it runs (e.g. 'research auth library').",
 						},
 					},
 					"required": []string{"prompt"},
@@ -182,7 +186,7 @@ func selectTools(allowed []string, includeMCP bool) []Tool {
 // executeToolCall runs a single tool invoked by an LLM and returns its text
 // result. It is shared by the linear ReAct loop and tool-enabled DAG nodes.
 // turn is used solely for execution-trace logging.
-func executeToolCall(turn int, tc ToolCall) string {
+func executeToolCall(a *Agent, turn int, tc ToolCall) string {
 	toolStart := time.Now()
 	name := tc.Function.Name
 
@@ -193,6 +197,7 @@ func executeToolCall(turn int, tc ToolCall) string {
 		LogExecutionTrace(turn, "tool_mcp_call", toolStart, "success", map[string]interface{}{
 			"mcp_server": mcpServerName,
 			"tool_name":  name,
+			"session":    a.SessionID,
 		})
 		return result
 	}
@@ -228,7 +233,7 @@ func executeToolCall(turn int, tc ToolCall) string {
 				"path":          args.Path,
 				"bytes_written": len(args.Content),
 			})
-			return executeWriteFile(args.Path, args.Content)
+			return executeWriteFile(a, args.Path, args.Content)
 		}
 		return parseToolErr(turn, name, toolStart, tc.Function.Arguments)
 
@@ -240,7 +245,7 @@ func executeToolCall(turn int, tc ToolCall) string {
 		}
 		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
 			LogExecutionTrace(turn, "tool_patch_file", toolStart, "success", map[string]interface{}{"path": args.Path})
-			return executePatchFile(args.Path, args.Search, args.Replace)
+			return executePatchFile(a, args.Path, args.Search, args.Replace)
 		}
 		return parseToolErr(turn, name, toolStart, tc.Function.Arguments)
 
@@ -249,14 +254,6 @@ func executeToolCall(turn int, tc ToolCall) string {
 		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
 			LogExecutionTrace(turn, "tool_execute_command", toolStart, "success", map[string]interface{}{"command": args.Command})
 			return executeTerminalCommand(args.Command)
-		}
-		return parseToolErr(turn, name, toolStart, tc.Function.Arguments)
-
-	case "spawn_sub_agent":
-		var args struct{ Prompt string }
-		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
-			LogExecutionTrace(turn, "tool_spawn_sub_agent", toolStart, "success", map[string]interface{}{"prompt": args.Prompt})
-			return executeSubAgent(args.Prompt)
 		}
 		return parseToolErr(turn, name, toolStart, tc.Function.Arguments)
 
@@ -277,7 +274,7 @@ func executeToolCall(turn int, tc ToolCall) string {
 				"query": args.Query,
 				"scope": args.Scope,
 			})
-			return executeBM25Search(args.Query, args.Scope, args.Limit)
+			return executeBM25Search(a, args.Query, args.Scope, args.Limit)
 		}
 		return parseToolErr(turn, name, toolStart, tc.Function.Arguments)
 

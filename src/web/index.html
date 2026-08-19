@@ -1500,6 +1500,73 @@
             if (packet.event === "workflow_end") {
                 finalizeWorkflowTrace(packet.data);
             }
+
+            // ===== PARALLEL SUB-AGENTS =====
+            if (packet.event === "subagent_start") {
+                renderSubAgentRow(packet.data, "running");
+            }
+            if (packet.event === "subagent_done") {
+                renderSubAgentRow(packet.data, "done");
+            }
+        }
+
+        // Sub-agent progress card. Groups concurrent sub-agents by parent
+        // turn/session; rows update as start/done events arrive.
+        function subAgentCardId(data) {
+            return "subagents-" + (data.parent_session || "root");
+        }
+
+        function ensureSubAgentCard(data) {
+            const chat = document.getElementById("chat-messages");
+            let card = document.getElementById(subAgentCardId(data));
+            if (card) return card;
+            card = document.createElement("div");
+            card.id = subAgentCardId(data);
+            card.className = "max-w-4xl mx-auto rounded-lg border border-cyan-500/30 bg-slate-900/40 overflow-hidden";
+            card.innerHTML = `
+                <div class="flex items-center justify-between px-4 py-2 bg-cyan-950/30 border-b border-cyan-500/20">
+                    <div class="flex items-center gap-2 text-cyan-300 font-bold text-xs uppercase tracking-wider">
+                        <i class="fa-solid fa-diagram-project text-sm"></i>
+                        <span class="sa-title">Sub-agents</span>
+                    </div>
+                    <span class="sa-status text-[10px] font-mono text-cyan-400 flex items-center">
+                        <i class="fa-solid fa-spinner fa-spin mr-1.5"></i> running
+                    </span>
+                </div>
+                <div class="px-4 py-2 sa-rows space-y-1.5"></div>`;
+            chat.appendChild(card);
+            chat.scrollTop = chat.scrollHeight;
+            return card;
+        }
+
+        function renderSubAgentRow(data, state) {
+            const card = ensureSubAgentCard(data);
+            const rows = card.querySelector(".sa-rows");
+            const rowId = "sa-" + (data.session_id || data.description || Date.now());
+            let row = document.getElementById(rowId);
+            const label = data.description || data.session_id || "sub-agent";
+            if (!row) {
+                row = document.createElement("div");
+                row.id = rowId;
+                row.className = "flex items-center gap-2 text-[11px]";
+                rows.appendChild(row);
+            }
+            const icon = state === "done"
+                ? '<i class="fa-solid fa-circle-check text-emerald-400"></i>'
+                : '<i class="fa-solid fa-spinner fa-spin text-cyan-400"></i>';
+            const dur = data.duration_ms ? ` · ${data.duration_ms} ms` : "";
+            row.innerHTML = `${icon}<span class="font-mono text-slate-300 truncate">${escapeHtml(label)}</span><span class="text-slate-500 text-[10px]">${dur}</span>`;
+            if (state === "done") {
+                const pending = rows.querySelectorAll(".fa-spinner").length;
+                if (pending === 0) {
+                    const st = card.querySelector(".sa-status");
+                    st.innerHTML = '<i class="fa-solid fa-circle-check mr-1.5 text-emerald-400"></i> completed';
+                    st.classList.remove("text-cyan-400");
+                    st.classList.add("text-emerald-400");
+                }
+            }
+            const chat = document.getElementById("chat-messages");
+            chat.scrollTop = chat.scrollHeight;
         }
 
         function appendGreeting() {

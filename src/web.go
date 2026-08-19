@@ -998,8 +998,9 @@ func StartWebGUI(port int) {
 	})
 
 	mux.HandleFunc("/api/compact", func(w http.ResponseWriter, r *http.Request) {
-		history := loadHistoryFromFiles()
-		go executeSlidingWindowCompaction(history, true)
+		a := NewRootAgent()
+		history := a.loadHistory()
+		go executeSlidingWindowCompaction(a, history, true)
 		w.WriteHeader(http.StatusOK)
 	})
 
