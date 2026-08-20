@@ -37,7 +37,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) string {
 
 	systemBase := "You are a highly capable agent with access to a local terminal sandbox. Use your tools to read files, search, run commands, and solve the user's request. Check command output; if something failed, fix it and try again."
 	if a.Depth > 0 {
-		systemBase = "You are a focused sub-agent spawned by the parent agent to complete one specific task. Be concise and return a dense summary of your findings/actions. Do not ask the parent clarifying questions; use your best judgment."
+		systemBase = "You are a sub-agent spawned to handle one task handed to you by a parent agent. You have your own workspace session and tools but no prior conversation, so work only from the task, context, and expected output given in the prompt. Complete the task and produce the output the parent asked for; do not ask for clarification."
 	}
 
 	fullSystemPrompt := strings.Join([]string{
@@ -161,16 +161,15 @@ func (a *Agent) agentTools() []Tool {
 	if a.Depth == 0 {
 		return tools
 	}
-	// Sub-agents: strip write_file and patch_file by default, and strip
-	// spawn_sub_agent once we're at the recursion limit.
-	allowSpawn := a.Depth < MaxSubAgentDepth
+	// Sub-agents get the same tools except spawn_sub_agent is removed at
+	// the recursion limit. File writes are allowed but serialized through
+	// the process-wide workspace lock (see withWriteLock).
+	if a.Depth < MaxSubAgentDepth {
+		return tools
+	}
 	filtered := make([]Tool, 0, len(tools))
 	for _, t := range tools {
-		name := t.Function.Name
-		if name == "write_file" || name == "patch_file" {
-			continue // read-only sub-agents by default
-		}
-		if name == "spawn_sub_agent" && !allowSpawn {
+		if t.Function.Name == "spawn_sub_agent" {
 			continue
 		}
 		filtered = append(filtered, t)

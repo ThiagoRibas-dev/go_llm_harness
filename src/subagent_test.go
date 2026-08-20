@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -97,7 +98,8 @@ func TestAgentRequestThrottle(t *testing.T) {
 }
 
 // TestMaxSubAgentDepth ensures the agent tool set strips spawn_sub_agent
-// beyond the recursion limit.
+// beyond the recursion limit. Sub-agents keep write tools (serialized by
+// the workspace lock); only deeper spawning is cut off.
 func TestMaxSubAgentDepth(t *testing.T) {
 	a := &Agent{Depth: MaxSubAgentDepth}
 	tools := a.agentTools()
@@ -105,9 +107,23 @@ func TestMaxSubAgentDepth(t *testing.T) {
 		if tl.Function.Name == "spawn_sub_agent" {
 			t.Fatal("spawn_sub_agent should be stripped at max depth")
 		}
-		if tl.Function.Name == "write_file" || tl.Function.Name == "patch_file" {
-			t.Fatal("sub-agents should not have write tools")
+	}
+	// A child below the limit can still spawn and write.
+	child := &Agent{Depth: 1}
+	var hasSpawn, hasWrite bool
+	for _, tl := range child.agentTools() {
+		if tl.Function.Name == "spawn_sub_agent" {
+			hasSpawn = true
 		}
+		if tl.Function.Name == "write_file" {
+			hasWrite = true
+		}
+	}
+	if !hasSpawn {
+		t.Error("child at depth 1 should be able to spawn sub-agents")
+	}
+	if !hasWrite {
+		t.Error("sub-agents should retain write tools (serialized by the lock)")
 	}
 }
 
@@ -126,6 +142,30 @@ func TestWorkspaceLockIsExclusive(t *testing.T) {
 	second := <-got
 	if first != 1 || second != 2 {
 		t.Errorf("expected ordered writes 1 then 2, got %d then %d", first, second)
+	}
+}
+
+// TestSubAgentComposePrompt verifies the structured task/context/expect
+// fields are assembled into labeled sections and optional sections are
+// omitted when empty.
+func TestSubAgentComposePrompt(t *testing.T) {
+	full := subAgentSpec{
+		Task:    "audit auth.go",
+		Context: "we use session tokens",
+		Expect:  "a bullet list",
+	}.composePrompt()
+	for _, want := range []string{"## Task", "audit auth.go", "## Context", "## Return", "bullet list"} {
+		if !strings.Contains(full, want) {
+			t.Errorf("composed prompt missing %q:\n%s", want, full)
+		}
+	}
+
+	minimal := subAgentSpec{Task: "just do it"}.composePrompt()
+	if strings.Contains(minimal, "## Context") || strings.Contains(minimal, "## Return") {
+		t.Errorf("optional sections should be omitted when empty:\n%s", minimal)
+	}
+	if !strings.Contains(minimal, "just do it") {
+		t.Errorf("task missing from minimal prompt")
 	}
 }
 

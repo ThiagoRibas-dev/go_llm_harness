@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -28,17 +29,37 @@ func withWriteLock(fn func() string) string {
 
 // subAgentSpec is the parsed shape of a spawn_sub_agent tool call.
 type subAgentSpec struct {
-	Prompt      string `json:"prompt"`
+	Task        string `json:"task"`
+	Context     string `json:"context"`
+	Expect      string `json:"expect"`
 	Description string `json:"description"`
+}
+
+// composePrompt builds the user message the child agent receives from the
+// structured inputs. The child's own system prompt (in Agent.Run) already
+// covers the environment, tools, and workspace; this just frames the job.
+func (s subAgentSpec) composePrompt() string {
+	var b strings.Builder
+	b.WriteString("## Task\n")
+	b.WriteString(s.Task)
+	if strings.TrimSpace(s.Context) != "" {
+		b.WriteString("\n\n## Context\n")
+		b.WriteString(s.Context)
+	}
+	if strings.TrimSpace(s.Expect) != "" {
+		b.WriteString("\n\n## Return\n")
+		b.WriteString(s.Expect)
+	}
+	return b.String()
 }
 
 // runSubAgent executes one spawn_sub_agent call: it creates an isolated
 // child session, builds a child Agent, runs the ReAct loop in that session,
-// and returns a structured report to the parent.
+// and returns the child's final answer to the parent.
 func (a *Agent) runSubAgent(ctx context.Context, tc ToolCall) string {
 	var spec subAgentSpec
-	if err := json.Unmarshal([]byte(tc.Function.Arguments), &spec); err != nil || spec.Prompt == "" {
-		return fmt.Sprintf("spawn_sub_agent error: invalid arguments: %v", err)
+	if err := json.Unmarshal([]byte(tc.Function.Arguments), &spec); err != nil || strings.TrimSpace(spec.Task) == "" {
+		return fmt.Sprintf("spawn_sub_agent error: 'task' is required: %v", err)
 	}
 	if a.Depth >= MaxSubAgentDepth {
 		return "spawn_sub_agent error: maximum sub-agent depth reached"
@@ -47,29 +68,31 @@ func (a *Agent) runSubAgent(ctx context.Context, tc ToolCall) string {
 	childSessID := fmt.Sprintf("%s_sub_%d", a.SessionID, time.Now().UnixNano())
 	childPath := GetSystemPath(filepath.Join(".goharness", "sessions", childSessID))
 	_ = os.MkdirAll(childPath, 0755)
-	createSessionMeta(childSessID, a.Workspace, a.SessionID, "Sub-agent: "+spec.Description)
+	label := spec.Description
+	if label == "" {
+		label = spec.Task
+	}
+	createSessionMeta(childSessID, a.Workspace, a.SessionID, "Sub-agent: "+label)
 
 	child := a.Sub(childSessID)
 
-	// Announce to the UI (only the root session's UI is live, but the event
-	// is harmless for children).
 	BroadcastSSE("subagent_start", map[string]interface{}{
 		"parent_session": a.SessionID,
 		"session_id":     childSessID,
-		"description":    spec.Description,
+		"description":    label,
 		"depth":          child.Depth,
 	})
 
 	start := time.Now()
-	answer := child.Run(ctx, spec.Prompt)
+	answer := child.Run(ctx, spec.composePrompt())
 	duration := time.Since(start).Milliseconds()
 
 	BroadcastSSE("subagent_done", map[string]interface{}{
 		"parent_session": a.SessionID,
 		"session_id":     childSessID,
-		"description":    spec.Description,
+		"description":    label,
 		"duration_ms":    duration,
 	})
 
-	return fmt.Sprintf("=== SUB-AGENT REPORT (%s) ===\nTask: %s\n\n%s\n=================================", childSessID, spec.Prompt, answer)
+	return answer
 }

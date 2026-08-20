@@ -104,20 +104,28 @@ func builtInToolSchemas() []Tool {
 			Type: "function",
 			Function: FunctionDescriptor{
 				Name:        "spawn_sub_agent",
-				Description: "Spawn an isolated sub-agent to perform one focused task (research, code analysis, search) and return a dense summary. Call this tool multiple times in ONE response to run several sub-agents in parallel; their results come back together.",
+				Description: "Spawns an isolated sub-agent to handle a task in parallel. It has no memory of this conversation and only sees what you pass in, so provide full context. Call it several times in one response to run independent tasks concurrently; results return together. The sub-agent has read/search/command tools, can edit files, and may itself spawn sub-agents (up to 2 levels deep).",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
-						"prompt": map[string]interface{}{
+						"task": map[string]interface{}{
 							"type":        "string",
-							"description": "The precise task or instruction for the sub-agent.",
+							"description": "What the sub-agent should do. One focused, self-contained objective.",
+						},
+						"context": map[string]interface{}{
+							"type":        "string",
+							"description": "Background the sub-agent needs: relevant file paths, prior decisions, constraints, or data. It cannot see this conversation, so include anything it must know.",
+						},
+						"expect": map[string]interface{}{
+							"type":        "string",
+							"description": "What to return and in what form (e.g. 'a bullet list of findings with file:line references', or 'a patch plus a one-line summary'). You define the output shape.",
 						},
 						"description": map[string]interface{}{
 							"type":        "string",
-							"description": "Short label for this sub-agent shown while it runs (e.g. 'research auth library').",
+							"description": "Short label shown while the agent runs (a few words, e.g. 'audit auth middleware').",
 						},
 					},
-					"required": []string{"prompt"},
+					"required": []string{"task"},
 				},
 			},
 		},
