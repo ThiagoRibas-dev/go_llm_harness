@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>GoHarness — UI mockup</title>
+<meta name="viewport" content="width=1440">
+<style>
+/* ─────────────────────────────────────────────
+   12.29.12 / 12.28.11 — design tokens
+   ───────────────────────────────────────────── */
+:root{
+  --bg:#0b0f17; --bg-2:#0f1520; --panel:#121a27; --panel-2:#162132;
+  --line:#223047; --line-2:#2b3c58;
+  --txt:#e6edf6; --txt-dim:#9fb0c8; --txt-mute:#6b7d99;
+  --accent:#4f9cff; --accent-2:#38d0c5;
+  --warn:#f0a93b; --bad:#f0564b; --good:#3ddc84;
+  --purple:#a78bfa; --pink:#f472b6;
+  --rail:56px; --sidebar:288px; --details:360px;
+  --mono:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color-scheme:dark;
+}
+[data-theme="light"]{
+  --bg:#f7f9fc; --bg-2:#eef2f8; --panel:#ffffff; --panel-2:#f3f6fb;
+  --line:#d8e0ec; --line-2:#c5d0e0;
+  --txt:#0e1726; --txt-dim:#46566e; --txt-mute:#7a8aa3;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  font-family:var(--sans); background:var(--bg); color:var(--txt);
+  font-size:13px; line-height:1.45; overflow:hidden;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+kbd{font-family:var(--mono);font-size:11px;background:var(--panel-2);border:1px solid var(--line-2);
+  border-bottom-width:2px;border-radius:4px;padding:1px 5px;color:var(--txt-dim)}
+.mono{font-family:var(--mono)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:transparent;border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+*:hover::-webkit-scrollbar-thumb{background:var(--line-2)}
+
+/* ───────── shell: 12.29.1 three-column concession ───────── */
+.app{display:grid;
+  grid-template-columns:var(--rail) var(--sidebar) 1fr var(--details);
+  height:100vh; background:var(--bg);}
+.app.rail-only{grid-template-columns:var(--rail) 0 1fr 0}
+.app.no-details{grid-template-columns:var(--rail) var(--sidebar) 1fr 0}
+
+/* ───────── 56px icon rail ───────── */
+.rail{background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:6px}
+.rail .logo{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#04121f;font-weight:800;margin-bottom:8px}
+.rail .ic{width:36px;height:36px;border-radius:8px;display:grid;place-items:center;color:var(--txt-mute);position:relative}
+.rail .ic:hover{background:var(--panel-2);color:var(--txt)}
+.rail .ic.active{color:var(--accent)}
+.rail .ic .dot{position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px var(--panel)}
+.rail .sp{flex:1}
+
+/* ───────── sidebar ───────── */
+.sidebar{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+.sb-head{padding:12px 12px 8px;display:flex;align-items:center;gap:8px}
+.sb-head .title{font-weight:700;flex:1;letter-spacing:.2px}
+.sb-head .iconbtn{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;color:var(--txt-mute)}
+.sb-head .iconbtn:hover{background:var(--panel-2);color:var(--txt)}
+.search{margin:0 12px 10px;position:relative}
+.search input{width:100%;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;
+  padding:7px 10px 7px 30px;color:var(--txt);outline:none}
+.search input:focus{border-color:var(--accent)}
+.search .mag{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--txt-mute)}
+.sb-scroll{flex:1;overflow-y:auto;padding:4px 8px 8px}
+.ws{margin-bottom:8px}
+.ws > .row{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:7px;cursor:pointer;font-weight:600}
+.ws > .row:hover{background:var(--panel-2)}
+.ws .chev{color:var(--txt-mute);font-size:10px;width:14px}
+.ws .wname{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ws .wcount{font-size:11px;color:var(--txt-mute);font-weight:500}
+.sessions{padding-left:12px}
+.sess{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer}
+.sess:hover{background:var(--panel-2)}
+.sess.active{background:var(--panel-2);box-shadow:inset 2px 0 0 var(--accent)}
+.sess .st{width:8px;height:8px;border-radius:50%;flex:none}
+.sess .st.running{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
+.sess .st.pending{background:var(--warn)}
+.sess .st.idle{background:var(--line-2)}
+.sess .st.done{background:var(--good)}
+.sess .sname{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+.sess .smeta{font-size:11px;color:var(--txt-mute);font-family:var(--mono)}
+.sess.sub{padding-left:22px}
+.sess .subbadge{font-size:9.5px;color:var(--purple);border:1px solid color-mix(in srgb,var(--purple) 40%,transparent);
+  padding:0 5px;border-radius:10px;font-weight:600}
+.sb-foot{padding:8px;border-top:1px solid var(--line)}
+.sb-foot .row{display:flex;align-items:center;gap:9px;padding:8px;border-radius:8px;cursor:pointer}
+.sb-foot .row:hover{background:var(--panel-2)}
+.avatar{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--pink));
+  display:grid;place-items:center;color:#fff;font-weight:700;font-size:11px}
+
+/* ───────── conversation column ───────── */
+.conv{display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.chead{padding:10px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;min-height:46px}
+.chead .crumb{font-size:12px;color:var(--txt-mute)}
+.chead .crumb b{color:var(--txt);font-weight:600}
+.chead .subnav{display:flex;align-items:center;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:2px}
+.chead .tab{padding:5px 11px;border-radius:6px;font-size:12px;color:var(--txt-dim);display:flex;align-items:center;gap:6px}
+.chead .tab.active{background:var(--panel-2);color:var(--txt)}
+.chead .sp{flex:1}
+.chead .iconbtn{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;color:var(--txt-mute)}
+.chead .iconbtn:hover{background:var(--panel);color:var(--txt)}
+
+.cbody{flex:1;overflow-y:auto;padding:18px 0 8px}
+.cbody::-webkit-scrollbar-thumb{background:var(--line-2)}
+
+/* step group — 12.28.2 / 12.29.7 */
+.step{padding:0 22px;margin-bottom:6px}
+.step + .step{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}
+.step-head{display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--txt-mute);margin-bottom:10px;font-family:var(--mono)}
+.step-head .stp-dot{width:18px;height:18px;border-radius:50%;background:var(--accent);color:#04121f;display:grid;place-items:center;font-size:10px;font-weight:800}
+.step-head .stp-dot.done{background:var(--good)}
+.step-head .stp-tools{color:var(--txt-dim)}
+.step-head .stp-stat{margin-left:auto;display:flex;gap:12px}
+.step-head .stp-stat b{color:var(--txt-dim);font-weight:600}
+
+.msg{display:flex;gap:12px;margin:10px 0}
+.msg .who{width:26px;height:26px;border-radius:7px;flex:none;display:grid;place-items:center;font-weight:700;font-size:11px;margin-top:1px}
+.msg.user .who{background:var(--panel-2);color:var(--txt-dim)}
+.msg.assistant .who{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#04121f}
+.msg.tool .who{background:var(--panel-2);color:var(--warn)}
+.msg .body{flex:1;min-width:0}
+.msg .name{font-size:11.5px;color:var(--txt-mute);margin-bottom:3px}
+.msg .prose{color:var(--txt)}
+.msg .prose code{background:var(--panel-2);padding:1px 5px;border-radius:4px;font-family:var(--mono);font-size:12px}
+.msg .prose a{color:var(--accent)}
+
+/* context-injection collapsed row — 12.29.7 */
+.injection{display:flex;align-items:center;gap:8px;color:var(--txt-mute);font-size:11.5px;
+  padding:5px 9px;border:1px dashed var(--line);border-radius:8px;margin:6px 0;cursor:pointer;width:fit-content}
+.injection:hover{border-color:var(--line-2);color:var(--txt-dim)}
+.injection .gi{font-size:13px}
+
+/* typed blocks — 12.29.9 */
+.block{border:1px solid var(--line);border-radius:10px;margin:9px 0;background:var(--panel);overflow:hidden}
+.block > .bhead{display:flex;align-items:center;gap:9px;padding:7px 11px;font-size:12px;cursor:pointer;user-select:none}
+.block > .bhead:hover{background:var(--panel-2)}
+.block .bicon{width:22px;height:22px;border-radius:5px;display:grid;place-items:center;flex:none;font-size:12px}
+.block .bicon.term{background:#1d2a3f;color:var(--accent-2)}
+.block .bicon.diff{background:#2a1d22;color:var(--bad)}
+.block .bicon.read{background:#1d2a3f;color:var(--accent)}
+.block .bicon.search{background:#231d2a;color:var(--purple)}
+.block .bicon.web{background:#22231a;color:var(--warn)}
+.block .bicon.sub{background:#1d2a3f;color:var(--accent)}
+.block .btitle{font-weight:600;font-family:var(--mono);font-size:12px}
+.block .bsub{color:var(--txt-mute);font-size:11px;font-family:var(--mono)}
+.block .bmeta{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--txt-mute);font-size:11px;font-family:var(--mono)}
+.block .pill{padding:1px 7px;border-radius:20px;font-size:10.5px;font-weight:600}
+.block .pill.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.block .pill.run{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+.block .chev{color:var(--txt-mute);transition:transform .15s}
+.block.collapsed .bbody{display:none}
+.block.collapsed .chev{transform:rotate(-90deg)}
+.bbody{border-top:1px solid var(--line)}
+
+/* terminal block */
+.term{font-family:var(--mono);font-size:12px;padding:10px 12px;white-space:pre;color:#cfd8e6;max-height:320px;overflow:auto;background:#070b12}
+.term .ln-cmd{color:var(--accent-2)}
+.term .ln-err{color:var(--bad)}
+.term .ln-ok{color:var(--good)}
+.term .dim{color:var(--txt-mute)}
+.term .cr{color:var(--accent);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* diff block */
+.diff{font-family:var(--mono);font-size:12px;padding:8px 0;background:#070b12}
+.diff .hunk{padding:4px 12px;color:var(--txt-mute)}
+.diff .add{color:var(--good);background:color-mix(in srgb,var(--good) 9%,transparent);padding:0 12px;display:block;white-space:pre}
+.diff .del{color:var(--bad);background:color-mix(in srgb,var(--bad) 9%,transparent);padding:0 12px;display:block;white-space:pre}
+.diff .ctx{color:var(--txt-dim);padding:0 12px;white-space:pre}
+
+/* read block */
+.read{background:#070b12}
+.read .pathbar{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11.5px;color:var(--txt-dim)}
+.read .pathbar .copy{margin-left:auto;color:var(--txt-mute);cursor:pointer}
+.read pre{margin:0;padding:10px 0;font-family:var(--mono);font-size:12px}
+.read .ln{display:inline-block;width:42px;text-align:right;padding-right:12px;color:var(--txt-mute);user-select:none}
+.read .kw{color:var(--purple)}.read .str{color:var(--good)}.read .com{color:var(--txt-mute);font-style:italic}.read .fn{color:var(--accent)}
+
+/* search block */
+.sresults{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.sresults .item{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.sresults .item .u{font-family:var(--mono);font-size:11.5px;color:var(--accent);text-decoration:none;display:block;margin-bottom:3px}
+.sresults .item .snippet{font-size:12px;color:var(--txt-dim)}
+.sresults .item .snippet b{background:color-mix(in srgb,var(--warn) 40%,transparent);color:var(--txt)}
+
+/* subagent fleet card — 12.28.7 */
+.subfleet{padding:10px 12px;display:flex;flex-direction:column;gap:7px}
+.subrow{display:flex;align-items:center;gap:10px;font-size:12px}
+.subrow .sico{width:18px;height:18px;flex:none}
+.subrow .sico.run{color:var(--accent)}
+.subrow .sico.done{color:var(--good)}
+.subrow .slbl{font-family:var(--mono)}
+.subrow .sbar{flex:1;height:4px;border-radius:3px;background:var(--bg-2);overflow:hidden}
+.subrow .sbar > i{display:block;height:100%;background:var(--accent)}
+.subrow .smeta{font-family:var(--mono);color:var(--txt-mute);font-size:11px;min-width:110px;text-align:right}
+
+/* deliverables — 12.28.12 */
+.deliv{padding:8px 12px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);font-size:11.5px;color:var(--txt-dim)}
+.deliv .chip{display:inline-flex;align-items:center;gap:5px;background:var(--panel-2);border:1px solid var(--line-2);
+  border-radius:7px;padding:3px 8px;font-family:var(--mono);cursor:pointer}
+.deliv .chip:hover{border-color:var(--accent);color:var(--accent)}
+.deliv .chip .fi{color:var(--good)}
+
+/* turn tail / message actions */
+.tactions{display:flex;gap:2px;margin-top:6px;color:var(--txt-mute)}
+.tactions button{width:26px;height:26px;border-radius:6px;display:grid;place-items:center}
+.tactions button:hover{background:var(--panel);color:var(--txt)}
+.tactions .sep{width:1px;background:var(--line);margin:5px 3px}
+
+/* composer — 12.29.6 */
+.composer{padding:8px 22px 14px}
+.cstats{display:flex;gap:14px;font-size:11px;color:var(--txt-mute);font-family:var(--mono);margin:0 2px 6px}
+.cstats b{color:var(--txt-dim);font-weight:600}
+.cstats .cache{color:var(--accent-2)}
+.bar{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;transition:border-color .15s}
+.bar:focus-within{border-color:var(--accent)}
+.queue{padding:8px 12px 0;display:flex;flex-direction:column;gap:5px}
+.qmsg{display:flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:11.5px}
+.qmsg .qi{width:16px;height:16px;color:var(--warn)}
+.qmsg .qx{margin-left:auto;color:var(--txt-mute);cursor:pointer}
+.planstrip{display:flex;gap:6px;padding:7px 12px 0;flex-wrap:wrap}
+.planstrip .chip{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);
+  border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);border-radius:7px;padding:3px 9px;font-size:11px;font-weight:600}
+.planstrip .chip .x{margin-left:7px;opacity:.7}
+.editor{display:flex;align-items:flex-end;gap:8px;padding:10px 12px}
+.editor textarea{flex:1;resize:none;background:none;border:0;color:var(--txt);font:inherit;outline:none;
+  min-height:24px;max-height:200px;line-height:1.5}
+.editor .send{width:32px;height:32px;border-radius:9px;background:var(--accent);color:#04121f;display:grid;place-items:center;flex:none}
+.editor .send:hover{filter:brightness(1.1)}
+.caccess{display:flex;align-items:center;gap:6px;padding:0 12px 9px;font-size:11.5px;color:var(--txt-mute)}
+.caccess .perms{display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line-2);
+  border-radius:7px;padding:3px 8px;cursor:pointer}
+.caccess .perms:hover{border-color:var(--warn);color:var(--warn)}
+.caccess .model{display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:7px;padding:3px 8px;cursor:pointer}
+.caccess .model:hover{border-color:var(--accent)}
+.caccess .hint{margin-left:auto}
+.chip-input{background:var(--accent);color:#04121f;padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:11px}
+
+/* approval in-place takeover — 12.28.3 / 12.29.6 */
+.takeover{margin:9px 0;border:1px solid color-mix(in srgb,var(--warn) 55%,var(--line));
+  border-radius:12px;background:color-mix(in srgb,var(--warn) 9%,var(--panel));overflow:hidden}
+.takeover .th{padding:9px 13px;display:flex;gap:9px;align-items:flex-start}
+.takeover .th .warn-ic{color:var(--warn);font-size:15px;margin-top:1px}
+.takeover .th .q{font-weight:600}
+.takeover .th .qsub{color:var(--txt-dim);font-size:11.5px;margin-top:2px;font-family:var(--mono)}
+.takeover .tacts{display:flex;gap:8px;padding:0 13px 11px}
+.takeover .tacts button{padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600}
+.takeover .deny{background:var(--panel-2);border:1px solid var(--line);color:var(--txt-dim)}
+.takeover .once{background:var(--panel-2);border:1px solid var(--line-2);color:var(--txt)}
+.takeover .allow{background:var(--warn);color:#231700}
+
+/* ───────── details panel (trajectory) ───────── */
+.details{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+.dhead{padding:10px 13px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+.dhead .title{font-weight:700;flex:1;font-size:12.5px}
+.dtabs{display:flex;gap:2px;padding:8px 10px;border-bottom:1px solid var(--line)}
+.dtabs .t{padding:5px 10px;font-size:11.5px;color:var(--txt-dim);border-radius:6px}
+.dtabs .t.active{background:var(--panel-2);color:var(--txt)}
+.dbody{flex:1;overflow:auto;padding:0}
+.timeline{padding:8px 12px 20px}
+.tl-overview{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;color:var(--txt-mute);
+  border:1px solid var(--line);border-radius:7px;padding:6px 9px;margin-bottom:10px;overflow:hidden}
+.tl-overview .seg{height:5px;border-radius:3px}
+.tlev{border-left:2px solid var(--line);padding:2px 0 12px 12px;margin-left:7px;position:relative}
+.tlev::before{content:"";position:absolute;left:-5px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--line-2)}
+.tlev.assistant::before{background:var(--accent)}
+.tlev.tool::before{background:var(--warn)}
+.tlev.user::before{background:var(--txt-mute)}
+.tlev .tlh{display:flex;gap:8px;align-items:baseline;font-size:11.5px}
+.tlev .tlh .ev{font-weight:600}
+.tlev .tlh .tm{margin-left:auto;font-family:var(--mono);color:var(--txt-mute);font-size:10.5px}
+.tlev .tlb{color:var(--txt-dim);font-size:11.5px;margin-top:2px}
+.tlev .tlb code{font-family:var(--mono);background:var(--panel-2);padding:0 4px;border-radius:3px}
+.tlev .stats{display:flex;gap:12px;margin-top:4px;font-size:10.5px;font-family:var(--mono);color:var(--txt-mute)}
+.tlev .stats b{color:var(--txt-dim);font-weight:600}
+
+/* annotation callouts */
+.note{position:absolute;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#04121f;
+  font-weight:800;font-size:11px;display:grid;place-items:center;box-shadow:0 0 0 3px var(--bg),0 0 0 4px var(--accent);
+  z-index:5;cursor:help}
+.note.b{background:var(--accent-2);box-shadow:0 0 0 3px var(--bg),0 0 0 4px var(--accent-2)}
+.note.p{background:var(--purple);box-shadow:0 0 0 3px var(--bg),0 0 0 4px var(--purple)}
+.note.w{background:var(--warn);box-shadow:0 0 0 3px var(--bg),0 0 0 4px var(--warn)}
+.note.g{background:var(--good);box-shadow:0 0 0 3px var(--bg),0 0 0 4px var(--good)}
+
+/* legend */
+.legend{position:fixed;right:14px;bottom:14px;width:330px;max-height:50vh;overflow:auto;
+  background:color-mix(in srgb,var(--panel) 96%,transparent);border:1px solid var(--line-2);
+  border-radius:12px;padding:12px 14px;backdrop-filter:blur(8px);font-size:11.5px;box-shadow:0 12px 40px rgba(0,0,0,.45);z-index:50}
+.legend h4{margin:0 0 8px;font-size:12px;letter-spacing:.3px;text-transform:uppercase;color:var(--txt-mute)}
+.legend .item{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:3px 0;align-items:start}
+.legend .item .n{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:10.5px;color:#04121f}
+.legend .item .n.a{background:var(--accent)} .legend .item .n.b{background:var(--accent-2)}
+.legend .item .n.p{background:var(--purple)} .legend .item .n.w{background:var(--warn)}
+.legend .item .n.g{background:var(--good)}
+.legend .item b{color:var(--txt)}
+.legend .item span{color:var(--txt-dim)}
+.legend .close{position:absolute;right:8px;top:7px;color:var(--txt-mute);cursor:pointer}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ───────── rail ───────── -->
+  <nav class="rail">
+    <div class="logo">G</div>
+    <button class="ic active" title="Chat">💬</button>
+    <button class="ic" title="Workflows">🔀</button>
+    <button class="ic" title="Sub-agents">
+      🧩<span class="dot"></span>
+    </button>
+    <button class="ic" title="Files">📁</button>
+    <button class="ic" title="Search">🔎</button>
+    <div class="sp"></div>
+    <button class="ic" title="History">🕘</button>
+    <button class="ic" title="Settings">⚙️</button>
+  </nav>
+
+  <!-- ───────── sidebar ───────── -->
+  <aside class="sidebar">
+    <div class="sb-head">
+      <span class="title">Workspaces</span>
+      <button class="iconbtn" title="Add workspace">＋</button>
+      <button class="iconbtn" title="Collapse sidebar">⇤</button>
+    </div>
+    <div class="search"><span class="mag">🔎</span><input placeholder="Search sessions…"></div>
+    <div class="sb-scroll">
+      <div class="ws">
+        <div class="row"><span class="chev">▼</span><span class="wname">go_llm_harness</span><span class="wcount">7</span></div>
+        <div class="sessions">
+          <div class="sess"><span class="st running"></span><span class="sname">Implement sub-agent fan-out</span><span class="smeta">· 2m</span></div>
+          <div class="sess active"><span class="st pending"></span><span class="sname">UI mockup review</span><span class="smeta">●</span></div>
+          <div class="sess"><span class="st idle"></span><span class="sname">Pi comparison notes</span><span class="smeta">14k tok</span></div>
+          <div class="sess sub"><span class="subbadge">sub</span><span class="sname">audit-auth-reviewer</span><span class="smeta">✓ 18s</span></div>
+          <div class="sess sub"><span class="subbadge">sub</span><span class="sname">audit-auth-worker</span><span class="smeta">✓ 42s</span></div>
+          <div class="sess"><span class="st done"></span><span class="sname">Profile concurrency bug</span><span class="smeta">✓ 312 tok</span></div>
+          <div class="sess"><span class="st idle"></span><span class="sname">Windows cmd.exe fixes</span></div>
+        </div>
+      </div>
+      <div class="ws">
+        <div class="row"><span class="chev">▶</span><span class="wname">other-project</span><span class="wcount">2</span></div>
+      </div>
+    </div>
+    <div class="sb-foot">
+      <div class="row"><div class="avatar">TH</div><div>
+        <div style="font-weight:600;font-size:12.5px">Thiago</div>
+        <div style="font-size:11px;color:var(--txt-mute)">Pro · local</div></div></div>
+    </div>
+  </aside>
+
+  <!-- ───────── conversation ───────── -->
+  <main class="conv">
+    <header class="chead">
+      <span class="crumb">go_llm_harness / <b>UI mockup review</b></span>
+      <div class="subnav">
+        <button class="tab active">💬 Chat</button>
+        <button class="tab">📈 Trajectory</button>
+        <button class="tab">🧩 Sub-agents</button>
+      </div>
+      <span class="sp"></span>
+      <button class="iconbtn" title="Share">↗</button>
+      <button class="iconbtn" title="Export">⬇</button>
+    </header>
+
+    <div class="cbody">
+      <div class="step">
+        <div class="step-head">
+          <span class="stp-dot">1</span>
+          <span>Turn 1</span>
+          <span class="stp-tools">· 2 tool calls · 1 sub-agent</span>
+          <span class="stp-stat"><span>↑ <b>1.4k</b></span><span>↓ <b>3.2k</b></span><span class="cache">R <b>8.1k</b></span></span>
+        </div>
+
+        <div class="msg user">
+          <div class="who">Y</div>
+          <div class="body">
+            <div class="name">You · 14:02</div>
+            <div class="prose">Audit <code>src/agent_runtime.go</code> for races now that we run sub-agents in parallel. Also run <code>go vet ./...</code>.</div>
+          </div>
+        </div>
+
+        <div class="injection">📄 AGENTS.md · project conventions loaded</div>
+
+        <div class="msg tool">
+          <div class="who" style="color:var(--purple)">🧩</div>
+          <div class="body" style="width:100%">
+            <div class="name">spawn_sub_agent · 14:02</div>
+            <div class="block">
+              <div class="bhead">
+                <span class="bicon sub">🧩</span>
+                <span class="btitle">3 sub-agents · parallel</span>
+                <span class="bsub">audit reviewers</span>
+                <span class="bmeta"><span class="pill run">running</span><span>42s</span></span>
+              </div>
+              <div class="bbody">
+                <div class="subfleet">
+                  <div class="subrow">
+                    <span class="sico run">◐</span>
+                    <span class="slbl">reviewer-correctness</span>
+                    <span class="sbar"><i style="width:72%"></i></span>
+                    <span class="smeta">reading agent.go</span>
+                  </div>
+                  <div class="subrow">
+                    <span class="sico done">✓</span>
+                    <span class="slbl">reviewer-tests</span>
+                    <span class="sbar"><i style="width:100%;background:var(--good)"></i></span>
+                    <span class="smeta">done · 18s · 2 findings</span>
+                  </div>
+                  <div class="subrow">
+                    <span class="sico done">✓</span>
+                    <span class="slbl">reviewer-simplicity</span>
+                    <span class="sbar"><i style="width:100%;background:var(--good)"></i></span>
+                    <span class="smeta">done · 9s · LGTM</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="msg tool">
+          <div class="who" style="color:var(--accent-2)">▶_</div>
+          <div class="body" style="width:100%">
+            <div class="name">execute_command · 14:02</div>
+            <div class="block collapsed">
+              <div class="bhead">
+                <span class="bicon term">▶_</span>
+                <span class="btitle">go vet ./...</span>
+                <span class="bmeta"><span class="pill ok">exit 0</span><span>1.2s</span><span class="chev">▾</span></span>
+              </div>
+              <div class="bbody"><div class="term"><span class="ln-cmd">$ go vet ./...</span>
+<span class="ln-ok">✓ no issues</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="stp-dot done">✓</span>
+          <span>Turn 2</span>
+          <span class="stp-tools">· 2 edits · 1 approval</span>
+          <span class="stp-stat"><span>↑ <b>2.0k</b></span><span>↓ <b>4.6k</b></span><span class="cache">CH <b>78%</b></span></span>
+        </div>
+
+        <!-- approval in-place takeover -->
+        <div class="takeover">
+          <div class="th">
+            <span class="warn-ic">⚠</span>
+            <div><div class="q">Allow writing to <span class="mono">src/agent_runtime.go</span>?</div>
+            <div class="qsub">The sub-agent "worker" wants to apply a patch (2 hunks, +14 −6). This file is outside the workspace's <span class="mono">src/</span> allow-list.</div></div>
+          </div>
+          <div class="tacts">
+            <button class="deny">Deny</button>
+            <button class="once">Allow once</button>
+            <button class="allow">Allow for this session</button>
+          </div>
+        </div>
+
+        <div class="msg assistant">
+          <div class="who">G</div>
+          <div class="body">
+            <div class="name">GoHarness · 14:04</div>
+            <div class="prose">Found one real race: <code>Agent.turn</code> is incremented without holding <code>a.mu</code>. Since sub-agents now share the parent throttle map, two goroutines can race on the counter. I moved the increment under the mutex and added a test. I also tightened the <code>acquireThrottle</code> path to use the shared lock. <a href="#">Diff below</a>.</div>
+
+            <div class="block">
+              <div class="bhead">
+                <span class="bicon diff">✎</span>
+                <span class="btitle">src/agent_runtime.go</span>
+                <span class="bsub">+14 −6</span>
+                <span class="bmeta"><span class="pill ok">applied</span><span class="chev">▾</span></span>
+              </div>
+              <div class="bbody"><div class="diff">
+<span class="hunk">@@ -64,7 +64,7 @@ func (a *Agent) nextTurnNumber() int {</span>
+<span class="del">-	a.turn++</span>
+<span class="add">+	a.mu.Lock()</span>
+<span class="add">+	a.turn++</span>
+<span class="ctx"> 	return a.turn</span>
+<span class="add">+	a.mu.Unlock()</span>
+<span class="hunk">@@ -140,6 +140,12 @@ func (a *Agent) request(...) {</span>
+<span class="add">+	// Shared throttle map is accessed by sub-agents; hold the lock.</span>
+<span class="add">+	a.mu.Lock()</span>
+<span class="add">+	ch, ok := a.throttlers[key]</span>
+<span class="add">+	a.mu.Unlock()</span>
+</div></div>
+            </div>
+
+            <div class="deliv">
+              <span>Produced:</span>
+              <span class="chip"><span class="fi">✎</span> src/agent_runtime.go</span>
+              <span class="chip"><span class="fi">＋</span> src/agent_runtime_test.go</span>
+            </div>
+
+            <div class="tactions">
+              <button title="Copy">📋</button>
+              <button title="Regenerate">↻</button>
+              <span class="sep"></span>
+              <button title="Good">👍</button>
+              <button title="Bad">👎</button>
+              <button title="Branch">⎇</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- composer -->
+    <div class="composer">
+      <div class="cstats">
+        <span>↑ <b>3.4k</b></span><span>↓ <b>7.8k</b></span>
+        <span class="cache">cache <b>R 8.1k · W 3.2k · 78% hit</b></span>
+        <span>cost <b>$0.041</b></span><span>ctx <b>31%</b></span>
+      </div>
+      <div class="bar">
+        <div class="queue">
+          <div class="qmsg"><span class="qi">⏸</span> Steering: also check <span class="mono">subagent.go</span> after these tools finish.<span class="qx">✕</span></div>
+        </div>
+        <div class="planstrip">
+          <span class="chip">📝 Plan mode on — edits locked<span class="x">✕</span></span>
+        </div>
+        <div class="editor">
+          <textarea rows="1" placeholder="Message GoHarness…  (/ for commands, @ for files/agents, ! to run a shell command)"></textarea>
+          <button class="send">➤</button>
+        </div>
+        <div class="caccess">
+          <span class="perms">🔒 Workspace write</span>
+          <span class="model">🧠 anthropic / claude-3.5-sonnet ▾</span>
+          <span class="hint"><kbd>/</kbd> commands · <kbd>@</kbd> files · <kbd>!</kbd> shell · <kbd>Enter</kbd> to queue while running</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ───────── details: trajectory ───────── -->
+  <aside class="details">
+    <div class="dhead"><span class="title">Trajectory</span>
+      <button class="iconbtn" title="Close panel" style="width:26px;height:26px;border-radius:6px;display:grid;place-items:center;color:var(--txt-mute)">✕</button>
+    </div>
+    <div class="dtabs">
+      <button class="t active">Ledger</button><button class="t">Tokens</button><button class="t">Timing</button>
+    </div>
+    <div class="dbody">
+      <div class="timeline">
+        <div class="tl-overview">
+          <span class="seg" style="flex:3;background:var(--accent)"></span>
+          <span class="seg" style="flex:1;background:var(--warn)"></span>
+          <span class="seg" style="flex:2;background:var(--good)"></span>
+          <span style="margin-left:8px">2 turns · 14 events · 9.2s</span>
+        </div>
+
+        <div class="tlev user"><div class="tlh"><span class="ev">user/message</span><span class="tm">14:02:03</span></div>
+          <div class="tlb">Audit <code>agent_runtime.go</code> for races…</div></div>
+        <div class="tlev tool"><div class="tlh"><span class="ev">tool/call · spawn_sub_agent</span><span class="tm">+0.1s</span></div>
+          <div class="tlb">3 parallel sub-agents (reviewer-correctness, -tests, -simplicity)</div>
+          <div class="stats"><span>↑<b> 412</b></span><span>↓<b> 8.4k</b></span><span class="cache">cache<b> 82%</b></span><span>42.3s</span></div></div>
+        <div class="tlev tool"><div class="tlh"><span class="ev">tool/result · spawn_sub_agent</span><span class="tm">+42.4s</span></div>
+          <div class="tlb">2 findings, 1 LGTM</div></div>
+        <div class="tlev tool"><div class="tlh"><span class="ev">tool/call · execute_command</span><span class="tm">+0.2s</span></div>
+          <div class="tlb"><code>go vet ./...</code></div>
+          <div class="stats"><span>exit<b> 0</b></span><span>1.2s</span></div></div>
+        <div class="tlev assistant"><div class="tlh"><span class="ev">approval/requested</span><span class="tm">+0.4s</span></div>
+          <div class="tlb">write to <code>agent_runtime.go</code> — session-allow</div></div>
+        <div class="tlev assistant"><div class="tlh"><span class="ev">assistant/chunk…</span><span class="tm">+1.0s</span></div></div>
+        <div class="tlev assistant"><div class="tlh"><span class="ev">assistant/message</span><span class="tm">+3.8s</span></div>
+          <div class="tlb">Found one real race: <code>Agent.turn</code>…</div>
+          <div class="stats"><span>↑<b> 2.0k</b></span><span>↓<b> 4.6k</b></span><span>3.8s</span></div></div>
+        <div class="tlev tool"><div class="tlh"><span class="ev">tool/call · patch_file</span><span class="tm">+0.1s</span></div>
+          <div class="tlb">+14 −6 in <code>agent_runtime.go</code></div></div>
+        <div class="tlev tool"><div class="tlh"><span class="ev">tool/result · patch_file</span><span class="tm">+0.2s</span></div><div class="tlb">applied</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- annotation pins -->
+  <span class="note" style="top:8px;left:14px" title="56px icon rail — 12.29.1 / 12.29.4">1</span>
+  <span class="note b" style="top:8px;left:84px" title="Grouped workspace/session sidebar with live status — 12.28.9 / 12.29.11">2</span>
+  <span class="note p" style="top:54px;left:398px" title="View tabs: Chat / Trajectory / Sub-agents — 12.29.3">3</span>
+  <span class="note" style="top:150px;right:380px" title="Step-grouped transcript, streaming-tail isolation — 12.28.2 / 12.29.7">4</span>
+  <span class="note p" style="top:260px;right:380px" title="Sub-agent fleet card with per-child progress — 12.28.7">5</span>
+  <span class="note b" style="top:406px;right:380px" title="Typed Terminal/Diff/Read/Search blocks — 12.29.9">6</span>
+  <span class="note w" style="top:497px;right:380px" title="In-place approval takeover of the composer — 12.28.3 / 12.29.6">7</span>
+  <span class="note g" style="top:742px;right:380px" title="Deliverables chips + message feedback — 12.28.12">8</span>
+  <span class="note" style="top:806px;left:398px" title="Sticky stats dock with cache R/W/hit + cost/context — 11.17 / 12.28.2">9</span>
+  <span class="note p" style="top:844px;left:398px" title="Queued steering messages + plan-mode strip — 11.2 / 12.7">10</span>
+  <span class="note b" style="top:900px;left:398px" title="Unified @ and / trigger in the composer — 11.4 / 11.21 / 12.28.5">11</span>
+  <span class="note w" style="top:900px;right:380px" title="Permission chip + model selector + keyboard hint — 12.16 / 12.28.14">12</span>
+  <span class="note p" style="top:54px;right:8px" title="Resizable details panel (trajectory inspector) — 12.28.4 / 12.29.1">13</span>
+  <span class="note" style="top:120px;right:8px" title="Event ledger with tokens/timing per step — 12.28.4">14</span>
+
+  <!-- legend -->
+  <div class="legend" id="legend">
+    <button class="close" onclick="document.getElementById('legend').style.display='none'">✕</button>
+    <h4>Mockup annotations → roadmap</h4>
+    <div class="item"><span class="n a">1</span><span><b>Icon rail.</b> Collapsed 56 px sidebar with activity dot on sub-agents. <span>12.29.1 / 12.29.4</span></span></div>
+    <div class="item"><span class="n b">2</span><span><b>Workspace/session browser.</b> Grouped, sortable, live pending/running status, sub-agent rows hidden from main list. <span>12.28.9 / 12.29.11</span></span></div>
+    <div class="item"><span class="n p">3</span><span><b>Conversation view tabs.</b> Chat / Trajectory / Sub-agents swap only the body; shell stays mounted. <span>12.29.3</span></span></div>
+    <div class="item"><span class="n a">4</span><span><b>Step grouping.</b> One header per turn with tool count and aggregate token/cache stats; streaming tail is isolated. <span>12.28.2 / 12.29.7</span></span></div>
+    <div class="item"><span class="n p">5</span><span><b>Sub-agent fleet card.</b> Collapsed tool result expands to per-child rows with progress, status, duration. <span>12.28.7</span></span></div>
+    <div class="item"><span class="n b">6</span><span><b>Typed content blocks.</b> Terminal (ANSI-aware, head/tail collapse), Diff (hunks + stats), Read (line numbers), Search (sources + snippets). <span>12.29.9</span></span></div>
+    <div class="item"><span class="n w">7</span><span><b>Approval takeover.</b> Permission question replaces the composer in place; not a modal. <span>12.28.3 / 12.29.6 / 12.16</span></span></div>
+    <div class="item"><span class="n g">8</span><span><b>Deliverables + feedback.</b> Files produced in a turn become clickable chips; 👍/👎 ratings stay out of model context. <span>12.28.12</span></span></div>
+    <div class="item"><span class="n a">9</span><span><b>Sticky stats dock.</b> Input/output/cache reads/writes/hit-rate, cost, context-% above the composer. <span>11.17</span></span></div>
+    <div class="item"><span class="n p">10</span><span><b>Queue rows + plan strip.</b> Steering messages wait for the next tool batch; plan mode locks edits. <span>11.2 / 12.7</span></span></div>
+    <div class="item"><span class="n b">11</span><span><b>Unified trigger.</b> <code>/</code> commands, <code>@</code> files/agents, <code>!</code> shell — one combobox under the caret. <span>11.4 / 11.21 / 12.28.5</span></span></div>
+    <div class="item"><span class="n w">12</span><span><b>Access row.</b> Permission preset chip, model/profile picker, keyboard hints; disabled state shows the reason. <span>12.16 / 12.28.14</span></span></div>
+    <div class="item"><span class="n p">13</span><span><b>Details panel.</b> Resizable fourth column that auto-closes under window pressure; hosts the trajectory inspector. <span>12.28.4 / 12.29.1</span></span></div>
+    <div class="item"><span class="n a">14</span><span><b>Event ledger.</b> Turn-aware timeline with per-event tokens, duration, cache stats; virtualized and searchable. <span>12.28.4</span></span></div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line-2);color:var(--txt-mute);font-size:11px">
+      Static mock — colors/numbers are illustrative. Click × to dismiss.
+    </div>
+  </div>
+</div>
+<script>
+// minimal interactions: tab toggle, block collapse, panel close, rail toggle
+document.querySelectorAll('.chead .tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.chead .tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');
+});
+document.querySelectorAll('.block > .bhead').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('collapsed'));
+document.querySelector('.dhead .iconbtn').onclick=()=>{
+  const a=document.getElementById('app');a.classList.toggle('no-details');
+};
+document.querySelector('.sb-head .iconbtn[title="Collapse sidebar"]').onclick=()=>{
+  const a=document.getElementById('app');a.classList.toggle('rail-only');
+};
+</script>
+</body>
+</html>
