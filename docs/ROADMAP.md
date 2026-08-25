@@ -525,3 +525,187 @@ Roughly in impact-per-effort, grouped so earlier items unblock later ones:
 10. **11.13 extension API** (strategic platform bet; do after 1–9 inform its shape)
 11. **11.7 durable background jobs** (once steering + fleet UI exist)
 12. **11.22 persistent PTY shells** (defer)
+
+---
+
+## 🧬 Phase 12: DeepSeek Harness Comparative Backlog
+
+This phase captures findings from comparing GoHarness to [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness) (npm `@deepseek-ai/dsh`, TypeScript/Cordis, MIT). Reference material:
+- Architecture: https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/architecture.md
+- Subsystems: `docs/subsystems/{core,tools,session,subagent,scope,llm-streaming,system-prompt}.md`
+- Key packages under `packages/`: `core/{agent,agent-loop,session,tools,system-prompt,scope}`, `subagent/*`, `shell`, `terminal`, `lsp`, `jobs`, `plan`, `todo`, `goal`, `workflow`, `sandbox`, `hooks`, `mcp`, `spill`, `feedback`, `preset`, `session-query`, `code-runtime`, `attachment`, `e2b`, `schedule`, `skill`, `guard`.
+
+DeepSeek Harness is architecturally the most ambitious of the three (Pi, Claude Code-style, us): built on **Cordis**, where literally *everything is a plugin* — model adapter, tool registry, session log, even the agent loop itself are replaceable Cordis services composed at boot from layered "profiles" and "bundles". It is a developer preview with compatibility-breaking changes, and its design is overkill for a single-binary Go product — but several ideas are directly transferable. Items are tagged **[NEW]** / **[IMPROVEMENT]** and note whether we adopt, adapt, or skip.
+
+### 12.1 Capability seams: service/provider/consumer triad **[IMPROVEMENT — architectural north star]**
+* **Reference:** dsh `capability-seams.md` — every swappable capability has three roles: a Service Definition (interface), Service Provider (implementation), and Consumer (the model-facing tool or loop). One provider swap changes the whole product because filesystem + subprocess + LSP + PTY all share one "execution world" (`ctx.fs` + `ctx.subprocess`); pointing those at E2B moves Bash, PTY, and LSP into a remote sandbox with no per-tool forks. We currently hardcode local execution in each tool.
+* **Takeaway for GoHarness:** define small Go interfaces for the execution world — `FS` (read/write/stat), `Runner` (exec one-shot), `Terminals` (PTY sessions), and `LSPer` — and have tools depend on them, not concrete functions. Ship a `local` implementation; later add `docker`/`ssh`/`e2b`/`firecracker` providers that all tools inherit for free. This is the same idea as our provider-profile throttle map but generalized to IO.
+* **Effort:** L (interfaces + threading through tools); pays off every time we add a sandbox/remote runtime.
+
+### 12.2 Session event log as source of truth **[IMPROVEMENT]**
+* **Reference:** dsh `core/session` — an append-only log of typed `SessionEvent`s (`turn/start`, `user/message`, `assistant/chunk*`, `assistant/message`, `tool/call`, `tool/result`, etc.). A runtime invariant asserts **"model-visible means logged"**: anything that reaches a model request must be reconstructable from the log. Fork, resume, transcripts, telemetry, UI replay, and persistence all derive from this one stream; raw `assistant/chunk` events preserve streaming fidelity.
+* **GoHarness today:** per-turn JSON files in session folders. Fine for inspection, but fork copies a whole folder, streaming chunks aren't durably recorded (only the final message), and there's no single projection.
+* **Plan:** adopt (or dual-write) a JSONL session log per session with typed events — this overlaps with 11.6. Add an invariant check in tests: the messages sent to the model must equal `deriveMessages(log)`. Record tool calls *before* execution and chunks as they stream. This unlocks replay, time-travel, and stable transcripts.
+* **Effort:** L, but shared with 11.6.
+
+### 12.3 Waterfall event hooks around every extension point **[NEW]**
+* **Reference:** dsh fires typed waterfalls at `agent/pre-step`, `agent/request`, `llm/stream`, `tools/pre-execute`, `tools/execute`, `tools/post-execute`, `system-prompt/assemble`, plus emit events (`system-prompt/change`, `tool/result`). Listeners call `next()` to delegate; a listener can rewrite, reject, timeout, or observe. This is how approval policy, sandboxing, hooks (Claude-Code-style `hooks.json`), metrics, and per-call timeouts are all implemented without forking tools. The tool pipeline specifically is: `tool/call` logged → `tools/pre-execute` (hooks/permission/sandbox) → monotonic guards (deny/abstain) → `ctx.approval` one-shot prompt → `tools/execute` (around: timeout/retry/metrics) → tool body → `fs/*` intent gates → owned session events → `tools/post-execute` (accept/block/replace/add context) → normalization → `finalizeContent` → `tools/result`.
+* **GoHarness today:** we have SSE broadcast for UI but no internal interception bus.
+* **Plan:** add a typed hook bus in the `Agent` runtime: `BeforeTool(ctx, call) (allow|deny|approve, err)`, `AfterTool(ctx, call, result) (newResult, err)`, `BeforeRequest(ctx, messages)`, `AfterChunk(ctx, chunk)`. Implement: (a) approval prompts (11.11's `ask_user` is one consumer), (b) Claude-Code-style `hooks.json` shell commands, (c) per-tool timeouts (dsh splits `dsh-timeout`/capability termination/policy), (d) repeat-tool advisory reminders (dsh `repeat-tool-reminder`), (e) metrics/tracing. The 11.13 extension API is the external face of this same bus.
+* **Effort:** M.
+
+### 12.4 First-class persistent terminals (PTY) **[NEW]**
+* **Reference:** dsh `terminal/` family — `ctx.terminals` backend registry; `terminal-bash` provides shell sessions with readiness detection, bounded state, and sandbox policy; `tool-terminal` exposes **six** model-facing tools for spawn/send/ctrl/await/log/kill, plus background-send integration. PTYs are owner-scoped (each agent owns its sessions) and complement one-shot bash for REPLs, dev servers, and interactive CLIs.
+* **GoHarness today:** one-shot `execute_command` only.
+* **Plan:** `github.com/creack/pty` backend behind the `Runner`/`Terminals` interface from 12.1; tools `terminal_start`, `terminal_send`, `terminal_poll` (with bounded reads and a deadline), `terminal_kill`. Reuse our workspace lock and sandbox modes. Document `tmux` as the non-PTY fallback for v1 (already in 11.22).
+* **Effort:** M.
+
+### 12.5 LSP as a capability seam, not a JSON-RPC tunnel **[NEW]**
+* **Reference:** dsh `lsp/` — a Service Definition with exactly **four semantic operations** (`goToDefinition`, `findReferences`, `goToImplementation`, `hover`); a generic stdio provider that can run any language server; one model-facing `lsp` tool. Providers register **capabilities**, not raw methods; documents open transiently per query. There is deliberately no generic JSON-RPC escape hatch, so swapping providers can't change what the model sees.
+* **GoHarness today:** none (pi-lens-style build feedback is 11.10).
+* **Plan:** post-11.10, add the four-op LSP seam over stdio. The build/test feedback loop catches most errors; LSP adds navigation and hover for code-understanding tasks. Keep the surface intentionally tiny.
+* **Effort:** M.
+
+### 12.6 Tool-output spill to disk **[NEW]**
+* **Reference:** dsh `spill/` — when a tool result exceeds a size threshold, the full output is persisted to a session-scoped file and the inline result is replaced with a bounded preview plus a retrieval locator; a `get_spill`/offset API lets the model page through it. This directly prevents a 500 KB `grep` or build log from blowing the context window — a problem we handle only by truncating to 400 chars, which loses information.
+* **GoHarness today:** `truncateResult()` clips tool output to 400 chars for console display, but the *full* result is returned to the model.
+* **Plan:** add a spill store under `.goharness/sessions/<id>/spill/`; cap inline tool results at e.g. 20 KB; beyond that, write full content to a content-addressed file and return a short header + `read_spill(id, offset, limit, find_text)` tool result (same shape as the web content cache in 11.1). Apply to command output, file reads, BM25 results, and web fetches uniformly.
+* **Effort:** S.
+
+### 12.7 Plan mode as logged, per-agent collaboration state **[NEW]**
+* **Reference:** dsh `plan-mode` — plan mode is not a global toggle; it is per-agent collaboration state (the agent and user iterate a plan, edits are gated until the plan is accepted/rejected, with an exit tool). The plan itself is logged to the session.
+* **GoHarness today:** we have visual workflows (DAG) for complex pipelines but no lightweight "plan, get approval, then execute" mode for linear chat.
+* **Plan:** a plan mode where the model writes a structured plan to a scratch document, edits are blocked (tools return "plan not accepted"), the user reviews/edits, then accepts to unlock execution. Reuse the approval hook from 12.3. Pairs naturally with 11.12 (todo overlay) and named reviewer sub-agents (11.8).
+* **Effort:** S-M.
+
+### 12.8 Goals with autonomous round-driving **[NEW]**
+* **Reference:** dsh `goal/` family — `ctx.goals` holds durable objective state as part of the session log; a `goal-round-driver` continues the agent across turns until the goal is met or blocked; `tool-goal`/`command-goal` expose it to model and user. This is "give the agent an objective and let it work across multiple rounds until done" — beyond our single ReAct loop.
+* **Plan:** add a goal record (description, done criteria, status) to session state; a driver loop that, after each turn settles, asks the model "is the goal met? if not, continue" until completion or a step budget; surface progress in the UI. Requires the steering/queue (11.2) and cancellation (11.3) to be safe.
+* **Effort:** M.
+
+### 12.9 Dynamic workflows over sub-agents + "Ralph" **[IMPROVEMENT]**
+* **Reference:** dsh `workflow/` — model-authored orchestration scripts run over the sub-agent registry in worker threads; `tool-workflow` exposes general execution; `tool-ralph` ships a fixed "fresh agent per task" workflow (spawns a clean sub-agent for each item, like a worker pool).
+* **GoHarness today:** our DAG workflows are *human-authored* in the visual editor; sub-agents are *model-invoked* per turn. We don't have model-authored fan-out over many children.
+* **Plan:** after durable sub-agent jobs (11.7), add a `run_workflow(spec)` tool where `spec` is a small declarative/scripted DAG the model writes (list of tasks, dependencies, which role/profile runs each), executed over the existing sub-agent engine with the per-profile throttle and workspace lock. "Ralph" is just a preset: N independent tasks → N fresh children → collect results.
+* **Effort:** L.
+
+### 12.10 Multiple sub-agent providers behind one interface **[IMPROVEMENT]**
+* **Reference:** dsh subagent seam registers providers by name: `spawn-in-process` (local child), `fork` (OS process), `acp` (Agent Client Protocol), `codex` (delegate to OpenAI Codex), `claude-code` (delegate to Claude Code), `dsh-sdk` (embed). Each advertises **capabilities** (`outputSchema`, `depthLimit`, `toolFilter`, `persona`); a request needing a capability the provider lacks fails loudly at start — no silent degradation. There are also *continuable* children (durable background sessions you can resume and send more messages to) vs. one-shot children.
+* **GoHarness today:** one in-process sub-agent kind.
+* **Plan:** keep in-process as the default; behind a `SubagentProvider` interface add at least an `ACP` provider (open standard, lets us delegate to any ACP-compatible agent) and possibly a `claude-code`/`codex` CLI provider (shell out, capture transcript). Add a capabilities struct so the model knows what it can ask for. Continuable/resumable children are 11.7.
+* **Effort:** M per provider; interface is S.
+
+### 12.11 Structured sub-agent output (object-rooted JSON schema) **[IMPROVEMENT]**
+* **Reference:** dsh `SubagentStartRequest.outputSchema` — a sub-agent can be asked to return a value matching a JSON Schema; providers that support it force a capture tool so the result is machine-parseable (`SubagentResult.structured`), with a strict enforced subset of JSON Schema.
+* **GoHarness today:** our `expect` field asks for a return shape in prose; the result is always text.
+* **Plan:** extend `spawn_sub_agent` with an optional `output_schema`; when set, inject a mandatory final `report_result(json)` tool the child must call, parse/validate against the schema, and return the structured value alongside the text. The parent can then route results programmatically (feeds 12.9 workflows).
+* **Effort:** S.
+
+### 12.12 Per-agent tool scoping & personas **[IMPROVEMENT]**
+* **Reference:** dsh `SubagentStartRequest.toolFilter` and `persona` — a child's tools can be restricted by name with "visibility not authority" (the tool vanishes from the prompt AND refuses to execute; unknown names error loudly), and a per-child persona string shadows the deployment persona with strict `{{variable}}` interpolation. In-process scoping uses the `scope` primitive (12.14) so one registration context means both per-agent visibility and shared lifetime ownership.
+* **GoHarness today:** sub-agents get all tools except write-by-default (which we've since enabled); named roles (11.8) will carry a tool allow-list.
+* **Plan:** when we add named roles (11.8), make tool filtering *enforced* server-side (not just omitted from the prompt), and add a `persona`/system-prompt override per role.
+* **Effort:** S (fold into 11.8).
+
+### 12.13 Per-session agent presets & process-shared services **[NEW]**
+* **Reference:** dsh `preset/` — a directory with an `agent.cordis.yml` mounts under an agent's scope, giving that session its own tools and prompt sections while other live sessions keep theirs; so one process runs multiple differently-composed agents at once. Presets that try to publish a process-global service are rejected at mount.
+* **GoHarness today:** one global tool/prompt config per running server; all sessions share it.
+* **Plan:** allow a session to select an "agent preset" (subset of tools + extra prompt sections + profile/model) from `.goharness/presets/<name>.yaml`; the `Agent` runtime already carries its own tool list and API config, so this is mostly config + UI. Useful for running a "research" agent vs a "coding" agent side by side.
+* **Effort:** S-M.
+
+### 12.14 Scope primitive (per-agent visibility + lifetime) **[NEW — internal]**
+* **Reference:** dsh `core/scope` — one small library ties "this registration belongs to agent X" to both **visibility** (agent X sees its own tools/events shadowing globals) and **lifetime** (when agent X ends, all its registrations unwind together, with racing disposers awaiting the same quiescence). It's an opaque identity key (the live `Agent` object) plus a scoped registry layer with shadowing.
+* **GoHarness today:** tools are global; cleanup is ad hoc.
+* **Plan:** when we add the extension bus (12.3) and presets (12.13), use a small `Scope` type: each `Agent` carries one; registering a tool/hook/command on a scope auto-disposes when the agent ends. Prevents leaked MCP tools and hooks from sub-agents.
+* **Effort:** M (internal; not user-visible).
+
+### 12.15 Profiles & bundles as layered, patchable config **[NEW]**
+* **Reference:** dsh boots a plugin tree from ordered layers: each bundle in the profile's list, then the profile's `cordis.patch.yml`, then the home-level patch, then any `--patch` overlay. A patch targets a row by id and replaces its config or inserts new rows, so every shipped default is overridable without forking. `dsh --profile web --dump-config` prints the resolved tree.
+* **GoHarness today:** config is a flat JSON file; profiles (provider connections) exist but aren't a composition system.
+* **Plan:** borrow the layering idea for config: ship defaults as the base layer, then project `.goharness/config.yml`, then user `~/.goharness/config.yml`, then CLI flags — with a declarative patch/merge (not just overwrite). Add a `--dump-config` debug command. Especially valuable once extensions (11.13) exist.
+* **Effort:** M.
+
+### 12.16 Approval policy & sandbox as services **[IMPROVEMENT]**
+* **Reference:** dsh `ctx.approval` is a one-shot prompt seam; `ctx.sandbox` applies per-session confinement to process execution with modes, per-call policy, wrapped-argv dialects, and fail-closed errors. Sandbox and filesystem share one world, so policy moves with remote providers (12.1). We have path write-protection and sandbox *modes* (host/docker/linux landlock/macos sandbox-exec/windows AppContainer) but no per-call approval prompts and no single policy object threaded through tools.
+* **Plan:** unify our existing sandbox backends behind a `Sandbox` interface on the execution world; add an approval hook (12.3) that can prompt per-tool-call (allow once / allow session / deny), persisted as a per-session decision. Project trust (11.15) gates loading project policy.
+* **Effort:** M.
+
+### 12.17 Hooks bridge (Claude Code / Codex style `hooks.json`) **[NEW]**
+* **Reference:** dsh `hooks/` — a bridge plugin that reads an existing `hooks.json` (PreToolUse/PostToolUse, etc.) and dispatches to external shell commands on the matching dsh events, so users can bring their existing hook configs. Includes timeout-policy and repeat-reminder listeners.
+* **GoHarness today:** none.
+* **Plan:** once the hook bus exists (12.3), add a `hooks.json` reader that runs user shell commands on `BeforeTool`/`AfterTool`/`BeforeRequest`/`AfterRequest` with stdin JSON and treats exit code as allow/deny. This is a very high-value, low-cost compatibility feature for Claude Code users.
+* **Effort:** S.
+
+### 12.18 Session query with full-text search + model tool **[IMPROVEMENT]**
+* **Reference:** dsh `session-query` family: `ctx.sessionQuery` defines trusted reads/relationship queries/search; `session-query-sqlite` implements it with **SQLite FTS**; `tool-session-query` exposes workspace-authorized queries to the model; `session-log-export` adds web `/export` (ZIP). This is cross-session *and* within-session semantic recall over the durable event log.
+* **GoHarness today:** BM25 over workspace files and session-scoped search; no cross-session query, no FTS, no model-facing recall tool.
+* **Plan:** overlaps with 11.9 (memory). After JSONL logs (11.6/12.2), add a SQLite FTS index over session events and a `session_query(query, scope, limit)` tool that respects workspace authorization. Export endpoint reuses it.
+* **Effort:** M.
+
+### 12.19 Content-addressed attachments **[NEW]**
+* **Reference:** dsh `attachment/` — immutable, content-addressed binary references with image limits and a storage service; bytes only enter durable storage on submit or provider commit.
+* **GoHarness today:** `uploads/` folder (from web paste) exists but is not content-addressed or quota-managed.
+* **Plan:** when adding image support (11.19), store uploads as blobs keyed by hash, dedupe, enforce size/type limits, and reference by ID in messages rather than embedding base64.
+* **Effort:** S (fold into 11.19).
+
+### 12.20 Code Mode / model-written programs **[NEW]**
+* **Reference:** dsh `code-runtime/` — a capability seam for executing a *model-written program* against host-provided async bindings, capturing what it printed and returned, with a worker-thread backend and generated SDK per language. Tools are tagged `mode: code`; the model gets a `run_code` tool plus an SDK in the runtime's language. This is sandboxed code execution (think e2b/Pyodide) rather than shell commands.
+* **GoHarness today:** none.
+* **Plan:** lower priority. Add behind the execution-world interface (12.1) as a provider — e.g. a WebAssembly sandbox (Wazero) or a containerized Python/JS runtime — with a generated small SDK. Lets the model do data-processing tasks without shelling out.
+* **Effort:** L; defer.
+
+### 12.21 Scheduled/mission runs **[NEW]**
+* **Reference:** dsh `schedule/` package and pi-subagents' missions — timed and recurring runs with delivery receipts.
+* **Plan:** a cron-like scheduler (in-process, persisted) that runs a named prompt/workflow on a schedule and delivers results (notification/webhook/chat). Useful for "check this CI every morning." Low priority but easy once jobs (11.7) exist.
+* **Effort:** S-M; defer.
+
+### 12.22 Guard / secret scanning **[NEW]**
+* **Reference:** dsh `guard/` family (and pi-hermes-memory's secret scanning) — policy guards on output.
+* **Plan:** a `BeforeResponse` hook that scans for obvious secret patterns (API keys in output) and warns/blocks; also scan before memory persistence (11.9).
+* **Effort:** XS.
+
+### 12.23 Human feedback that stays out of model context **[NEW]**
+* **Reference:** dsh `feedback/` — two deliberately separate contracts: an immutable log-only remark (never enters model history) and an editable per-message rating/note sidecar. Telemetry observes remarks but feedback stays independent.
+* **Plan:** add 👍/👎 + notes on assistant messages in the UI; persist to a sidecar, never inject into prompts. Useful for evals and product feedback without contaminating context.
+* **Effort:** S.
+
+### 12.24 Skills as on-demand capability packages **[IMPROVEMENT]**
+* **Reference:** dsh `skill/` follows the [Agent Skills standard](https://agentskills.io) (same as Pi) — Markdown with frontmatter, loaded on demand by description match. Covered by 11.13; listed here for completeness because dsh confirms the same pattern.
+* **Plan:** as 11.13.
+
+### 12.25 Telemetry/observability contracts **[NEW]**
+* **Reference:** dsh `packages/telemetry` (vendor-neutral contracts, reference adapter, conformance tests, typed schemas) plus OpenTelemetry adapter; Braintrust ships a pi extension for tracing. Every turn/tool/LLM call emits structured events derived from the session log.
+* **Plan:** define a small telemetry interface (`OnTurn`, `OnTool`, `OnLLMCall`) fed from the hook bus (12.3); ship a logging adapter and an OTLP adapter behind a config flag. Our `LogExecutionTrace` is a start but not structured/exportable.
+* **Effort:** S-M.
+
+### 12.26 Headless / RPC / SDK modes **[IMPROVEMENT]**
+* **Reference:** dsh ships `web` (browser app), `headless` (one-shot runner, no server), an SDK (`createAgentSession`), and RPC over stdio (strict LF-delimited JSONL). Pi has the same four modes.
+* **GoHarness today:** web UI + OpenAI-compatible HTTP gateway; no one-shot CLI runner or stdio RPC.
+* **Plan:** add `goharness run "prompt"` (headless, prints result, exits 0/1) and a `--mode rpc` JSONL stdio protocol for editor/CI integration. The `Agent` runtime is already embeddable; this is wiring.
+* **Effort:** M.
+
+### 12.27 Things we deliberately do *not* need from dsh
+- **Cordis as a framework.** Its plugin composition is elegant but is a large TypeScript inversion-of-control system; a Go interface + hook bus (12.1/12.3) gives us 90% of the extensibility with a fraction of the complexity for a single-binary product.
+- **Bun/Node runtime assumptions.**
+- **"No privileged core" taken to the extreme** (model adapter as a plugin, etc.). We can keep our providers compiled in while still making IO and tools pluggable.
+
+### Updated sequencing (merge with Phase 11 order)
+The dsh analysis changes priorities in two ways:
+- **12.3 (hook bus) and 12.6 (tool-output spill) should move up** — they're small, unblock many other items (approval, hooks, timeouts, memory, tracing), and spill fixes a real context-window bug independent of any big feature.
+- **12.1 (execution-world interfaces) should precede remote sandboxes, PTY, and LSP** — do the interface once, then add providers.
+
+Revised high-level order:
+1. 11.1 web search/fetch · 12.6 tool-output spill · 12.22 secret guard (XS)
+2. 11.2 steering + 11.3 cancel/abort
+3. 12.3 hook bus (with approval + timeouts + 12.17 hooks.json bridge)
+4. 11.4 `@file` · 11.5 `!command` · 11.16 context walking
+5. 12.1 execution-world interfaces (`FS`/`Runner`/`Terminals`)
+6. 11.10 build feedback · 12.4 PTY · 12.16 sandbox/approval policy
+7. 11.8 named roles (with 12.12 enforced scoping) · 11.12 todo · 12.7 plan mode · 12.8 goals
+8. 11.9 memory + 12.18 session query/FTS
+9. 11.6/12.2 JSONL session log with model-visible invariant
+10. 12.10 sub-agent providers + 12.11 structured output + 11.7 durable background jobs
+11. 12.5 LSP seam · 11.18 thinking blocks · 11.19 images (with 12.19 attachments) · 11.11 ask-user
+12. 11.14 model catalog · 11.15 trust · 11.20 palette · 11.21 slash commands · 12.13 presets · 12.15 layered config
+13. 11.13 extension API (external face of 12.3/12.14)
+14. 12.9 model-authored workflows · 12.20 code mode · 12.21 schedules · 12.25 telemetry · 12.26 headless/RPC
