@@ -358,3 +358,170 @@ The parent agent can configure the exact synchronization strategy for the concur
 #### 🔵 Option C: "Asynchronous / Fire-and-Forget" (Async Goroutines)
 * **The Logic:** The parent agent spawns a long-running background test compilation or deployment script and does not want to freeze its own thread waiting for it.
 * **The Flow:** GoHarness spawns the sub-agent asynchronously. It immediately returns a success status alongside the child's **Session ID** back to the parent. The parent can proceed with other tasks and query the child's status or read its written outputs later.
+
+> **Implementation status (2026-08):** The synchronous fan-out/fan-in core of Phase 10 is shipped as the `spawn_sub_agent` tool (structured `task`/`context`/`expect` inputs, per-profile concurrency throttle, workspace write lock, recursion depth cap of 2, and a live "Sub-agents" progress card). Wait-First/Race and durable background jobs remain open — see 11.7.
+
+---
+
+## 🧩 Phase 11: Ergonomics & Platform Backlog (Pi Comparative Analysis)
+
+This phase catalogues improvements identified by comparing GoHarness against [Pi](https://github.com/earendil-works/pi) (`@earendil-works/pi-coding-agent`) and its most-used extension ecosystem. Items are tagged **[NEW]** (a capability GoHarness lacks) or **[IMPROVEMENT]** (extends something we already have). Each lists the reference implementation and concrete technical notes so the work can be picked up without re-research.
+
+Pi's architecture is the inverse of ours: a minimal TypeScript/Bun TUI kernel where *everything else* — sub-agents, MCP, plan mode, web access, LSP feedback, memory — ships as a versioned extension package. We have chosen to productize those features in-core, so most of these are additive on top of foundations we already have (the `Agent` runtime, DAG engine, profiles, MCP client, BM25 index) rather than redesigns.
+
+Reference repos:
+- **Pi core:** https://github.com/earendil-works/pi
+- **pi-web-access** (web search/fetch/video/PDF/GitHub): https://github.com/nicobailon/pi-web-access — npm `pi-web-access`
+- **pi-subagents** (named roles, fleet view, background runs): https://github.com/nicobailon/pi-subagents — npm `pi-subagents`
+- **pi-mcp-adapter:** npm `pi-mcp-adapter` (we already have MCP in-core)
+- **pi-lens** (LSP/lint/typecheck feedback): npm `pi-lens`
+- **pi-background-tasks** (durable shell + delegated agents): npm `pi-background-tasks`
+- **pi-hermes-memory / remnic / pi-memory** (cross-session semantic memory)
+- **pi-goal / pi-goal-list-loop-audit** (autonomous goal/todo loops)
+- **@juicesharp/rpiv-ask-user-question** (model-initiated structured Q&A)
+- **@quintinshaw/pi-dynamic-workflows** (text-driven fan-out across many agents)
+
+### 11.1 Web search & fetch tools **[NEW]**
+* **Reference:** `pi-web-access` registers `web_search`, `fetch_content`, `get_search_content`, `source_check`.
+* **What it actually does (verified from source, v0.24.2):** there is **no headless browser**. Dependencies are just `undici` (HTTP), `linkedom` (HTML parse), `@mozilla/readability` (Firefox Reader View article extraction), `turndown` (HTML→Markdown), `unpdf` (local PDF text), and `p-limit` (concurrency cap). The pipeline for a page is: manual-redirect `fetch` with SSRF validation per hop → check `Content-Type` → parse HTML with `linkedom` → run Readability → convert article HTML to Markdown with Turndown. If Readability fails, it tries Next.js RSC flight data; if the page looks JS-rendered it returns an explicit error rather than hallucinating. JS-heavy pages are delegated to *remote hosted* extractors (Jina Reader `r.jina.ai`, Firecrawl, Kagi, Bright Data, Gemini URL Context) which run headless browsers server-side — never locally.
+* **Search:** provider JSON APIs (OpenAI Responses, Brave, Exa, Tavily, etc.) with an ordered fallback chain; zero-config defaults to keyless Exa MCP + DuckDuckGo HTML scraping; self-hosted SearXNG if configured.
+* **Smart extras:** GitHub URLs are `git clone --depth 1`'d locally instead of scraped; PRs/issues via `gh pr view`/`gh issue view`; YouTube via Gemini transcript+frames; PDFs via a Datalab→Gemini→local-unpdf fallback chain.
+* **GoHarness plan:** two tools — `web_search.go` and `web_fetch.go`.
+  - Search backend interface with fallback chain: self-hosted SearXNG (if configured) → DuckDuckGo HTML scrape (keyless) → Tavily/Brave/Exa (keyed via Providers screen).
+  - Pure-Go fetch pipeline: `net/http` with manual redirect following + SSRF guard (block RFC1918/loopback/link-local, validate DNS per hop, cap 5 MB, 30 s timeout, max 3 concurrent) → `github.com/nickstenning/html-to-markdown` (or a Go Readability port) → Markdown. Detect GitHub URLs and `git clone --depth 1` into a per-session cache. Detect PDFs and use `github.com/ledongthuc/pdf` for local text.
+  - JS-heavy fallback: route through Jina Reader (`https://r.jina.ai/<url>`), server-side Markdown, free tier — opt-in per call.
+  - Content cache outside the session JSON (Pi uses `~/.pi/web-search-cache/`, 1-hour TTL, 128 entries / 128 MiB LRU, `0600` perms), plus a `get_web_content(id, offset, limit, find_text)` tool so large pages don't flood context.
+  - `source_check(claim)` nice-to-have: 2–3 searches + top-page fetches → `supported/contradicted/unclear/missing-evidence` verdict with exact passage offsets and SHA-256 hashes.
+* **Effort:** M (~600–900 LOC across 4 files + two tool schemas + `httptest` tests).
+
+### 11.2 Message queue while the agent is running (steering & follow-ups) **[NEW]**
+* **Reference:** Pi editor — Enter while working queues a *steering* message delivered after the current tool batch; Alt+Enter queues a *follow-up* delivered after all work settles; Escape aborts and restores queued text; `steeringMode`/`followUpMode` settings.
+* **Why it matters:** on long workflows or parallel sub-agent runs, the user currently can't interject without waiting.
+* **GoHarness plan:** the run loop already alternates LLM → tools → LLM. Add a thread-safe queue (`Agent.pendingSteering`, `Agent.pendingFollowup`) fed from a web endpoint. After each `runToolCalls`, inject steering messages as user turns; after the loop settles, inject follow-ups. Web composer shows a "queued" indicator; Escape cancels the in-flight request via `context.Cancel` and restores the draft.
+* **Effort:** S-M.
+
+### 11.3 Cancel vs. abort distinction **[IMPROVEMENT]**
+* **Reference:** Pi — Escape once cancels the current tool/LLM call but keeps the turn and queued messages; Escape twice kills the whole turn.
+* **GoHarness plan:** first Escape cancels only the in-flight request (agent records "interrupted by user", stops calling tools); a second Escape within ~1 s cancels the parent run context. Surface as distinct "Stop" vs. "Abort" buttons.
+* **Effort:** S.
+
+### 11.4 `@file` mentions in the composer **[NEW]**
+* **Reference:** Pi `@` fuzzy-searches project files and attaches contents.
+* **GoHarness plan:** we already BM25-index the workspace. Add a typeahead in the web composer triggered by `@`; on selection, read the file (respecting tree-scanner ignore patterns) and append its contents as a fenced block, or send a `context_files` array the backend injects as context. Reuse `GenerateWorkspaceTree`.
+* **Effort:** S (mostly frontend + `/api/files?q=`).
+
+### 11.5 `!command` shell injection in chat **[NEW]**
+* **Reference:** Pi `!command` runs a shell command and sends output to the model; `!!command` runs without sending.
+* **GoHarness plan:** intercept lines beginning with `!` in the composer; run via `executeTerminalCommand`; `!` appends output as a user message and submits, `!!` streams to chat only.
+* **Effort:** XS.
+
+### 11.6 Session tree / time-travel navigator **[IMPROVEMENT]**
+* **Reference:** Pi stores sessions as one JSONL file with `id`/`parentId` per entry, enabling `/tree` — an in-place searchable branch navigator. Our fork copies an entire session directory.
+* **Why it matters:** cheap branching, labels/bookmarks, filter modes, non-destructive compaction.
+* **GoHarness plan:** adopt JSONL as an *additional* index alongside existing turn files: write each event as one JSONL record with a stable ULID and `parent_id`. Branching appends rather than duplicating. Web sidebar gets a tree view, labels, search. Compaction writes a summary record but leaves prior records intact.
+* **Effort:** L (migration/dual-write is delicate; do incrementally with import/export).
+* **Companion pieces (from Pi):** `/copy` last response, `/export` to HTML/JSONL/Markdown, `/import` to resume, `/share` (private gist with rendered HTML).
+
+### 11.7 Durable/background sub-agent jobs **[IMPROVEMENT]**
+* **Reference:** `pi-subagents` FleetView + `pi-background-tasks`; agents run after the parent turn settles with a persistent inspector for transcripts/steer/stop.
+* **GoHarness plan:** on top of the shipped engine, add a job registry (in-memory map + `.goharness/jobs/<id>.json`): `id, parent_session, spec, status, started_at, finished_at, result_path`. `spawn_sub_agent` gains `background: bool`; background jobs return immediately and continue in a goroutine. Reuse existing `subagent_start`/`subagent_done` SSE events; add `subagent_log`. A web "Fleet" panel lists jobs with stop/steer. Steering queue (11.2) feeds into this.
+* **Effort:** M.
+
+### 11.8 Named sub-agent roles & packaged workflows **[IMPROVEMENT]**
+* **Reference:** `pi-subagents` ships `scout` (recon), `researcher` (web/docs with sources), `worker` (implementation, validates, escalates), `reviewer` (review), `oracle` (second opinion, no edits), `delegate` (general), plus `/council`, `/parallel-review`, `/review-loop` templates.
+* **GoHarness plan:** a role is `{name, system_prompt, tool_allowlist, profile, temperature}`. Load YAML/TOML from `~/.goharness/agents/` and project-local `.goharness/agents/`; `spawn_sub_agent` gains an optional `agent: "reviewer"` field applying the role's tool subset and model/profile (already routed through the per-profile throttle). Ship five defaults. Workflow templates become prompt-template files (11.13).
+* **Effort:** S-M.
+
+### 11.9 Cross-session memory **[NEW]**
+* **Reference:** `pi-hermes-memory`, `@remnic/plugin-pi`, `pi-memory` add semantic recall over daily logs/facts; some include secret scanning.
+* **GoHarness plan:** reuse BM25. Add `memory_remember(content, tags...)` appending to dated Markdown in `~/.goharness/memory/`, and `memory_recall(query, limit)` BM25-searching them (optional embedding rerank via the Phase 8.2 embeddings proxy). Inject top-k hits into the root system prompt on session start. Auto-extract decisions/learnings at compact time.
+* **Effort:** S.
+
+### 11.10 Automatic build/lint/typecheck feedback loop **[NEW]**
+* **Reference:** `pi-lens` runs LSP/linters/formatters/type-checkers after edits and feeds errors back until clean.
+* **GoHarness plan:** after `write_file`/`patch_file`, detect project type (Go → `go build ./...`; Node → `npm run typecheck`/`tsc --noEmit`; Python → `py_compile`/`ruff`; Rust → `cargo check`) and run its check, capturing output. On error append a synthetic tool result so the model self-corrects, up to a small per-turn budget (e.g. 3 rounds). Per-profile/per-project setting. No LSP needed in v1.
+* **Effort:** M.
+
+### 11.11 Model-initiated Q&A interludes **[NEW]**
+* **Reference:** `@juicesharp/rpiv-ask-user-question` — the model puts a structured questionnaire to the user mid-turn instead of guessing.
+* **GoHarness plan:** add an `ask_user` tool taking a JSON schema of questions (text/select/multiselect). The run loop pauses, renders a form in the web UI, waits for the response, injects it as a tool result, and continues.
+* **Effort:** M (async waiter + form renderer).
+
+### 11.12 Persistent TODO/plan overlay **[NEW]**
+* **Reference:** Pi core omits to-dos; `@juicesharp/rpiv-todo` adds one. Our DAG editor covers complex plans; a lightweight checklist helps linear runs.
+* **GoHarness plan:** a `todo` tool (`add`/`update`/`complete`/`list`) whose state renders as a sticky web overlay surviving `/reload`; inject a compact rendering as a system message each turn. Don't over-engineer.
+* **Effort:** S.
+
+### 11.13 Skills, prompt templates, and the extension surface **[NEW — strategic]**
+* **Reference:** Pi's highest-leverage feature. Extensions call `pi.registerTool()`, `pi.registerCommand()`, `pi.on("event", ...)`, replace the editor, add widgets/status lines/providers; bundled into npm/git packages with a manifest. Skills follow the [Agent Skills standard](https://agentskills.io); prompt templates are `/name`-expandable Markdown with `{{variables}}`.
+* **GoHarness plan — staged:**
+  1. **Prompt templates** (XS): Markdown in `.goharness/prompts/*.md`, expand via `/name` with `{{arg}}` substitution.
+  2. **Skills** (S): `SKILL.md` with frontmatter (`name`, `description`, `when_to_use`) auto-loaded from `.goharness/skills/`, `~/.goharness/skills/`, and packages; offered to the model via a lookup tool and injected on description match.
+  3. **Extension API** (L): a subprocess JSON-RPC protocol (modeled on MCP) letting external processes register tools, slash commands, and lifecycle hooks (`before_turn`, `after_tool`, `before_compact`, `session_switch`). Go stays one static binary; extensions can be any language. MCP already covers ~60% (external tool registration) — generalize it to commands/events. A `goharness.json` manifest declares tools/commands/skills/prompts; `goharness install git:...` places packages under `~/.goharness/`.
+* **Why it matters:** compounds over time; without it our ecosystem is capped at what we ship.
+* **Effort:** XS templates, S skills, L the protocol.
+
+### 11.14 Provider/model catalog as data **[IMPROVEMENT]**
+* **Reference:** Pi keeps a live, refreshable per-provider model catalog (`pi update --models`); users add custom models via `~/.pi/agent/models.json` without a release.
+* **GoHarness plan:** move model lists from code into an embedded `models.json` refreshed from a versioned URL; allow override/extension via `~/.goharness/models.json`. Custom OpenAI/Anthropic/Gemini-compatible endpoints already work via profiles; this makes the picker self-updating.
+* **Effort:** S.
+
+### 11.15 Project trust & local config policy **[NEW]**
+* **Reference:** Pi asks before trusting a folder with `.pi/`; before trust it loads only user-global extensions.
+* **GoHarness plan:** once 11.13 adds project-local packages, show a trust modal for folders containing `.goharness/`, persist the decision, load project agents/skills/extensions only after trust. Non-interactive modes get `--approve`/`--no-approve`.
+* **Effort:** S.
+
+### 11.16 Context files: parent-directory walking + overrides **[IMPROVEMENT]**
+* **Reference:** Pi loads `AGENTS.md`/`CLAUDE.md` from `~/.pi/agent/`, every parent directory, and cwd; `AGENTS.override.md` replaces that directory's file; `.pi/SYSTEM.md` replaces the system prompt wholesale; `APPEND_SYSTEM.md` appends.
+* **GoHarness plan:** extend `LoadLocalInstructions()` to walk parent dirs (currently cwd only), add `.goharness/AGENTS.override.md`, plus full system-prompt override (`.goharness/SYSTEM.md`) and append (`.goharness/APPEND_SYSTEM.md`). Big value for monorepos.
+* **Effort:** XS-S.
+
+### 11.17 Richer live status & cost footer **[IMPROVEMENT]**
+* **Reference:** Pi's footer shows cwd, session name, input tokens (↑), output (↓), cache reads (R), cache writes (W), cache-hit rate (CH), cost, context %.
+* **GoHarness plan:** we already broadcast prompt/completion tokens and cost. Extend usage parsing for Anthropic `cache_read_input_tokens`/`cache_creation_input_tokens` and Gemini `cached_content_token_count`; render R/W/CH beside the existing widgets plus a context-usage % bar. Add a `/session` JSON view.
+* **Effort:** S.
+
+### 11.18 Collapsible "thinking" blocks **[NEW]**
+* **Reference:** Pi Ctrl+T collapses/expands reasoning blocks; we already collapse tool calls but not thinking traces.
+* **GoHarness plan:** surface thinking from provider-specific fields (Anthropic `thinking`, Gemini `thoughtSignature`, OpenAI reasoning tokens) as distinct, collapsed-by-default chat blocks with a global toggle.
+* **Effort:** S-M (provider parsing is the messy part).
+
+### 11.19 Image paste/drag into the composer **[NEW]**
+* **Reference:** Pi supports clipboard image paste and drag-drop.
+* **GoHarness plan:** accept images in the web composer, store under `.goharness/sessions/<id>/uploads/`, pass as `image_url`/inline image parts through all three provider translators.
+* **Effort:** M.
+
+### 11.20 Editor modal & slash command palette **[NEW]**
+* **Reference:** Pi Ctrl+G opens `$VISUAL`/`$EDITOR`/nano for long prompts; `/` opens a palette mixing commands, skills, templates.
+* **GoHarness plan:** web can't launch a local editor, so add a full-screen editor modal (we already have modals) for long prompts and a `/` palette listing commands/workflows/templates/agents with keyboard nav.
+* **Effort:** S (web-only).
+
+### 11.21 In-chat slash commands **[NEW]**
+* **Reference:** Pi's `/compact`, `/new`, `/resume`, `/fork`, `/clone`, `/tree`, `/copy`, `/export`, `/import`, `/share`, `/reload`.
+* **GoHarness status:** workflow New/Clone/Delete exist in the UI; no unified in-chat command system.
+* **Plan:** a Go command registry (+ extension hook from 11.13); parse `/verb args` in the composer; autocomplete in the palette. Prioritize `/compact [instructions]`, `/new`, `/fork`, `/export jsonl|html|md`, `/agents`, `/reload`.
+* **Effort:** S once the palette exists.
+
+### 11.22 Persistent shell sessions / background shells **[NEW]**
+* **Reference:** Pi ships no background bash (points at tmux); `pi-background-tasks` adds durable shells. We have one-shot `execute_command` but no PTY.
+* **GoHarness plan:** lower priority. A `shell_start`/`shell_send`/`shell_poll`/`shell_kill` toolset via `github.com/creack/pty` would enable dev servers/REPLs; for v1 document `tmux`/`screen` in the system prompt instead.
+* **Effort:** L — defer.
+
+---
+
+### Suggested sequencing
+
+Roughly in impact-per-effort, grouped so earlier items unblock later ones:
+
+1. **11.1 Web search & fetch** (huge capability lift; zero-config defaults)
+2. **11.2 Steering messages + 11.3 cancel/abort** (felt UX for long runs; unblocks 11.7)
+3. **11.4 `@file` mentions, 11.5 `!command`, 11.16 context-file walking** (XS–S polish)
+4. **11.10 auto build/typecheck feedback** (closes the "success with a broken tree" failure)
+5. **11.8 named sub-agent roles + 11.12 todo overlay** (leverage shipped engine)
+6. **11.9 cross-session memory** (reuse BM25 + embeddings proxy)
+7. **11.6 JSONL session tree + export/import/share** (foundational for 11.21 and better branching)
+8. **11.11 ask-user, 11.17 cache accounting, 11.18 thinking blocks, 11.19 images**
+9. **11.14 model catalog, 11.15 trust, 11.20 palette, 11.21 slash commands**
+10. **11.13 extension API** (strategic platform bet; do after 1–9 inform its shape)
+11. **11.7 durable background jobs** (once steering + fleet UI exist)
+12. **11.22 persistent PTY shells** (defer)
