@@ -709,3 +709,123 @@ Revised high-level order:
 12. 11.14 model catalog · 11.15 trust · 11.20 palette · 11.21 slash commands · 12.13 presets · 12.15 layered config
 13. 11.13 extension API (external face of 12.3/12.14)
 14. 12.9 model-authored workflows · 12.20 code mode · 12.21 schedules · 12.25 telemetry · 12.26 headless/RPC
+
+### 12.28 UI/UX: client plugin architecture and surfaces **[NEW — strategic for the web GUI]**
+
+dsh's web frontend is as pluginized as its backend. The client (`packages/client/`) is a React app where every surface is a separate `ui-*` package that mounts into named **slots** (`ui-slots` provides a `register({name, children, store, inject, kind}, Component)` API with chain-routing, four-share prop typing, and store seats). UI packages do not own the transcript; they register keyed renderers against the session event log. This is a different philosophy from our single-bundle web UI, and several concrete ergonomic ideas transfer without adopting the whole framework.
+
+**Reference packages** (all under `packages/client/modules/`): `ui-conversation`, `ui-tool`, `ui-trajectory`, `ui-input-trigger`, `ui-commands`, `ui-subagent`, `ui-plan`, `ui-goal`, `ui-jobs`, `ui-workflow-run`, `ui-user-questions`, `ui-attachment`, `ui-reference`, `ui-permission-presets`, `ui-message-feedback`, `ui-layout`, `ui-sidebar`, `ui-workspace`, `ui-settings`, `ui-settings-models`, `ui-settings-plugins`, `ui-theme`, `ui-deliverables`, `ui-brand-official`, `ui-primitives`, `ui-renderer`.
+
+#### 12.28.1 Slot/region model for the web client **[IMPROVEMENT]**
+* **Reference:** `ui-slots` — named regions (composer, header actions, sidebar sections, conversation view tabs, status bars, overlays) with `register()`; chain-kind slots self-nominate by a selector so the first match wins (e.g. one view renderer per conversation node type). Four prop shares compose: runtime, child slots, store, and injected business API.
+* **GoHarness today:** our web UI is one HTML file with hardcoded regions; adding a button/panel means editing the core.
+* **Plan:** introduce a small client-side registry (plain JS, no framework needed) — `ui.registerSlot('composer.footer', Component)` and `ui.registerChatNode('tool_call', renderer)` — even without a plugin loader this decouples features and makes 11.13's UI extensions possible. Render tool calls, subagent cards, plan chips, and jobs badges as independent node renderers rather than branches in one giant template.
+* **Effort:** M.
+
+#### 12.28.2 Conversation view: step-grouped flow + sticky composer **[IMPROVEMENT]**
+* **Reference:** `ui-conversation` — chat is grouped by step (one model request + its tools), with a "step summary" row, streaming-tail isolation, and turn status. The composer is a **sticky dock**: a stats dock (token/cost/context) sits above the input, and queued steering messages render as rows above the textarea; the scrollport reserves its scrollbar gutter so opening/closing overlays never shifts content horizontally.
+* **GoHarness today:** messages stream in; tool calls are collapsed `<details>`; no step grouping; composer is static.
+* **Plan:** group a response and its tool calls under a step header ("● 3 tools · 1.2s · 4.2k tokens") with a collapse-all; make the composer sticky; add the live stats dock (11.17). Keep scroll position stable as new blocks arrive.
+* **Effort:** M.
+
+#### 12.28.3 Composer takeover for approvals and questions **[NEW]**
+* **Reference:** both approvals and `ui-user-questions` replace the composer in place (not a floating modal) with an amber strip, the question/approval text, and refuse/allow or answer controls. While waiting, the normal input is hidden; the answer is delivered through the same `PendingWait` carrier and restores the composer. Pending interactions (approvals, plan reviews, questions) are also surfaced in the sidebar with an amber dot and "Waiting for approval/answer".
+* **GoHarness today:** we have foldable tool results but no model-initiated question or per-call approval UI.
+* **Plan:** when 11.11 (`ask_user`) or an approval hook (12.3/12.16) fires, swap the composer for an inline question/approval card with allow-once/allow-session/deny; reflect pending state in the session sidebar.
+* **Effort:** M (depends on 11.11 and 12.3).
+
+#### 12.28.4 Trajectory / inspector view **[NEW]**
+* **Reference:** `ui-trajectory` — a second tab beside Chat rendering a **turn-aware event ledger** (User / Assistant / Tool / nested Subtool rows) with thick rules at turn boundaries, compact step markers, and a selection **inspector** showing token usage (input/output/cache), duration, and timing per event. It has a time-axis overview at the top, click-drag interval selection to focus events, wheel-to-zoom, and virtualized rendering (only visible rows + overscan mount); older pages load on scroll-up.
+* **Why it matters:** for debugging long agent runs and for cost/latency work, a flat chat transcript is inadequate; this is the "developer tools" view of an agent.
+* **Plan:** add a "Trajectory" tab to the session view. Render events from the JSONL log (11.6/12.2) as a virtualized ledger; clicking an event opens an inspector with tokens/duration/cache; add a timeline strip. Reuse our existing `cost_update`/trace events.
+* **Effort:** L (mostly frontend); depends on the event log.
+
+#### 12.28.5 `@` and `/` trigger system with grouped candidates **[IMPROVEMENT]**
+* **Reference:** `ui-input-trigger` + `ui-commands` — under the caret, `/` and `@` open a grouped, fuzzy-matched candidate menu. Focus stays in the textarea (combobox pattern with `aria-activedescendant`); Enter/Space adjudication hooks let sources accept or refuse submission (e.g. a command that takes images only fires if images are attached). `/` does fuzzy subsequence matching (prefixes rank first) even though Space/Enter require an exact name. The menu is session-scoped and sources can be warmed and updated live.
+* **GoHarness today:** we have toolbar buttons but no in-editor command palette; 11.4 plans `@file`.
+* **Plan:** build one trigger component used by both `@file` (11.4), `@agent` (subagent addressing), and `/command` (11.21); group candidates by source; keep the caret in the input; support keyboard nav and fuzzy filter. The 11.20 palette reuses this.
+* **Effort:** M.
+
+#### 12.28.6 Tool call tree with nested sub-calls **[IMPROVEMENT]**
+* **Reference:** `ui-tool` — a `ToolCallTree` renders one root call with recursive `subCalls`, selection state, and a per-call slot so each tool ships its own atomic view (bash gets a terminal view, subagent gets its own card, file edits get a diff). The runtime is authoritative for call/result pairing; UI packages register only the view for their wire name.
+* **GoHarness today:** our tool results are one collapsed block per call; sub-agents report as one tool result. We don't show nested calls (a tool that invokes another tool, or a sub-agent's internal tool calls).
+* **Plan:** model tool calls as a tree in the chat renderer; let sub-agents (11.7) expose their child calls; give each tool type its own renderer (diff for patch, terminal for command, card for subagent). Reuse for the trajectory view.
+* **Effort:** M.
+
+#### 12.28.7 Sub-agent navigation and fleet UI **[IMPROVEMENT]**
+* **Reference:** `ui-subagent` — in a parent session, the header shows a breadcrumb (`parent / ▾ 3 descendants`) with a lazy-loaded tree catalog of child sessions (running indicator, per-child token usage and duration); subagent-origin sessions are hidden from the main sidebar and reached through the parent's catalog. A running continuable child keeps its composer enabled for follow-ups; a one-shot child shows a read-only transcript; Stop is always available. An `@` source lists running children for quick reference insertion.
+* **GoHarness today:** we have a compact "Sub-agents (3)" progress card (Phase 1/2 work) but no transcript drill-down, no per-child stats, no follow-ups, and sub-agent sessions aren't navigable.
+* **Plan:** after 11.7 (durable jobs), make the card expandable: click a child → open its transcript in a pane; show per-child tokens/duration; allow stop; later allow follow-up messages into a continuable child. Hide sub-agent sessions from the main sidebar.
+* **Effort:** M (with 11.7).
+
+#### 12.28.8 Plan chip, todo strip, goals, jobs badge in the composer **[NEW]**
+* **Reference:** `ui-plan` renders a "Plan ×" chip in the composer's plan seat when plan mode is active and switches the placeholder; `ui-tool`/todo renders the active todo list as a strip above the input; `ui-goal` shows objective progress; `ui-jobs` adds a header badge listing background jobs owned by the session (running + stoppable counts).
+* **Plan:** once 12.7 (plan mode), 11.12 (todo), 12.8 (goals), and 11.7 (jobs) exist, surface each as a small, persistent composer-region indicator rather than burying them in chat. One-line status, click to expand/focus.
+* **Effort:** S each, once the backend exists.
+
+#### 12.28.9 Workspace and session sidebar with grouped, searchable, sortable rows **[IMPROVEMENT]**
+* **Reference:** `ui-workspace` + `ui-sidebar` — workspaces group sessions; each workspace remembers expanded/collapsed state; an open workspace shows 5 sessions with a "Show more" overflow; sessions can be sorted manually or by "Last updated"; an inline search expands across the header, does instant substring matches on titles/workspaces, and after 250 ms does a ranked **content** search with snippets (capped at 20 results, "narrow your query" prompt). Session rows show live status: **Waiting for approval/answer** (amber), **Running** (blue spinner), descendant-activity count, or unviewed completion. Rename, fork (auto-incremented title), archive, and delete are inline; drag-to-reorder is persisted; hovering a row copies its path/title.
+* **GoHarness today:** we have a session sidebar but no grouping by workspace, no content search, no live pending/running status on rows, no sort modes.
+* **Plan:** group sessions by workspace folder; add row status from the live agent state; add the 250 ms debounced content search backed by 12.18's FTS; add rename/fork/archive inline. Match Pi's "last updated" vs "manual" sort.
+* **Effort:** M.
+
+#### 12.28.10 Settings as plugin cards with live model testing **[IMPROVEMENT]**
+* **Reference:** `ui-settings-models` — providers are cards with inline key entry (validated as printable ASCII, rejected if pasted as `NAME=value`), per-model context-window/output-cap fields with `K`/`M` suffixes, and a **"Fetch available models"** button that interrogates the *currently typed but unsaved* endpoint+key (one round trip instead of save-then-return). Results open a multi-select picker; providers that can't be interrogated stay hand-editable with their error shown inline. Each settings write carries a revision so concurrent edits from another tab or a file edit are rejected with `settings-conflict`. Custom providers are a separate create card requiring a unique id, endpoint, protocol, and ≥1 model. A first-run notice gates the DeepSeek onboarding until a provider is reachable.
+* **GoHarness today:** our Providers modal edits profiles but has no "test" button, no live model fetch, no revision/conflict handling, no custom-protocol create flow.
+* **Plan:** add a "Test & fetch models" action per provider (calls the provider's models endpoint with the draft creds, shows checkmarks/errors before saving); add context-window/output-cap editors; add optimistic concurrency via a settings revision; add a custom OpenAI/Anthropic/Gemini-compatible provider create card (11.14's UI).
+* **Effort:** M.
+
+#### 12.28.11 First-class theme system **[IMPROVEMENT]**
+* **Reference:** `ui-theme` ships dark/light built around **CSS design tokens** (a `cssdesign` token catalog); third-party themes override same-named alias variables. The theme is a browser preference (not sent to the model); hot-reloads on edit.
+* **GoHarness today:** one embedded stylesheet; no theming.
+* **Plan:** factor our colors/spacing/typography into CSS custom properties on `:root` with a `[data-theme=light]` override; add a theme switcher; later allow user CSS or packaged themes. Pure frontend, no model impact.
+* **Effort:** S-M.
+
+#### 12.28.12 Message-level feedback, deliverables, and references **[NEW]**
+* **Reference:** `ui-message-feedback` adds 👍/👎 + optional note per assistant message in a **storage sidecar** that never enters model context (12.23); `ui-deliverables` tracks files/artifacts the agent produced; `ui-reference` renders `@file`/`@folder`/`@session` mentions as colored inline chips in both the transcript and the composer, with the actual reference text preserved for editing (so a mention survives a remount as canonical parseable text rather than a display-only bubble).
+* **Plan:** add per-message rating (sidecar, not model context); surface files written in a turn as a "deliverables" group; render `@` mentions as chips in sent and received messages using the same serialization as the composer.
+* **Effort:** S-M.
+
+#### 12.28.13 Drag-and-drop, image attachments, and drop overlay **[NEW]**
+* **Reference:** `ui-attachment` — composer images get a rail of thumbnails with file names/sizes; a full-viewport drop overlay shows while dragging files over the page; images open in a fit-to-viewport lightbox (Escape/mask/close-button dismiss, focus restored). Limits are enforced client-side.
+* **GoHarness today:** no drag-drop or image paste (11.19 covers the model side).
+* **Plan:** with 11.19, add paste/drag listeners, a thumbnail rail, the drop overlay, and a lightbox; enforce size/type limits; store via the content-addressed attachment service (12.19).
+* **Effort:** M.
+
+#### 12.28.14 Empty/hero state and block reasons **[IMPROVEMENT]**
+* **Reference:** with no workspace selected the whole composer card is the workspace-picker trigger (textarea read-only, keyboard accessible); when sending is blocked the composer shows the reason as placeholder text ("Select a model first", "Plan awaiting review", "No workspace selected") with the one missing action kept live. Blocks are *affordances* explaining why and what to do.
+* **GoHarness today:** the composer is always editable; errors are toasts.
+* **Plan:** make the composer reflect state: disable + reason when no workspace/model/profile is selected; make the whole card a CTA for the missing prerequisite.
+* **Effort:** S.
+
+#### 12.28.15 Reliability details worth copying
+Small things dsh does that add up:
+- **Scrollbar gutter always reserved** so content doesn't horizontally shift when a scrollbar appears/disappears.
+- **Virtualized long lists** (trajectory, search results, session list) with overscan and stable keys.
+- **Streaming tail isolation** — new chunks don't re-render the whole transcript; the streaming element is keyed separately.
+- **Debounced search (250 ms)** with abort of the previous in-flight request.
+- **Stable React/DOM identity for the shell** across session switches (workspace picker, scroll body, composer seat are never unmounted) so focus/scroll/IME state survives navigation.
+- **Session-scoped draft mirror** — the composer draft persists across workspace/session switches.
+- **Hover-to-reveal** compact actions (checkpoint disclosures, row buttons) rather than always-visible clutter.
+- **Accessibility:** visible focus rings, `aria-activedescendant` on comboboxes, keyboard shortcuts for everything (Escape to cancel/close, arrow keys in menus/tree).
+- **Toast/notice surface** for non-blocking errors that keep the draft (e.g. "images not supported on this command").
+- **Localized EN/中文** pairs throughout; even without translating, structure strings for it.
+
+### Where GoHarness is already ahead
+- **Visual DAG workflow editor** — dsh has model-authored *text* workflows (`tool-workflow`/Ralph) but no graphical canvas.
+- **Per-profile HTTP concurrency throttling in core** — dsh relies on provider/tool policy; our `max_concurrency` is a first-class profile field.
+- **Environment-aware shell instructions** in the system prompt — we already detect OS/shell and inject guidance; dsh leaves this to personas.
+- **Single static binary** vs dsh's Node/pnpm runtime — easier to install and air-gap.
+
+### UI sequencing (fold into Phase 11/12 order)
+1. **12.28.14** empty/block states + **12.28.11** theme tokens (XS–S polish, low risk).
+2. **12.28.5** unified `@`/`/` trigger (unblocks 11.4, 11.20, 11.21).
+3. **12.28.2** step-grouped conversation + sticky composer + stats dock.
+4. **12.28.6** tool-call tree renderer (enables richer subagent/files views).
+5. **12.28.9** workspace/session sidebar with status + FTS (with 12.18).
+6. **12.28.3** composer-takeover approval/questions (with 11.11, 12.3).
+7. **12.28.7** subagent fleet drill-down (with 11.7).
+8. **12.28.10** settings model testing + conflict handling.
+9. **12.28.4** trajectory/inspector view (with JSONL log).
+10. **12.28.1** slot registry (after enough surfaces exist to justify it; supports 11.13).
+11. **12.28.8/12/13** plan/todo/goal/deliverables/feedback as those backends land.
