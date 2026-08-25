@@ -829,3 +829,124 @@ Small things dsh does that add up:
 9. **12.28.4** trajectory/inspector view (with JSONL log).
 10. **12.28.1** slot registry (after enough surfaces exist to justify it; supports 11.13).
 11. **12.28.8/12/13** plan/todo/goal/deliverables/feedback as those backends land.
+
+### 12.29 Shell layout, panel geometry, tabs, and visibility **[IMPROVEMENT — web GUI]**
+
+dsh's client has a deliberately small, well-reasoned layout system rather than ad-hoc CSS. Sources: `packages/client/modules/ui-layout`, `ui-sidebar`, `ui-settings`, `ui-conversation`, `ui-primitives`, `ui-renderer`, `ui-deliverables`, `ui-slots`, `ui-workspace`, `ui-brand-official`.
+
+#### 12.29.1 Three-column shell with a concession chain **[IMPROVEMENT]**
+* **Reference:** `ui-layout` ships an **AppFrame** with three columns registered as slots — `sidebar`, `conversation`, `details` — plus `conversation.empty`. Drag handles sit between them.
+* **Concession rules (the important part):** when the window narrows, **only the details panel shrinks**, and once it hits its minimum it **auto-closes**; the sidebar and conversation never shrink. This is called the "concession chain" and it means the user's primary surface is never squeezed.
+* **Closed states are not zero:** a closed sidebar collapses to a **56 px icon rail** (brand mark + 36 px icon buttons at 10 px inset); a closed details panel is **0 px wide**. So "hide" means two different things depending on the surface.
+* **Geometry is transient:** the sidebar width and details-open state are **not persisted to localStorage**; reload restores defaults, and switching to a different Session id closes details. Returning to the same session restores its width; unselected surfaces render details at zero width without touching the stored preference. The last non-blank session id is retained across blank states.
+* **No scroll anchoring during squeeze** is a documented limitation.
+* **GoHarness today:** our web UI is essentially a single conversation pane + a sidebar with no resizing/concession model and no details surface.
+* **Plan:** adopt a three-column frame: sidebar (resizable, collapses to an icon rail), conversation (never shrinks), details (resizable, auto-closes under pressure). Persist widths across reloads (we don't share dsh's reset-on-reload stance). Details panel becomes the home for 12.28.4 (trajectory inspector), 12.28.7 (subagent fleet), per-message inspector, and file preview.
+* **Effort:** M (frontend).
+
+#### 12.29.2 Slot ownership of chrome, not just content **[NEW]**
+* **Reference:** every panel's *chrome* is declared as named slots so plugins can replace pieces without touching layout:
+  - `sidebar.brand.mark`, `sidebar.brand.name` (independent slots; collapsed rail renders just the mark; `ui-brand-official` overrides both without replacing the New Session button).
+  - `sidebar.workspaces` (the scroll region), `sidebar.settings` (bottom-pinned).
+  - `conversation.session.header.lineage`, `…header.actions`, `…header.utilities` (three independent rows in the session header — lineage/breadcrumbs on the left, action buttons center, utilities right; removing an occupant restores titles without affecting actions).
+  - `conversation.composer` (the whole input seat; approvals/questions take it over), `conversation.hero.workspace`, `conversation.view` (the tab ring), `conversation.input.overlay` (the `@`/`/` menu), `conversation.chat.turnTail` (deliverables row), `conversation.empty`.
+  - `settings.trigger`, `settings.header`, `settings.close`, `settings.action`, `settings.section`, `settings.plugins.tab`, `settings.onboarding`.
+  - `root` (the whole app).
+* **Chain slots** self-nominate by a selector (first non-null wins) — e.g. the active conversation view.
+* **GoHarness plan:** as part of 12.28.1, define this slot catalog up front; even before external plugins exist, internal features (trajectory, subagents, deliverables, approvals) mount through slots so the DOM structure stabilizes.
+* **Effort:** M (pays off across every later UI item).
+
+#### 12.29.3 Conversation view tabs (not pages) **[NEW]**
+* **Reference:** the conversation column has a **view ring** — a tab strip where each entry owns its chrome. Chat is the package's own entry; **Trajectory** (12.28.4) contributes another tab; plugins contribute more. The active view renders through a slot with `only: <id>`. The shell (scroll body, composer, header) stays mounted; only the view body swaps. Tabs carry `id/order/label`; session-scoped.
+* **Plan:** add a tab strip to our conversation header. Chat first, Trajectory second (once 12.28.4 lands), later subagent transcript, files, etc. Keep composer/scrollport identity stable across tab switches.
+* **Effort:** S once slots exist.
+
+#### 12.29.4 Sidebar anatomy and collapse motion **[IMPROVEMENT]**
+* **Reference:** sidebar shell (not the workspace list) owns: brand row, **New Session** action, layout collapse toggle, scroll region, bottom-pinned **Settings** seat. `ui-workspace` fills the scroll region; it does not own the chrome.
+* **Collapse animation:** expanded content fades out at its current width for 150 ms; upper controls (toggle, New Session, add, search) share a 150 ms fade + 49 px leftward translation, ending on the rail's 10 px inset as the column slides at 300 ms; each 36 px control follows the same path. The bottom-pinned Settings control fades but does **not** translate. `prefers-reduced-motion` disables transitions. A page that starts collapsed renders the rail statically.
+* **Scrollbars are a pointer affordance:** the column binds the scrollbar thumb to `transparent` when the pointer is outside and keeps it drawn for **2 seconds after the pointer leaves**; the region reserves the gutter so showing/hiding the thumb never reflows content.
+* **GoHarness today:** our sidebar has no collapse-to-rail, no animation, native scrollbars.
+* **Plan:** implement icon-rail collapse with the staged animation; reserve scrollbar gutter; auto-hide thumbs.
+* **Effort:** S-M.
+
+#### 12.29.5 Settings as a sidebar surface, not a modal **[IMPROVEMENT]**
+* **Reference:** settings has **no presentation of its own** — it's a slot system: a base package provides the schema/transport/scope; `ui-settings-general` provides the shell (navigation + chrome) which mounts into `sidebar.settings` (so it lives at the sidebar's foot, not a modal). Features register sections (one page each), a Plugins tab for plugin pages, and ordered onboarding pages. Settings are schema-bound and **revisioned**: each write carries an expected revision, so a concurrent edit from another tab or a file edit is rejected with `settings-conflict`. Remote/non-loopback browsers get **no durable settings** (RPC is loopback-only); their rows render inert.
+* **GoHarness today:** Settings is a modal; no conflict detection; no sections/plugins model.
+* **Plan:** relocate Settings into the sidebar (or a slide-over panel) with section registration; add optimistic concurrency; keep secrets out of the client. This also gives 12.28.10 (model testing) a home.
+* **Effort:** M.
+
+#### 12.29.6 Composer regions and in-place takeover **[NEW]**
+* **Reference:** the composer is a stack, not one textarea:
+  - **Stats dock** (sticky above the input) — token/cache/cost/context readouts (11.17).
+  - **Input docks** — queued steering/follow-up messages render as rows above the textarea (11.2).
+  - **Todo/plan strip** — the active todo list/plan state (11.12/12.7).
+  - **Bar** — the textarea plus its access row (permission preset chip, model picker, send).
+  - **Overlay** — the `@`/`/` candidate menu.
+* **Approvals and questions replace the composer in place** (an amber strip with the question + allow/refuse controls) rather than opening a modal; pending waits leave no placeholder card in the message flow. A block reason (no workspace, no model, plan review pending) renders the same disabled textarea with the reason as its placeholder, and leaves exactly one action live (the thing that unblocks it).
+* **Plan:** when building 11.2/11.11/12.3/12.7, mount them into these composer regions; never as floating cards in chat.
+* **Effort:** M (architectural).
+
+#### 12.29.7 Message flow: steps, streaming isolation, compaction placement **[IMPROVEMENT]**
+* **Reference:** chat is grouped by **step** (one model request + its tools), with a step-summary row, streaming-tail isolation, and turn status. **Streaming tail isolation** means new chunks re-render only the trailing element; everything above is frozen as cached React nodes keyed stably, so a long reply doesn't re-parse the whole transcript.
+* **Compaction renders as one collapsed row *at the checkpoint's flow position***, not a replacement of the transcript above it; it shows replaced-item count and estimated tokens, and discloses the summary on click/hover. Manual `/compact` starts as a running row and folds into the checkpoint when it settles.
+* Non-user messages (context injections, cross-session recalls) render as a **default-collapsed disclosure** naming the role and the producer (so "a skill catalog" reads differently from "a workspace instruction file").
+* **Turn tail:** the deliverables row (12.28.12) and icon actions render between the message body and its footer, owned by slots.
+* **Plan:** group our transcript by step; virtualize the settled history; stream only the tail; render compaction inline as a collapsible checkpoint rather than a system message; fold injected context by default.
+* **Effort:** M.
+
+#### 12.29.8 Layer/z-index contract **[NEW]**
+* **Reference (from `ui-primitives`):** layers are explicit and ordered:
+  1. App content (slots, sidebar, conversation, details).
+  2. `HoverCard` — portaled, with a pointer-leave grace so it survives the anchor gap.
+  3. `Toast` — top banner, 120 px from viewport top, **`pointer-events: none`**, centered over the composer anchor (re-measured on resize); `role="alert"`; 3 s hold + 1 s fade; keyed by sequence so repeats re-animate.
+  4. Attachment **drop overlay** — full viewport, pointer-inert (owner decides accept/drop).
+  5. Attachment **lightbox** — body-portaled, fit-to-viewport, Escape/mask/close dismiss, restores focus.
+  6. **Modal / Onboarding** — body-portaled, makes `#root` inert for its lifetime, owns focus trap.
+  The toast explicitly layers *above* the lightbox so an upload failure over a preview stays visible.
+* **Plan:** codify our z-index scale as CSS custom properties with the same ordering; never hardcode `z-9999`; make toasts pointer-events-none; trap focus in modals.
+* **Effort:** XS-S.
+
+#### 12.29.9 Primitives that own specific content shapes **[NEW]**
+* **Reference:** `ui-primitives` ships typed renderers rather than generic markdown:
+  - **TerminalBlock** — parses ANSI with `anser` (SGR colors, cursor movements incl. CR/backspace/erase-in-line, tab stops, CJK width), replays spinner redraws (`100%\rOK` shows `OK`, `\x1b[K` erases), keeps `white-space: pre`, horizontal scroll, collapses head+tail beyond 16 lines behind an expand button, one running/done/error state dot in a reserved gutter.
+  - **DiffBlock** — path header, removed-then-added grouping, `⋯` hunk gap, `└ +A -R · N file(s)` footer, copy control writes prefixed diff text, same head/tail collapse.
+  - **ReadBlock** — line-numbered syntax-highlighted file window, "showing N of M" note, head/tail collapse.
+  - **SearchBlock / WebBlock** — source list with status and capped retrieval, empty-state note, compact fetch summary.
+  - **JsonBlock / JsonTree** — read-only inspector for structured tool output.
+  - **MarkdownText** — GFM + KaTeX math, raw HTML omitted, relative/non-HTTP links neutralized, safe external-link attributes, **incremental streaming parser** that freezes all but the last two blocks as cached React elements, wide tables scroll horizontally inside a focusable wrapper, inline code that is an absolute URL becomes a link, and a `fileMentions` resolver turns real file tokens into openers.
+  - **StateDot** with four states (done/warning/ongoing/error), **DisclosureRow**, **Button/Pill/Menu/Modal/Input**, **useAnchoredPosition/useAnchoredMaxHeight** for floating panels.
+* **GoHarness today:** tool output is one collapsed `<pre>`; no ANSI, no diff rendering, no line numbers, no streaming-optimized markdown.
+* **Plan:** build these atoms one at a time as we touch each tool: TerminalBlock for `execute_command`, DiffBlock for `patch_file`, ReadBlock for `read_file`, SearchBlock for `bm25_search`/web search; swap the generic markdown renderer for an incremental one.
+* **Effort:** M (highest ROI of the UI polish items).
+
+#### 12.29.10 Persistent shell identity across session switches **[IMPROVEMENT]**
+* **Reference:** the conversation shell (workspace picker, scroll body, composer seat, textarea) **survives no-session and session transitions** with stable React/DOM identity. Strict-session **header and body** are separate outlets that fill their regions when the first session arrives. Blank sessions render the same composer body as active sessions, and the **InputHub carries drafts across workspace switches** and mirrors them into the session store. This means focus, scroll position, IME composition, and the textarea caret don't reset when you switch sessions.
+* **GoHarness today:** switching sessions re-renders the whole chat and loses draft/focus/scroll.
+* **Plan:** hoist shell state above the session outlet; keep the composer mounted; mirror drafts per-session.
+* **Effort:** M.
+
+#### 12.29.11 Workspace/session browser details worth copying **[IMPROVEMENT]**
+* Already covered in 12.28.9, but specific geometry rules: an **open workspace shows 5 sessions** with a transient **Show more**; returning to 5 requires closing and reopening; a new session created from a group opens the group so it stays visible; **Manual** vs **Last updated** sort (last-updated does a full recency sort once, then prompts promote their session once; manual preserves order); drag order is host-durable for real workspaces and browser-local for Ungrouped/flat list; workspace **search** expands across the header, outside-click collapses an empty query except while the slide gesture is in flight, clear button always resets; content search debounces 250 ms, aborts the previous request, caps at 20; session rows show **pending interaction** (Waiting for approval / Plan awaiting review / Waiting for answer) with an amber dot that **outranks** the running indicator; descendant subagent activity outranks the unviewed-completion reminder; subagent-origin sessions are **hidden from the sidebar** and entered through the parent's catalog.
+* **Plan:** fold these rules into 12.28.9's implementation.
+
+#### 12.29.12 Branding and theming mechanics **[IMPROVEMENT]**
+* **Reference:** a **theme presenter** consumes resolved `ctx.theme` snapshots and writes them to the document: `color-scheme` on `<html>` (native UA chrome — scrollbars, form controls), `body[data-ds-dark-theme]`, the theme's alias tokens as inline CSS variables on `<body>`, and a `<meta name="theme-color">` matching the computed background. It **measures after palette/token application** so the rendered background is the single color authority. Third-party themes are an extension point that overrides alias variables; missing values deliberately fall back to the nearest semantic token. The default shell label is "DSH Local Build" with a 7-char commit badge; deployments override via slots.
+* **Plan:** same approach for 12.28.11 — tokens on body, color-scheme on html, meta theme-color; measure after apply; ship a light theme as an override sheet.
+* **Effort:** S.
+
+#### 12.29.13 Boot/rendering lifecycle **[NEW]**
+* **Reference:** `ui-renderer` owns the React root. The server renders a **framework-free boot page**; after every client plugin activates, it calls `ctx.uiRenderer.mount(container)`. The renderer installs slot outlets, session providers, and observable-to-hooks bindings, hydrates the existing boot DOM, and **switches to the assembled application before the next paint**. React/ReactDOM/Cordis/slots/primitives keep one identity through the static module table. Per-region readiness is deferred (the first frame waits for all entries, but no per-slot Suspense yet).
+* **Plan:** for our single binary, serve a lightweight loading shell, stream the JS bundle, and hydrate against the live DOM rather than replacing it; defer non-critical panels. Faster perceived startup, especially on remote/SSH launches.
+* **Effort:** M (lower priority than layout/primitives).
+
+#### Recommended UI order (revised)
+1. **12.28.14 block/empty states** + **12.29.8 z-index contract** + **12.29.12 theme tokens** (XS–S, set the foundation).
+2. **12.29.2 slot catalog** + **12.29.1 three-column shell** + **12.29.10 persistent shell identity** (the structural M).
+3. **12.28.5 `@`/`/` trigger** in the **12.29.6 composer regions** + **12.28.2 step grouping / sticky stats dock**.
+4. **12.29.9 typed blocks** (Terminal/Diff/Read/Search) + **12.29.7 streaming-tail isolation + inline compaction rows**.
+5. **12.29.4 sidebar rail/collapse** + **12.28.9 workspace/session browser** with statuses.
+6. **12.29.3 conversation tabs** + **12.28.4 trajectory inspector**.
+7. **12.29.5 settings surface** + **12.28.10 live model testing**.
+8. **12.28.3 composer takeover** for approvals/questions (with 11.11, 12.3).
+9. **12.28.7 subagent fleet** in the details panel.
+10. **12.29.13 boot/hydrate polish**.
