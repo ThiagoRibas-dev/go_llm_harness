@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
     <title>GoHarness - Agentic Console</title>
     <!-- Tailwind CSS Embedded (Offline-First) -->
     <script src="/tailwind.min.js"></script>
@@ -42,12 +43,144 @@
         details.tool-result-group > summary::-webkit-details-marker {
             display: none;
         }
+        :root {
+            --gh-bg-app: #0f172a;
+            --gh-bg-canvas: #0b0f19;
+            --gh-bg-panel: #1e293b;
+            --gh-bg-muted: rgba(15, 23, 42, 0.55);
+            --gh-bg-soft: rgba(15, 23, 42, 0.35);
+            --gh-border: #334155;
+            --gh-border-strong: #475569;
+            --gh-text-primary: #f8fafc;
+            --gh-text-secondary: #cbd5e1;
+            --gh-text-muted: #94a3b8;
+            --gh-text-faint: #64748b;
+            --gh-accent: #2563eb;
+            --gh-accent-hover: #3b82f6;
+            --gh-accent-soft: rgba(37, 99, 235, 0.14);
+            --gh-success: #10b981;
+            --gh-warning: #f59e0b;
+            --gh-danger: #ef4444;
+            --gh-scroll-track: #1e293b;
+            --gh-scroll-thumb: #475569;
+            --gh-scroll-thumb-hover: #64748b;
+            --gh-shadow: 0 18px 45px rgba(2, 6, 23, 0.28);
+        }
+        body[data-theme="light"] {
+            --gh-bg-app: #e2e8f0;
+            --gh-bg-canvas: #f8fafc;
+            --gh-bg-panel: #ffffff;
+            --gh-bg-muted: rgba(255, 255, 255, 0.82);
+            --gh-bg-soft: rgba(255, 255, 255, 0.72);
+            --gh-border: #cbd5e1;
+            --gh-border-strong: #94a3b8;
+            --gh-text-primary: #0f172a;
+            --gh-text-secondary: #1e293b;
+            --gh-text-muted: #475569;
+            --gh-text-faint: #64748b;
+            --gh-accent-soft: rgba(37, 99, 235, 0.10);
+            --gh-scroll-track: #cbd5e1;
+            --gh-scroll-thumb: #94a3b8;
+            --gh-scroll-thumb-hover: #64748b;
+        }
+        html {
+            background: var(--gh-bg-app);
+            color-scheme: dark;
+        }
+        body {
+            background: var(--gh-bg-app) !important;
+            color: var(--gh-text-primary) !important;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--gh-scroll-track);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--gh-scroll-thumb);
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--gh-scroll-thumb-hover);
+        }
+        header.app-header,
+        #sidebar,
+        #settings-dialog,
+        #fork-modal > div {
+            background: var(--gh-bg-panel) !important;
+            border-color: var(--gh-border) !important;
+        }
+        main.app-conversation {
+            background: var(--gh-bg-canvas) !important;
+        }
+        #chat-messages {
+            scrollbar-gutter: stable both-edges;
+        }
+        #composer-shell {
+            background: var(--gh-bg-panel) !important;
+            border-color: var(--gh-border) !important;
+            box-shadow: var(--gh-shadow);
+            transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+        }
+        #composer-shell.is-disabled {
+            border-color: rgba(245, 158, 11, 0.45) !important;
+            background: rgba(30, 41, 59, 0.88) !important;
+            box-shadow: none;
+        }
+        #composer-shell.is-clickable {
+            cursor: pointer;
+        }
+        #composer-shell.is-clickable:hover {
+            border-color: rgba(59, 130, 246, 0.55) !important;
+        }
+        #prompt-input:disabled {
+            color: var(--gh-text-muted);
+            cursor: not-allowed;
+        }
+        #prompt-submit:disabled,
+        #reroll-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        #composer-state-hint {
+            color: var(--gh-text-faint);
+        }
+        .gh-hero {
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.52));
+            border-radius: 18px;
+            padding: 28px;
+            box-shadow: var(--gh-shadow);
+        }
+        .gh-hero[data-state="busy"] {
+            border-color: rgba(245, 158, 11, 0.45);
+        }
+        .gh-hero[data-state="blocked"] {
+            border-color: rgba(239, 68, 68, 0.35);
+        }
+        .gh-hero-chip {
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            background: rgba(15, 23, 42, 0.4);
+            color: var(--gh-text-secondary);
+        }
+        .gh-hero-action {
+            background: var(--gh-accent);
+        }
+        .gh-hero-action:hover {
+            background: var(--gh-accent-hover);
+        }
+        .gh-hero-example {
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            background: rgba(15, 23, 42, 0.32);
+            color: var(--gh-text-secondary);
+        }
+        .gh-hero-example:hover {
+            border-color: rgba(59, 130, 246, 0.55);
+            color: var(--gh-text-primary);
+        }
     </style>
 </head>
-<body class="bg-[#0f172a] text-slate-100 font-sans h-full flex flex-col overflow-hidden">
+<body data-theme="dark" class="font-sans h-full flex flex-col overflow-hidden">
 
     <!-- ================= HEADER / TOP STATUS BAR ================= -->
-    <header class="bg-[#1e293b] border-b border-[#334155] px-6 py-3 flex items-center justify-between shadow-md shrink-0 z-10">
+    <header class="app-header bg-[#1e293b] border-b border-[#334155] px-6 py-3 flex items-center justify-between shadow-md shrink-0 z-10">
         <div class="flex items-center space-x-3">
             <button onclick="toggleSidebar()" class="text-slate-400 hover:text-white transition p-1 rounded hover:bg-slate-800" title="Toggle Sidebar">
                 <i class="fa-solid fa-bars text-sm"></i>
@@ -231,7 +364,7 @@
         </aside>
 
         <!-- 💬 CENTER PANEL: Interactive Chat Console -->
-        <main class="flex-1 flex flex-col min-w-0 bg-[#0b0f19]">
+        <main class="app-conversation flex-1 flex flex-col min-w-0 bg-[#0b0f19]">
             <!-- Turn Streams Display Container -->
             <div class="flex-1 overflow-y-auto px-8 py-6 space-y-6" id="chat-messages">
                 <!-- Greeting will be appended on boot -->
@@ -239,19 +372,23 @@
 
             <!-- ⌨️ INPUT CONTROL PANEL -->
             <div class="p-6 border-t border-[#334155] bg-[#0f172a]/50 shrink-0">
-                <form id="prompt-form" onsubmit="submitPrompt(event)" class="relative max-w-4xl mx-auto flex items-center bg-[#1e293b] rounded-lg border border-[#334155] shadow-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition duration-150">
-                    <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')...." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36" onkeydown="handleInputKeydown(event)"></textarea>
-                    
-                    <div class="flex items-center space-x-2 pr-3 shrink-0">
-                        <button type="button" onclick="triggerReroll()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition p-2.5 rounded-md border border-[#334155] text-xs font-bold flex items-center justify-center h-9 w-9" title="Reroll Last Response (Regenerate)">
-                            <i class="fa-solid fa-rotate-right text-xs"></i>
-                        </button>
-                        <button type="submit" class="bg-blue-600 text-white hover:bg-blue-500 transition duration-150 px-4 py-2 rounded text-xs font-bold h-9 shadow-md flex items-center space-x-1.5">
-                            <span>Execute</span> <i class="fa-solid fa-play"></i>
-                        </button>
+                <form id="prompt-form" onsubmit="submitPrompt(event)" onclick="handleComposerShellClick(event)" class="relative max-w-4xl mx-auto flex items-center bg-[#1e293b] rounded-lg border border-[#334155] shadow-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition duration-150">
+                    <div id="composer-shell" class="w-full flex items-center">
+                        <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')...." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36" onkeydown="handleInputKeydown(event)"></textarea>
+                        <div class="flex items-center space-x-2 pr-3 shrink-0">
+                            <button id="reroll-btn" type="button" onclick="triggerReroll()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition p-2.5 rounded-md border border-[#334155] text-xs font-bold flex items-center justify-center h-9 w-9" title="Reroll Last Response (Regenerate)">
+                                <i class="fa-solid fa-rotate-right text-xs"></i>
+                            </button>
+                            <button id="composer-cta" type="button" onclick="runComposerCta()" class="hidden bg-amber-600 text-white hover:bg-amber-500 transition duration-150 px-3 py-2 rounded text-xs font-bold h-9 shadow-md">
+                                <span id="composer-cta-label">Open</span>
+                            </button>
+                            <button id="prompt-submit" type="submit" class="bg-blue-600 text-white hover:bg-blue-500 transition duration-150 px-4 py-2 rounded text-xs font-bold h-9 shadow-md flex items-center space-x-1.5">
+                                <span>Execute</span> <i class="fa-solid fa-play"></i>
+                            </button>
+                        </div>
                     </div>
                 </form>
-                <div class="text-[10px] text-slate-500 text-center mt-2 font-mono">
+                <div id="composer-state-hint" class="text-[10px] text-slate-500 text-center mt-2 font-mono">
                     GoHarness Sandbox Mode is active. System write-protection active. Press <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Enter</kbd> to execute, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Shift+Enter</kbd> for new line.
                 </div>
             </div>
@@ -820,8 +957,11 @@
         let isSidebarCollapsed = false;
         let selectedForkTurn = 0;
         let activeWorkspaceDir = "";
+        let currentUIState = { composer_enabled: true, status: "ready", title: "GoHarness is ready", summary: "" };
+        const DEFAULT_PROMPT_PLACEHOLDER = "Type a prompt to solve (e.g., 'Write a python calculation script and test it')....";
 
         window.addEventListener("DOMContentLoaded", () => {
+            applyThemeChrome();
             fetchConfig();
             refreshWorkspaceTree();
             fetchWorkspaces();
@@ -1391,14 +1531,19 @@
 
         // Fetch config details
         function fetchConfig() {
-            fetch("/api/config")
+            return fetch("/api/config")
                 .then(res => res.json())
                 .then(cfg => {
                     activeWorkspaceDir = cfg.agent.workspace_dir;
                     document.getElementById("model-name").innerText = cfg.api.model + " (" + (cfg.api.provider || "openai").toUpperCase() + ")";
                     document.getElementById("workspace-path").innerText = "Path: " + cfg.agent.workspace_dir;
                     document.getElementById("session-id").innerText = "Session: " + cfg.session_id;
+                    currentUIState = cfg.ui_state || currentUIState;
+                    applyThemeChrome();
+                    updateComposerState();
+                    renderEmptyHero();
                     fetchSessions();
+                    return cfg;
                 })
                 .catch(err => console.error("Error fetching config:", err));
         }
@@ -1455,6 +1600,13 @@
         function handleIncomingEvent(packet) {
             if (packet.event === "session_init") {
                 document.getElementById("session-id").innerText = "Session: " + packet.data.session_id;
+                fetchConfig();
+            }
+
+            if (packet.event === "run_state") {
+                if (packet.data && packet.data.session_id === currentSessionId()) {
+                    fetchConfig();
+                }
             }
 
             if (packet.event === "turn_secured") {
@@ -1518,6 +1670,7 @@
 
         function ensureSubAgentCard(data) {
             const chat = document.getElementById("chat-messages");
+            removeEmptyHero();
             let card = document.getElementById(subAgentCardId(data));
             if (card) return card;
             card = document.createElement("div");
@@ -1569,29 +1722,166 @@
             chat.scrollTop = chat.scrollHeight;
         }
 
-        function appendGreeting() {
+        function currentSessionId() {
+            return document.getElementById("session-id").innerText.replace("Session: ", "").trim();
+        }
+
+        function applyThemeChrome() {
+            if (!document.body.dataset.theme) document.body.dataset.theme = "dark";
+            window.requestAnimationFrame(() => {
+                const bg = getComputedStyle(document.body).getPropertyValue("--gh-bg-app").trim() || "#0f172a";
+                const meta = document.querySelector('meta[name="theme-color"]');
+                if (meta) meta.setAttribute("content", bg);
+                document.documentElement.style.colorScheme = document.body.dataset.theme === "light" ? "light" : "dark";
+            });
+        }
+
+        function removeEmptyHero() {
+            const hero = document.getElementById("empty-hero");
+            if (hero) hero.remove();
+        }
+
+        function seedPromptExample(prompt) {
+            const input = document.getElementById("prompt-input");
+            if (!input || input.disabled) return;
+            input.value = prompt;
+            input.style.height = "auto";
+            input.style.height = input.scrollHeight + "px";
+            input.focus();
+        }
+
+        function runComposerCta() {
+            const action = currentUIState && currentUIState.cta_action;
+            if (action === "open_settings") {
+                openSettingsModal();
+                setTimeout(() => switchSettingsTab("standard"), 0);
+                return;
+            }
+            if (action === "open_workspace") {
+                switchSidebarTab("sessions");
+                setTimeout(() => {
+                    const input = document.getElementById("new-workspace-input");
+                    if (input) input.focus();
+                }, 0);
+                return;
+            }
+            const input = document.getElementById("prompt-input");
+            if (input && !input.disabled) input.focus();
+        }
+
+        function handleComposerShellClick(event) {
+            if (currentUIState && currentUIState.composer_enabled) return;
+            if (!currentUIState || !currentUIState.cta_action) return;
+            if (event.target.closest("button")) return;
+            runComposerCta();
+        }
+
+        function setLocalBusyState() {
+            currentUIState = {
+                composer_enabled: false,
+                status: "busy",
+                blocked_reason: "GoHarness is already executing this session. Wait for the current run to finish.",
+                cta_action: "",
+                cta_label: "",
+                title: "Current session is running",
+                summary: "Live tool output and assistant replies will continue streaming below until the run finishes."
+            };
+            updateComposerState();
+            renderEmptyHero();
+        }
+
+        function updateComposerState() {
+            const state = currentUIState || { composer_enabled: true, status: "ready" };
+            const form = document.getElementById("prompt-form");
+            const shell = document.getElementById("composer-shell");
+            const input = document.getElementById("prompt-input");
+            const submit = document.getElementById("prompt-submit");
+            const reroll = document.getElementById("reroll-btn");
+            const cta = document.getElementById("composer-cta");
+            const ctaLabel = document.getElementById("composer-cta-label");
+            const hint = document.getElementById("composer-state-hint");
+            if (!form || !shell || !input || !submit || !reroll || !cta || !ctaLabel || !hint) return;
+
+            const enabled = !!state.composer_enabled;
+            input.disabled = !enabled;
+            input.readOnly = !enabled;
+            input.placeholder = enabled ? DEFAULT_PROMPT_PLACEHOLDER : (state.blocked_reason || "GoHarness is not ready yet.");
+            submit.disabled = !enabled;
+            reroll.disabled = !enabled;
+            shell.classList.toggle("is-disabled", !enabled);
+            shell.classList.toggle("is-clickable", !enabled && !!state.cta_action);
+            form.setAttribute("aria-disabled", enabled ? "false" : "true");
+
+            if (enabled) {
+                cta.classList.add("hidden");
+                cta.classList.remove("inline-flex");
+                hint.innerHTML = 'GoHarness Sandbox Mode is active. System write-protection active. Press <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Enter</kbd> to execute, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Shift+Enter</kbd> for new line.';
+            } else {
+                if (state.cta_label) {
+                    ctaLabel.textContent = state.cta_label;
+                    cta.classList.remove("hidden");
+                    cta.classList.add("inline-flex");
+                } else {
+                    cta.classList.add("hidden");
+                    cta.classList.remove("inline-flex");
+                }
+                hint.textContent = state.blocked_reason || "GoHarness is not ready yet.";
+            }
+        }
+
+        function renderEmptyHero() {
             const chatContainer = document.getElementById("chat-messages");
-            const msgDiv = document.createElement("div");
-            msgDiv.className = "flex space-x-4 items-start p-4 rounded-lg bg-[#0b0f19]";
-            msgDiv.innerHTML = `
-                <div class="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-md">
-                    H
-                </div>
-                <div class="space-y-1 flex-1 min-w-0">
-                    <div class="flex items-center space-x-2">
-                        <span class="font-bold text-slate-200 text-sm">GoHarness System</span>
-                        <span class="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded font-mono">system</span>
+            if (!chatContainer) return;
+            const hasOtherContent = Array.from(chatContainer.children).some(el => el.id !== "empty-hero");
+            if (hasOtherContent) {
+                removeEmptyHero();
+                return;
+            }
+            removeEmptyHero();
+            const hero = document.createElement("div");
+            hero.id = "empty-hero";
+            hero.className = "gh-hero max-w-4xl mx-auto";
+            hero.dataset.state = (currentUIState && currentUIState.status) || "ready";
+            const title = escapeHtml((currentUIState && currentUIState.title) || "GoHarness is ready");
+            const summary = escapeHtml((currentUIState && currentUIState.summary) || "");
+            const blocked = currentUIState && currentUIState.status !== "ready";
+            const cta = currentUIState && currentUIState.cta_label
+                ? `<button type="button" onclick="runComposerCta()" class="gh-hero-action mt-5 inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-bold text-white shadow-md"><i class="fa-solid fa-arrow-right"></i><span>${escapeHtml(currentUIState.cta_label)}</span></button>`
+                : "";
+            const examples = blocked ? "" : `
+                <div class="mt-6 grid gap-2 sm:grid-cols-3">
+                    <button type="button" onclick="seedPromptExample('Summarize this repository architecture and call out the risky parts.')" class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Summarize this repository architecture and call out the risky parts.</button>
+                    <button type="button" onclick="seedPromptExample('Run the tests, explain the failures, and propose the minimal fix.')" class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Run the tests, explain the failures, and propose the minimal fix.</button>
+                    <button type="button" onclick="seedPromptExample('Inspect workflows.json and explain how the active DAG executes this task.')" class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Inspect workflows.json and explain how the active DAG executes this task.</button>
+                </div>`;
+            hero.innerHTML = `
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="max-w-2xl">
+                        <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] gh-hero-chip">
+                            <i class="fa-solid ${currentUIState && currentUIState.status === 'busy' ? 'fa-spinner fa-spin' : currentUIState && currentUIState.status === 'blocked' ? 'fa-triangle-exclamation' : 'fa-sparkles'}"></i>
+                            <span>${escapeHtml((currentUIState && currentUIState.status) || 'ready')}</span>
+                        </div>
+                        <h2 class="mt-4 text-2xl font-bold text-slate-100">${title}</h2>
+                        <p class="mt-2 text-sm leading-relaxed text-slate-300">${summary}</p>
+                        ${cta}
                     </div>
-                    <p class="text-slate-300 text-sm leading-relaxed font-sans">
-                        Welcome to the **GoHarness Embedded Web Console**! I am your sandboxed AI agent harness. Ask me to write scripts, patch programs, run compilations, or configure local systems. Any files I edit or commands I run will stream here in real-time.
-                    </p>
+                    <div class="grid gap-2 text-xs sm:min-w-[220px]">
+                        <div class="gh-hero-chip rounded-lg px-3 py-2"><span class="block text-slate-500 uppercase tracking-wider text-[10px]">Workspace</span><span class="mt-1 block font-mono text-slate-200">${escapeHtml(activeWorkspaceDir || 'unset')}</span></div>
+                        <div class="gh-hero-chip rounded-lg px-3 py-2"><span class="block text-slate-500 uppercase tracking-wider text-[10px]">Connection</span><span class="mt-1 block font-mono text-slate-200">${escapeHtml(document.getElementById('model-name').innerText || 'unset')}</span></div>
+                    </div>
                 </div>
+                ${examples}
             `;
-            chatContainer.appendChild(msgDiv);
+            chatContainer.appendChild(hero);
+        }
+
+        function appendGreeting() {
+            renderEmptyHero();
         }
 
         function appendTurnToChat(turn) {
             const chatContainer = document.getElementById("chat-messages");
+            removeEmptyHero();
             
             let avatarChar = "U";
             let avatarBg = "bg-slate-700";
@@ -1720,6 +2010,7 @@
 
         function appendSystemAlert(title, message, iconClass) {
             const chatContainer = document.getElementById("chat-messages");
+            removeEmptyHero();
             const alertDiv = document.createElement("div");
             alertDiv.className = "flex space-x-3 items-center bg-indigo-950/20 border border-indigo-900/60 rounded-lg p-4 max-w-4xl mx-auto text-xs text-indigo-300 font-mono";
             alertDiv.innerHTML = `
@@ -1749,6 +2040,7 @@
         // BEFORE the final assistant reply.
         function renderWorkflowTrace(data) {
             const chatContainer = document.getElementById("chat-messages");
+            removeEmptyHero();
             const cardId = `wf-trace-${data.run_id}`;
             if (document.getElementById(cardId)) return;
 
@@ -1880,6 +2172,10 @@
         // One-line summary for a tool result: tool name, status if visible,
         // size in chars/bytes, and a short first-line preview.
         function toolResultTitle(name, content) {
+            const spillMatch = (content || "").match(/spill_id:\s*([a-f0-9]{16,64})/i);
+            if (spillMatch) {
+                return `result · ${name || "tool"} · spill ${spillMatch[1].slice(0, 12)}…`;
+            }
             const len = (content || "").length;
             let firstLine = (content || "").split(/\r?\n/).find(l => l.trim().length > 0) || "";
             firstLine = firstLine.replace(/\s+/g, " ").trim();
@@ -2611,7 +2907,7 @@
                             <div>
                                 <label class="block text-slate-400 mb-1">Allowed built-in tools (blank = all)</label>
                                 <div class="grid grid-cols-2 gap-1">
-                                    ${["read_file","write_file","patch_file","execute_command","spawn_sub_agent","bm25_search"].map(t => {
+                                    ${["read_file","read_spill","write_file","patch_file","execute_command","spawn_sub_agent","bm25_search"].map(t => {
                                         const list = Array.isArray(p.allowed_tools) ? p.allowed_tools : [];
                                         const allowed = list.length===0 || list.includes(t);
                                         return `<label class="flex items-center gap-1 text-slate-400 text-[10px]"><input type="checkbox" ${allowed ? "checked" : ""} onchange="toggleNodeTool('${escapeHtml(n.id)}','${t}',this.checked)" class="accent-blue-500 scale-90"><span>${t}</span></label>`;
@@ -2650,6 +2946,7 @@
                 const tools = [
                     ["execute_command", "Run command"],
                     ["read_file", "Read file"],
+                    ["read_spill", "Read spilled output"],
                     ["write_file", "Write file"],
                     ["patch_file", "Patch file"],
                 ];
@@ -2870,6 +3167,10 @@
 
         function submitPrompt(e) {
             if (e) e.preventDefault();
+            if (currentUIState && !currentUIState.composer_enabled) {
+                runComposerCta();
+                return;
+            }
             const input = document.getElementById("prompt-input");
             const prompt = input.value.trim();
             if (!prompt) return;
@@ -2935,6 +3236,7 @@
 
             input.value = "";
             input.style.height = "auto";
+            setLocalBusyState();
 
             fetch("/api/prompt", {
                 method: "POST",
@@ -2945,6 +3247,7 @@
                 if (!res.ok) throw new Error("API call failed");
             })
             .catch(err => {
+                fetchConfig();
                 appendSystemAlert("API Execution Error", "Failed to connect to the GoHarness execution API. Please ensure the backend is running.", "fa-triangle-exclamation text-red-400");
             });
         }

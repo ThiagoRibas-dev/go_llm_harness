@@ -40,6 +40,35 @@ func builtInToolSchemas() []Tool {
 		{
 			Type: "function",
 			Function: FunctionDescriptor{
+				Name:        "read_spill",
+				Description: "Read a previously spilled large tool result from this session in bounded pages, optionally jumping to text matches.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"id": map[string]interface{}{
+							"type":        "string",
+							"description": "Spill identifier returned by a prior tool result.",
+						},
+						"offset": map[string]interface{}{
+							"type":        "integer",
+							"description": "Optional character offset to start reading from.",
+						},
+						"limit": map[string]interface{}{
+							"type":        "integer",
+							"description": "Optional maximum number of characters to return.",
+						},
+						"find_text": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional text to search for before returning a page.",
+						},
+					},
+					"required": []string{"id"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: FunctionDescriptor{
 				Name:        "write_file",
 				Description: "Write or overwrite a file in the workspace directory. Paths must be relative.",
 				Parameters: map[string]interface{}{
@@ -207,7 +236,7 @@ func executeToolCall(a *Agent, turn int, tc ToolCall) string {
 			"tool_name":  name,
 			"session":    a.SessionID,
 		})
-		return result
+		return maybeSpillToolResult(a, name, result)
 	}
 
 	switch name {
@@ -221,13 +250,30 @@ func executeToolCall(a *Agent, turn int, tc ToolCall) string {
 			if args.StartLine <= 0 {
 				args.StartLine = 1
 			}
-			result := executeReadFile(args.Path, args.StartLine, args.EndLine)
+			result := executeReadFile(a, args.Path, args.StartLine, args.EndLine)
 			LogExecutionTrace(turn, "tool_read_file", toolStart, "success", map[string]interface{}{
 				"path":       args.Path,
 				"start_line": args.StartLine,
 				"end_line":   args.EndLine,
 			})
-			return result
+			return maybeSpillToolResult(a, name, result)
+		}
+		return parseToolErr(turn, name, toolStart, tc.Function.Arguments)
+
+	case "read_spill":
+		var args struct {
+			ID       string `json:"id"`
+			Offset   int    `json:"offset"`
+			Limit    int    `json:"limit"`
+			FindText string `json:"find_text"`
+		}
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
+			LogExecutionTrace(turn, "tool_read_spill", toolStart, "success", map[string]interface{}{
+				"spill_id": args.ID,
+				"offset":   args.Offset,
+				"limit":    args.Limit,
+			})
+			return readSpill(a, args.ID, args.Offset, args.Limit, args.FindText)
 		}
 		return parseToolErr(turn, name, toolStart, tc.Function.Arguments)
 
@@ -261,7 +307,7 @@ func executeToolCall(a *Agent, turn int, tc ToolCall) string {
 		var args struct{ Command string }
 		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
 			LogExecutionTrace(turn, "tool_execute_command", toolStart, "success", map[string]interface{}{"command": args.Command})
-			return executeTerminalCommand(args.Command)
+			return maybeSpillToolResult(a, name, executeTerminalCommand(a, args.Command))
 		}
 		return parseToolErr(turn, name, toolStart, tc.Function.Arguments)
 
@@ -282,7 +328,7 @@ func executeToolCall(a *Agent, turn int, tc ToolCall) string {
 				"query": args.Query,
 				"scope": args.Scope,
 			})
-			return executeBM25Search(a, args.Query, args.Scope, args.Limit)
+			return maybeSpillToolResult(a, name, executeBM25Search(a, args.Query, args.Scope, args.Limit))
 		}
 		return parseToolErr(turn, name, toolStart, tc.Function.Arguments)
 

@@ -205,11 +205,12 @@ func (a *Agent) runToolCalls(ctx context.Context, turn int, calls []ToolCall) []
 			wg.Add(1)
 			go func(idx int, tc ToolCall) {
 				defer wg.Done()
+				result := a.runSubAgent(ctx, tc)
 				results[idx] = toolCallResult{
 					Index:      idx,
 					ToolCallID: tc.ID,
 					Name:       tc.Function.Name,
-					Result:     a.runSubAgent(ctx, tc),
+					Result:     maybeSpillToolResult(a, tc.Function.Name, result),
 				}
 			}(i, calls[i])
 		}

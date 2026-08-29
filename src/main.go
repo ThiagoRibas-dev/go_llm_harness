@@ -58,7 +58,7 @@ func main() {
 			Region:           "",
 			AutoCompactTurns: 6,
 			KeepLastN:        2,
-			SystemPrompt:     "You are a professional context compaction, research synthesis, and developer handoff engine. Your task is to generate a highly structured, dense, and complete summary of the execution conversation so far. This summary will be injected into a future session as the sole active baseline context, so you MUST preserve critical technical details, architectural decisions, core research data, and constraints while dropping conversational noise.\n\n" +
+			SystemPrompt: "You are a professional context compaction, research synthesis, and developer handoff engine. Your task is to generate a highly structured, dense, and complete summary of the execution conversation so far. This summary will be injected into a future session as the sole active baseline context, so you MUST preserve critical technical details, architectural decisions, core research data, and constraints while dropping conversational noise.\n\n" +
 				"When compacting, you MUST structure your output into these 9 aspects:\n" +
 				"1. 📊 CURRENT STATE: High-level active task status, project progress, or current document draft baseline.\n" +
 				"2. 🎯 GOALS & INTENT: What the user explicitly requested, the overarching strategic objective, target audience, or desired output tone.\n" +
@@ -173,7 +173,7 @@ func main() {
 
 		// Write metadata for the initial session
 		createSessionMeta(activeSessionID, activeConfig.Agent.WorkspaceDir, "", "Initial Session")
-		
+
 		activeConfig.Agent.LastActiveSessionID = activeSessionID
 		_ = SaveConfig(configPath, activeConfig)
 	}
@@ -286,9 +286,11 @@ func printBanner() {
 // migrated to an *Agent. It builds a root agent and runs it. New code
 // should use NewRootAgent().Run(ctx, prompt) directly.
 func runAgentLoop(userPrompt string) string {
-	return NewRootAgent().Run(context.Background(), userPrompt)
+	a := NewRootAgent()
+	done := beginSessionRun(a.SessionID)
+	defer done()
+	return a.Run(context.Background(), userPrompt)
 }
-
 
 func executeWriteFile(a *Agent, path, content string) string {
 	cleanPath := filepath.Clean(path)
@@ -359,7 +361,7 @@ func executePatchFile(a *Agent, path, search, replace string) string {
 	})
 }
 
-func executeTerminalCommand(command string) string {
+func executeTerminalCommand(a *Agent, command string) string {
 	for _, pattern := range activeConfig.Security.BlockedPatterns {
 		if strings.Contains(command, pattern) {
 			fmt.Printf("%s[SECURITY GUARDRAIL] Blocked execution of command containing pattern: '%s'%s\n", ColorRed, pattern, ColorReset)
@@ -367,7 +369,11 @@ func executeTerminalCommand(command string) string {
 		}
 	}
 
-	result, err := RunCommandInSandbox(command, activeConfig.Agent.WorkspaceDir)
+	workspaceDir := activeConfig.Agent.WorkspaceDir
+	if a != nil && a.Workspace != "" {
+		workspaceDir = a.Workspace
+	}
+	result, err := RunCommandInSandbox(command, workspaceDir)
 	if err != nil {
 		return fmt.Sprintf("Sandbox Execution Error: %v", err)
 	}
@@ -438,7 +444,7 @@ func restoreWorkspaceBackups(targetTurn int) {
 							rel, _ := filepath.Rel(turnFolder, path)
 							relClean := strings.TrimSuffix(rel, ".untracked_new")
 							destPath := filepath.Join(activeConfig.Agent.WorkspaceDir, relClean)
-							
+
 							// Physically delete the untracked file to completely restore state!
 							_ = os.Remove(destPath)
 							fmt.Printf("    - Deleted newly created file: %s\n", relClean)
@@ -473,8 +479,8 @@ func dirExists(path string) bool {
 	return false
 }
 
-// executeReadFile reads a specified line-range from a file in the workspace, enforcing safety truncation rules
-func executeReadFile(path string, startLine, endLine int) string {
+// executeReadFile reads a specified line-range from a file in the workspace, enforcing safety truncation rules.
+func executeReadFile(a *Agent, path string, startLine, endLine int) string {
 	cleanPath := filepath.Clean(path)
 
 	// Security Shield: protect system files
@@ -482,7 +488,11 @@ func executeReadFile(path string, startLine, endLine int) string {
 		return fmt.Sprintf("Security Exception: Systemic or out-of-workspace directories are read-protected. Access denied to path: %s", path)
 	}
 
-	fullPath := filepath.Join(activeConfig.Agent.WorkspaceDir, cleanPath)
+	workspaceDir := activeConfig.Agent.WorkspaceDir
+	if a != nil && a.Workspace != "" {
+		workspaceDir = a.Workspace
+	}
+	fullPath := filepath.Join(workspaceDir, cleanPath)
 	fileBytes, err := os.ReadFile(fullPath)
 	if err != nil {
 		return fmt.Sprintf("Error: File not found or could not be read at path '%s'. Ensure the file path is correct and relative.", cleanPath)
@@ -491,6 +501,9 @@ func executeReadFile(path string, startLine, endLine int) string {
 	lines := strings.Split(string(fileBytes), "\n")
 	totalLines := len(lines)
 
+	if startLine <= 0 {
+		startLine = 1
+	}
 	if startLine > totalLines {
 		return fmt.Sprintf("Error: Requested start_line (%d) exceeds total lines in file (%d).", startLine, totalLines)
 	}

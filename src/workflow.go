@@ -45,13 +45,14 @@ type RuntimeNode struct {
 	Outputs    map[string]interface{}
 	State      WorkflowNodeState
 	Error      error
-	
-	mu         sync.RWMutex
-	readyChan  chan struct{}
-	doneChan   chan struct{}
+
+	mu        sync.RWMutex
+	readyChan chan struct{}
+	doneChan  chan struct{}
 }
 
 type WorkflowNodeState string
+
 const (
 	StatePending   WorkflowNodeState = "pending"
 	StateRunning   WorkflowNodeState = "running"
@@ -64,9 +65,9 @@ type WorkflowExecutor struct {
 	SessionID    string
 	WorkflowID   string
 	WorkflowName string
-	RunID        string       // Unique id for this execution run (groups live node events)
-	TurnNumber   int          // Final assistant turn number this run maps to in the UI
-	NodeOrder    []string     // Node ids in declaration order (for stable UI rendering)
+	RunID        string   // Unique id for this execution run (groups live node events)
+	TurnNumber   int      // Final assistant turn number this run maps to in the UI
+	NodeOrder    []string // Node ids in declaration order (for stable UI rendering)
 	Nodes        map[string]*RuntimeNode
 	Timeout      time.Duration
 
@@ -484,11 +485,11 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, rawUserPrompt string) er
 		if id == "start" {
 			continue
 		}
-		
+
 		wg.Add(1)
 		go func(n *RuntimeNode) {
 			defer wg.Done()
-			
+
 			// Wait for upstreams to signal readiness
 			select {
 			case <-n.readyChan:
@@ -564,14 +565,14 @@ func (e *WorkflowExecutor) coordinateEdgeReadiness(ctx context.Context) {
 			if id == "start" {
 				continue
 			}
-			
+
 			node.mu.RLock()
 			isPending := node.State == StatePending
 			node.mu.RUnlock()
 
 			if isPending {
 				allResolved = false
-				
+
 				// Verify if all connecting upstream nodes have completed
 				upstreamsReady := true
 				for _, conn := range node.Inputs {
@@ -579,13 +580,13 @@ func (e *WorkflowExecutor) coordinateEdgeReadiness(ctx context.Context) {
 					src.mu.RLock()
 					srcDone := src.State == StateCompleted
 					src.mu.RUnlock()
-					
+
 					if !srcDone {
 						upstreamsReady = false
 						break
 					}
 				}
-				
+
 				if upstreamsReady {
 					// Toggle standard Go channel safety closures
 					node.mu.Lock()
@@ -603,7 +604,7 @@ func (e *WorkflowExecutor) coordinateEdgeReadiness(ctx context.Context) {
 		if allResolved {
 			break
 		}
-		
+
 		select {
 		case <-ctx.Done():
 			return
@@ -682,11 +683,11 @@ func (e *WorkflowExecutor) broadcastNode(n *RuntimeNode, status string, startTim
 	}
 
 	payload := map[string]interface{}{
-		"run_id":     e.RunID,
-		"node_id":    n.ID,
-		"type":       n.Type,
-		"label":      label,
-		"status":     status,
+		"run_id":      e.RunID,
+		"node_id":     n.ID,
+		"type":        n.Type,
+		"label":       label,
+		"status":      status,
 		"duration_ms": durationMs,
 	}
 	if status == "running" {
@@ -729,7 +730,7 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 		}
 
 		writeDebugLog("[WORKFLOW NODE %s] BM25 Search requested: query: '%s', scope: %s", n.ID, query, scope)
-		result := executeBM25Search(nodeAgent, query, scope, limit)
+		result := maybeSpillToolResult(nodeAgent, "bm25_search", executeBM25Search(nodeAgent, query, scope, limit))
 
 		n.mu.Lock()
 		n.Outputs["search_results"] = result
@@ -757,17 +758,26 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 		} else if toolName == "execute_command" {
 			var m map[string]string
 			_ = json.Unmarshal([]byte(args), &m)
-			result = executeTerminalCommand(m["command"])
+			result = executeTerminalCommand(nodeAgent, m["command"])
 			if strings.Contains(result, "Sandbox Execution Error") || strings.Contains(result, "Security Exception") {
 				exitCode = 1
 			}
+			result = maybeSpillToolResult(nodeAgent, toolName, result)
 		} else if toolName == "read_file" {
 			var m map[string]interface{}
 			_ = json.Unmarshal([]byte(args), &m)
 			start, _ := m["start_line"].(float64)
 			end, _ := m["end_line"].(float64)
 			path, _ := m["path"].(string)
-			result = executeReadFile(path, int(start), int(end))
+			result = maybeSpillToolResult(nodeAgent, toolName, executeReadFile(nodeAgent, path, int(start), int(end)))
+		} else if toolName == "read_spill" {
+			var m map[string]interface{}
+			_ = json.Unmarshal([]byte(args), &m)
+			offset, _ := m["offset"].(float64)
+			limit, _ := m["limit"].(float64)
+			path, _ := m["id"].(string)
+			findText, _ := m["find_text"].(string)
+			result = readSpill(nodeAgent, path, int(offset), int(limit), findText)
 		} else {
 			return fmt.Errorf("unknown workflow tool name: %s", toolName)
 		}
@@ -790,7 +800,7 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 
 		writeDebugLog("[WORKFLOW NODE %s] Evaluating routing condition: '%s'", n.ID, condition)
 		targetRoute := "default"
-		
+
 		if condition == "on_error" && (strings.Contains(evalVar, "Error") || strings.Contains(evalVar, "Exception")) {
 			targetRoute = "error_branch"
 		}
@@ -953,7 +963,7 @@ func stringSliceProp(n *RuntimeNode, key string) []string {
 // Per-node tool control:
 //   - tools_enabled (bool)   turn on the ReAct loop
 //   - allowed_tools ([]str)  restrict which built-in tools are exposed
-//                            (empty/nil = all built-ins)
+//     (empty/nil = all built-ins)
 //   - mcp_tools (bool)       also expose tools discovered from MCP servers
 //   - max_turns (int)        loop cap (default: global Agent.MaxTurns)
 func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, inputs map[string]interface{}) error {

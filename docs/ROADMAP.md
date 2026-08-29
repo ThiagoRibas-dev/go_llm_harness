@@ -932,6 +932,7 @@ dsh's client has a deliberately small, well-reasoned layout system rather than a
 #### 12.29.12 Branding and theming mechanics **[IMPROVEMENT]**
 * **Reference:** a **theme presenter** consumes resolved `ctx.theme` snapshots and writes them to the document: `color-scheme` on `<html>` (native UA chrome — scrollbars, form controls), `body[data-ds-dark-theme]`, the theme's alias tokens as inline CSS variables on `<body>`, and a `<meta name="theme-color">` matching the computed background. It **measures after palette/token application** so the rendered background is the single color authority. Third-party themes are an extension point that overrides alias variables; missing values deliberately fall back to the nearest semantic token. The default shell label is "DSH Local Build" with a 7-char commit badge; deployments override via slots.
 * **Plan:** same approach for 12.28.11 — tokens on body, color-scheme on html, meta theme-color; measure after apply; ship a light theme as an override sheet.
+* **Status:** foundation shipped in `src/web/index.html`: semantic CSS variables now own the shell colors, `data-theme` is the document switch, `color-scheme` is applied on `<html>`, and `<meta name="theme-color">` is updated after theme application. Still pending: a persisted theme picker and broader replacement of one-off hardcoded utility colors deeper in the UI.
 * **Effort:** S.
 
 #### 12.29.13 Boot/rendering lifecycle **[NEW]**

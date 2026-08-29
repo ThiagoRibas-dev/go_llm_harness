@@ -16,6 +16,7 @@ import (
 )
 
 // Global assets embedding (Phase 6.1)
+//
 //go:embed web/*
 var embeddedWebFS embed.FS
 
@@ -27,10 +28,10 @@ var (
 
 // In-process self-learning round-trip Tokenizer mappings (Phase 8.3)
 var (
-	tokenToWord  = make(map[int]string)
-	wordToToken  = make(map[string]int)
-	nextTokenID  = 1000
-	tokenMutex   sync.Mutex
+	tokenToWord = make(map[int]string)
+	wordToToken = make(map[string]int)
+	nextTokenID = 1000
+	tokenMutex  sync.Mutex
 )
 
 // RegisterSSEClient adds a client channel to the active broadcast list
@@ -154,7 +155,7 @@ func StartWebGUI(port int) {
 	mux.HandleFunc("/v1/models", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		
+
 		// Guard: If API Gateway is disabled, return 404 (Phase 8.4)
 		if !activeConfig.Web.APIGatewayEnabled {
 			w.WriteHeader(http.StatusNotFound)
@@ -363,13 +364,14 @@ func StartWebGUI(port int) {
 
 	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]interface{}{
-			"session_id":         activeSessionID,
-			"api":                activeConfig.API,
-			"provider_profile":   activeConfig.ProviderProfile,
-			"agent":              activeConfig.Agent,
-			"security":           activeConfig.Security,
-			"compaction":         activeConfig.Compaction,
-			"debug":              activeConfig.Debug, // Phase 8.6
+			"session_id":       activeSessionID,
+			"api":              activeConfig.API,
+			"provider_profile": activeConfig.ProviderProfile,
+			"agent":            activeConfig.Agent,
+			"security":         activeConfig.Security,
+			"compaction":       activeConfig.Compaction,
+			"debug":            activeConfig.Debug, // Phase 8.6
+			"ui_state":         buildUIState(activeSessionID),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -509,7 +511,7 @@ func StartWebGUI(port int) {
 		_ = os.MkdirAll(uploadsDir, 0755)
 
 		destPath := filepath.Clean(filepath.Join(uploadsDir, handler.Filename))
-		
+
 		// Guard: protect system files
 		if strings.Contains(destPath, ".goharness") && !strings.Contains(destPath, filepath.Join("sessions", activeSessionID, "uploads")) {
 			http.Error(w, "Security Exception: Invalid upload destination path", http.StatusForbidden)
@@ -544,7 +546,7 @@ func StartWebGUI(port int) {
 	mux.HandleFunc("/api/workspaces", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"active":    activeConfig.Agent.WorkspaceDir,
+			"active":     activeConfig.Agent.WorkspaceDir,
 			"workspaces": activeConfig.Agent.WorkspacesHistory,
 		})
 	})
@@ -912,6 +914,25 @@ func StartWebGUI(port int) {
 		_, _ = w.Write([]byte(`{"status":"queued"}`))
 	})
 
+	mux.HandleFunc("/api/spill", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimSpace(r.URL.Query().Get("id"))
+		if id == "" {
+			http.Error(w, "missing spill id", http.StatusBadRequest)
+			return
+		}
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		findText := r.URL.Query().Get("find_text")
+		a := NewRootAgent()
+		meta, _ := loadSpillMeta(a.SessionID, id)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":      id,
+			"meta":    meta,
+			"content": readSpill(a, id, offset, limit, findText),
+		})
+	})
+
 	// POST /api/sessions/reroll: Deletes the last Assistant/Tool turns and resubmits the last User turn
 	mux.HandleFunc("/api/sessions/reroll", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
@@ -1083,10 +1104,10 @@ func StartWebGUI(port int) {
 				os.MkdirAll(filepath.Join(sessionsRoot, activeSessionID), 0755)
 				createSessionMeta(activeSessionID, activeConfig.Agent.WorkspaceDir, "", "Default Session")
 			}
-			
+
 			activeConfig.Agent.LastActiveSessionID = activeSessionID
 			_ = SaveConfig("config.json", activeConfig)
-			
+
 			_ = loadHistoryFromFiles()
 			currentTurnNumber = findMaxTurnNumber(activeSessionID)
 			BroadcastSSE("session_init", map[string]interface{}{"session_id": activeSessionID})
@@ -1094,7 +1115,7 @@ func StartWebGUI(port int) {
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "success",
+			"status":            "success",
 			"active_session_id": activeSessionID,
 		})
 	})
@@ -1135,7 +1156,7 @@ func StartWebGUI(port int) {
 	mux.HandleFunc("/api/snapshots", func(w http.ResponseWriter, r *http.Request) {
 		wsClean := cleanWorkspaceName(activeConfig.Agent.WorkspaceDir)
 		snapshotsDir := filepath.Join(".goharness", "snapshots", wsClean)
-		
+
 		var snapshotList []SnapshotMeta
 		if entries, err := os.ReadDir(snapshotsDir); err == nil {
 			for _, entry := range entries {
@@ -1220,7 +1241,7 @@ func StartWebGUI(port int) {
 
 		wsClean := cleanWorkspaceName(activeConfig.Agent.WorkspaceDir)
 		snapDir := filepath.Join(".goharness", "snapshots", wsClean, req.SnapshotID)
-		
+
 		metaBytes, err := os.ReadFile(filepath.Join(snapDir, "metadata.json"))
 		if err != nil {
 			http.Error(w, "Snapshot not found or invalid", http.StatusNotFound)
@@ -1473,8 +1494,8 @@ func StartWebGUI(port int) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"providers":         masked,
-			"active_profile":    activeConfig.ProviderProfile,
+			"providers":          masked,
+			"active_profile":     activeConfig.ProviderProfile,
 			"compaction_profile": activeConfig.Compaction.ProviderProfile,
 		})
 	})
@@ -1595,7 +1616,7 @@ func StartWebGUI(port int) {
 
 	// 4. Start Server and print beautiful UX logs (Phase 8.4)
 	serverAddr := fmt.Sprintf("0.0.0.0:%d", port)
-	
+
 	fmt.Printf("\n%s=======================================================%s\n", ColorBlue, ColorReset)
 	fmt.Printf("%s   🚀 GOHARNESS WEB & GATEWAY SERVICES ACTIVE 🚀       %s\n", ColorBold+ColorGreen, ColorReset)
 	fmt.Printf("%s=======================================================%s\n", ColorBlue, ColorReset)
