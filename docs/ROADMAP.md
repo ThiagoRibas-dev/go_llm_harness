@@ -952,9 +952,115 @@ dsh's client has a deliberately small, well-reasoned layout system rather than a
 9. **12.28.7 subagent fleet** in the details panel.
 10. **12.29.13 boot/hydrate polish**.
 
-## 📊 Competitive Feature Matrix: GoHarness vs Pi vs DeepSeek Harness
+## 🧭 Phase 13: Codex Comparative Backlog
 
-> **Scope note:** the **Pi** column reflects the *practical Pi ecosystem we audited* (`pi`, `@earendil-works/pi-coding-agent`, `pi-web-access`, `pi-subagents`, `pi-background-tasks`, `pi-mcp-adapter`, `@juicesharp/rpiv-ask-user-question`, `@juicesharp/rpiv-todo`, `@quintinshaw/pi-dynamic-workflows`), not just the intentionally tiny `earendil-works/pi` core. The **DeepSeek Harness** column reflects capabilities present in the harness' first-party packages/subsystems, even when those capabilities are internally pluginized.
+This phase catalogues improvements identified by comparing GoHarness against **Codex** — specifically the open-source `openai/codex` CLI/runtime plus the documented **app-server**, **SDK**, **hooks**, **skills/plugins**, **review**, **plan/goal**, and **sandbox/approval** surfaces. Codex sits in a different product position from Pi and DeepSeek Harness: it is not trying to be provider-neutral or a general plugin microkernel first. It is a highly productized coding agent with unusually strong local ergonomics, automation surfaces, and trust/policy mechanisms around the agent loop.
+
+For GoHarness, the value is not "copy OpenAI product coupling." The value is: **headless automation discipline, review-first flows, skills/plugins with progressive disclosure, lifecycle hooks with trust, and rich local/remote client seams**.
+
+Reference repos/docs:
+- **Codex repo:** https://github.com/openai/codex
+- **CLI command reference:** https://learn.chatgpt.com/docs/developer-commands
+- **Non-interactive mode (`codex exec`):** https://learn.chatgpt.com/docs/non-interactive-mode
+- **Hooks:** https://learn.chatgpt.com/docs/hooks
+- **App Server:** https://learn.chatgpt.com/docs/app-server
+- **Codex SDK:** https://learn.chatgpt.com/docs/codex-sdk
+- **Code review:** https://learn.chatgpt.com/docs/code-review
+- **CLI customization:** https://learn.chatgpt.com/docs/cli-customization
+- **Skills:** https://learn.chatgpt.com/docs/build-skills
+- **Plugins:** https://learn.chatgpt.com/docs/build-plugins
+- **Slash commands / plan / goal / review / worktree:** https://learn.chatgpt.com/docs/reference/slash-commands
+
+### 13.1 Headless/non-interactive runner with JSONL events and schema output **[NEW]**
+* **Reference:** `codex exec` runs without the TUI, prints progress to `stderr`, final output to `stdout`, supports `--json` JSONL events, `--ephemeral`, `--output-last-message`, and `--output-schema <json-schema>`.
+* **Why it matters:** this is the cleanest automation surface Codex has. It is much stronger than "just shell out to the interactive client" because CI can consume structured machine events instead of screen text.
+* **GoHarness today:** no first-class `goharness exec`; the closest things are the interactive CLI loop, the embedded web UI, and the OpenAI-compatible HTTP gateway.
+* **Plan:** add `goharness exec "prompt"` with: `--json` (event stream), `--ephemeral` (no persisted session files), `-o/--output-last-message`, and `--output-schema schema.json` enforcing a final JSON object. Reuse the `Agent` runtime, the spill store, and the future typed event log. Emit progress on `stderr`, final answer on `stdout`, exactly like Codex.
+* **Effort:** M.
+
+### 13.2 App-server / RPC seam for rich local and remote clients **[NEW]**
+* **Reference:** `codex app-server` exposes a JSON-RPC 2.0-like protocol over **stdio JSONL**, **WebSocket**, or **Unix socket**, supports generated TypeScript/JSON schemas, and lets the TUI connect remotely via `codex --remote ...`.
+* **Why it matters:** Codex cleanly separates **agent runtime** from **client surface**. The CLI, IDE extension, desktop app, and remote clients can all talk to the same core protocol instead of scraping terminal output.
+* **GoHarness today:** embedded web server + SSE + OpenAI-compatible HTTP gateway, but no first-class agent-control RPC protocol.
+* **Plan:** after the typed session/event log lands, add `goharness app-server` with a narrow typed protocol: `thread/start`, `turn/send`, `turn/cancel`, `session/list`, `session/resume`, `tool/approve`, `spill/read`, `review/start`. Start with **stdio JSONL** and **Unix socket**; add WebSocket only when we have a concrete external client. Unlike Codex, keep this provider-neutral and local-first.
+* **Effort:** L.
+
+### 13.3 Lifecycle hooks with trust review and config layering **[IMPROVEMENT]**
+* **Reference:** Codex hooks run at concrete lifecycle points (`PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `UserPromptSubmit`, `SessionStart`, `SubagentStart`, `SubagentStop`, `Stop`, `SessionEnd`), load from `hooks.json` or `[hooks]` in layered `config.toml`, run matching handlers concurrently, and require **hash-based trust review** for non-managed hooks.
+* **Why it matters:** Codex proves that "hooks" are not one feature. They are the seam that makes approvals, memory extraction, guardrails, validation, org policy, and telemetry composable.
+* **GoHarness today:** we have the roadmap plan for a typed hook bus (`12.3`, `12.17`) but not the mechanism itself.
+* **Plan:** implement the internal bus first, then add `~/.goharness/hooks.json` and project `.goharness/hooks.json`, hash and trust-prompt non-managed hooks, and define concurrency/cancellation semantics up front. This should become the implementation vehicle for approvals, secret scanning, post-edit validation, and compaction/memory extraction.
+* **Effort:** M.
+
+### 13.4 Skills and plugins with progressive disclosure **[NEW — strategic]**
+* **Reference:** Codex uses the **open agent skills standard** (`SKILL.md` plus optional scripts/references/assets), supports explicit invocation (`$skill-name`) and implicit selection, scans repository/user/admin/system locations, and uses **progressive disclosure** so the initial skill list is capped to a small budget and the full skill is loaded only when selected. Plugins package skills and MCP servers into a shared installable directory.
+* **Why it matters:** this is the cleanest documented answer we have seen for "how do reusable workflows avoid bloating the base prompt?"
+* **GoHarness today:** we load `AGENTS.md`, `SKILLS.md`, `INSTRUCTIONS.md`, and `CLAUDE.md`, but that is still flat file injection rather than a real skill registry or packaging system.
+* **Plan:** add a real skill loader over `.agents/skills/` in repo scopes plus `~/.goharness/skills/`, cap the initial visible catalog to a strict budget, and load full skill instructions lazily when the model or user selects one. Only after that should we talk about installable GoHarness "plugins" bundling skills + MCP registration + hooks metadata.
+* **Effort:** M.
+
+### 13.5 Dedicated code-review mode and review model separation **[NEW]**
+* **Reference:** Codex ships `/review` plus `codex review`, can review **uncommitted changes**, a **base branch diff**, a **commit**, or **custom review instructions**, reports prioritized findings without mutating the working tree, and can use a distinct `review_model`.
+* **Why it matters:** this turns review from "prompt the agent to look at a diff" into a separate workflow with different safety and UX expectations.
+* **GoHarness today:** we can ask the agent to review code, but there is no dedicated diff review mode, no working-tree scope selector, no separate reviewer model, and no tailored UI.
+* **Plan:** add `goharness review` plus a web/CLI `/review` flow. Source scopes: unstaged, staged, commit, base branch, last turn. Default permissions: read-only. Result format: prioritized findings with file/line spans and severity. Optionally route review through a dedicated profile/model.
+* **Effort:** M.
+
+### 13.6 Plan mode, goal mode, and progress rows above the composer **[IMPROVEMENT]**
+* **Reference:** Codex exposes `/plan` for multi-step planning, `/goal` for a persistent objective, and shows goal progress above the composer with pause/resume/edit/clear controls while still accepting follow-up steering.
+* **Why it matters:** Codex demonstrates a more complete collaboration loop than a bare ReAct turn sequence: plan first, then run under a persistent objective, while keeping the user in control.
+* **GoHarness today:** none of this is shipped. We have roadmap intent split across plan mode, goal mode, steering queue, and UI takeover rows.
+* **Plan:** unify these roadmap items rather than shipping them as disconnected features: `11.2` message queue, `12.7` plan mode, `12.8` goals, and the composer-region work in `12.29.6` should be implemented as one surface. Codex is the proof that these features only feel coherent when the composer and turn state are designed together.
+* **Effort:** M-L.
+
+### 13.7 Explicit approval policy + sandbox presets + execpolicy evaluation **[IMPROVEMENT]**
+* **Reference:** Codex has explicit approval policies (`untrusted`, `on-request`, `never`), explicit sandbox presets (`read-only`, `workspace-write`, `danger-full-access`), a `--yolo` escape hatch, and `codex execpolicy` to evaluate rule files and see whether a command would be allowed, prompted, or blocked.
+* **Why it matters:** Codex treats permissions as a **user-facing contract**, not just scattered booleans in config.
+* **GoHarness today:** we have `sandbox_mode`, `sandbox_fallback`, blocked command substrings, and write-protection shields, but no single policy vocabulary the UI, CLI, hooks, and tools all share.
+* **Plan:** normalize GoHarness permissions around three filesystem presets and three approval modes, then expose an `execpolicy check` command/tool that simulates a proposed tool call and reports `allow/prompt/deny` with the matching rule. This can sit on top of the hook bus rather than bypassing it.
+* **Effort:** M.
+
+### 13.8 MCP breadth: streamable HTTP servers, OAuth, and richer server management **[IMPROVEMENT]**
+* **Reference:** Codex `mcp add` supports either stdio launch commands or a **streamable HTTP URL**, and `mcp login/logout` handles OAuth for servers that need it.
+* **Why it matters:** our MCP support is good for local binaries, but it stops at the easiest transport.
+* **GoHarness today:** stdio MCP only.
+* **Plan:** keep stdio as the zero-dependency default, but add a second transport for streamable HTTP MCP servers and a minimal credential store for OAuth/session tokens. Server management should show connection state, required scopes, and last error.
+* **Effort:** M.
+
+### 13.9 Persistent terminal sessions and integrated validation workflow **[IMPROVEMENT]**
+* **Reference:** Codex's product surfaces include an integrated terminal scoped to the current project/worktree, and ChatGPT/Codex can refer to the current terminal output while working. This is much closer to a persistent PTY than to isolated one-shot commands.
+* **Why it matters:** persistent terminals are what make "run dev server, inspect output, fix, rerun" feel native instead of bolted on.
+* **GoHarness today:** one-shot `execute_command` only.
+* **Plan:** treat Codex here as a product proof for `12.4` rather than inventing a separate roadmap line: PTY-backed terminals, bounded polling, attach current terminal buffer as context, and an optional validation lane that runs project checks after edits.
+* **Effort:** M.
+
+### 13.10 Operational polish: doctor, shell completions, theme picker, `/status`, and `/init` **[IMPROVEMENT]**
+* **Reference:** Codex ships `doctor`, shell completion generation, a TUI theme picker, `/status`, and `/init` to scaffold `AGENTS.md`.
+* **Why it matters:** these are small but high-frequency affordances. They cut support/debug friction and make the tool feel deliberate.
+* **GoHarness today:** we have some of the raw ingredients (`AGENTS.md` loading, config UI, token/cost stats), but not the packaged workflows.
+* **Plan:** a `goharness doctor` command should verify config, auth, providers, MCP servers, sandbox availability, workspace writability, session inventory, and hook validity. `/init` should scaffold `AGENTS.md`, `.goharness/`, sample skills, and providers. Shell completions and theme switching follow after the frontend/CLI refactor.
+* **Effort:** XS-M depending on slice.
+
+### Where GoHarness is already ahead of Codex
+- **Provider neutrality:** GoHarness is structurally designed for OpenAI, Anthropic, Gemini, Vertex, local OpenAI-compatible endpoints, and MCP tools without treating OpenAI product surfaces as the center of gravity.
+- **Embedded web UI in one binary:** Codex has rich clients, but not the same single-binary embedded web-console story.
+- **Visual DAG workflows:** Codex emphasizes conversational/skill-based workflows, reviews, and app-server clients rather than a native graphical pipeline editor.
+- **OpenAI-compatible gateway:** our in-process gateway is a real differentiator Codex does not target.
+
+### Codex-driven implementation order (recommended)
+1. **13.1** non-interactive `exec` + JSONL + `--output-schema`.
+2. **13.5** dedicated `review` mode (read-only, diff-scoped, optional `review_profile`).
+3. **13.3** hook bus + `hooks.json` trust flow (folds into `12.3` / `12.17`).
+4. **13.4** skills registry with progressive disclosure.
+5. **13.7** normalized permission policy + execpolicy simulator.
+6. **13.2** app-server / stdio JSONL protocol once the typed event log is real.
+7. **13.8/13.9/13.10** MCP transport breadth, PTY terminal, and operational polish.
+
+## 📊 Competitive Feature Matrix: GoHarness vs Pi vs DeepSeek Harness vs Codex
+
+> **Scope note:** the **Pi** column reflects the *practical Pi ecosystem we audited* (`pi`, `@earendil-works/pi-coding-agent`, `pi-web-access`, `pi-subagents`, `pi-background-tasks`, `pi-mcp-adapter`, `@juicesharp/rpiv-ask-user-question`, `@juicesharp/rpiv-todo`, `@quintinshaw/pi-dynamic-workflows`), not just the intentionally tiny `earendil-works/pi` core. The **DeepSeek Harness** column reflects first-party packages/subsystems in the open-source harness, even when they are internally pluginized. The **Codex** column reflects the documented local product/runtime we audited: open-source `openai/codex` CLI/runtime plus its documented app-server, SDK, hooks, skills/plugins, review, plan/goal, and MCP surfaces — **not** proprietary cloud internals we did not inspect.
+>
+> Adjacent systems like **Claude Code**, **Cline**, **Continue**, **Hermes**, **OpenCode**, **OptMem**, and **TencentDB Agent Memory** remain documented in `docs/COMPARISON_MATRIX.md` and `docs/RESEARCH.md`. This matrix now focuses on the four harnesses we have audited deeply enough to roadmap directly against.
 >
 > **Status key:**
 > - **Built-in** = shipped in the product/runtime we audited.
@@ -964,103 +1070,127 @@ dsh's client has a deliberately small, well-reasoned layout system rather than a
 > - **Missing** = absent from what we audited.
 > - **Unclear** = not explicitly verified in this pass; don't over-read the cell.
 
-### Runtime, packaging, and extension model
+### Runtime, packaging, configuration, and extension model
 
-| Feature | GoHarness | Pi | DeepSeek Harness | Notes |
-|---|---|---|---|---|
-| Local-first workspace/session operation | Built-in | Built-in | Built-in | All three are meant to act directly on a local workspace/session rather than a hosted control plane. |
-| Single static binary / standalone app runtime | Built-in | Missing | Missing | Current GoHarness differentiator: one Go binary with embedded UI. Pi and dsh ride the Node/npm toolchain. |
-| Embedded web UI served by the app | Built-in | Missing | Built-in | GoHarness and dsh both have a web surface; Pi is primarily CLI-first. |
-| Interactive CLI/TUI workflow | Built-in | Built-in | Built-in | Pi is strongest here today; GoHarness has the basics; dsh has CLI/headless/web modes. |
-| Headless one-shot runner | Planned | Built-in | Built-in | We explicitly called this out as a GoHarness gap in Phase 12. |
-| SDK / embeddable session runtime | Partial | Built-in | Built-in | GoHarness now has an internal `Agent` runtime, but not a polished public SDK surface yet. |
-| Stdio / RPC automation mode | Planned | Built-in | Built-in | dsh architecture and Pi both expose this mode; GoHarness does not yet. |
-| OpenAI-compatible HTTP gateway | Built-in | Missing | Missing | A real GoHarness differentiator today. |
-| Multi-provider LLM connector seam | Built-in | Unclear | Built-in | GoHarness has OpenAI/Anthropic/Gemini/Vertex; dsh has adapter seams; Pi provider depth was not the focus of this audit. |
-| Named provider profiles / reusable connection configs | Built-in | Unclear | Built-in | GoHarness `providers.json` is real now; dsh has profile/bundle/config layering; Pi not explicitly audited here. |
-| MCP support | Built-in | Extension | Built-in | Pi uses `pi-mcp-adapter`; GoHarness and dsh have first-class MCP wiring. |
-| Runtime plugin / extension architecture | Planned | Built-in | Built-in | Pi and dsh are extension-first by philosophy; GoHarness is still mostly compiled-in. |
-| Structured, append-only session event log | Partial | Unclear | Built-in | GoHarness persists per-turn JSON files and traces, but not the typed JSONL event ledger dsh has. |
-| Tool-output spill to disk | Built-in | Unclear | Built-in | GoHarness shipped the first cut; dsh already treats this as a core primitive. |
-| Session branching / rewind / compaction commands | Partial | Built-in | Partial | GoHarness has rollback/branch/compaction; Pi has stronger conversation tree ergonomics; dsh session tree was audited less on branch UX. |
+| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Notes |
+|---|---|---|---|---|---|
+| Local-first workspace/session operation | Built-in | Built-in | Built-in | Built-in | All four operate directly on a local workspace/session rather than requiring a hosted control plane. |
+| Standalone native binary available | Built-in | Missing | Missing | Built-in | GoHarness ships as one Go binary; Codex publishes standalone platform binaries in addition to npm/homebrew installers. |
+| Single-binary embedded web UI | Built-in | Missing | Built-in | Missing | GoHarness and dsh expose a browser surface; Codex's rich surfaces are app/IDE/app-server rather than an embedded web server. |
+| Interactive CLI/TUI | Built-in | Built-in | Built-in | Built-in | Pi and Codex are especially strong here. |
+| Headless one-shot runner | Planned | Built-in | Built-in | Built-in | Codex `exec` is now one of the clearest reference implementations for this gap. |
+| SDK / embeddable session runtime | Partial | Built-in | Built-in | Built-in | GoHarness has an internal `Agent` runtime but not a polished public SDK yet. |
+| Structured RPC / app-server protocol | Planned | Built-in | Built-in | Built-in | Pi and dsh already expose this class of seam; Codex's app-server makes the case concrete. |
+| Remote client/server mode | Planned | Built-in | Built-in | Built-in | Codex TUI can connect to remote app-server endpoints over WebSocket or Unix socket. |
+| OpenAI-compatible HTTP gateway | Built-in | Missing | Missing | Missing | Still a real GoHarness differentiator. |
+| Multi-provider LLM connector seam | Built-in | Unclear | Built-in | Partial | Codex is primarily OpenAI-centered but does support local OSS providers. |
+| Local open-source provider mode | Partial | Unclear | Unclear | Built-in | Codex explicitly supports `--oss` with LM Studio or Ollama; GoHarness can target local OpenAI-compatible endpoints but not with the same operator UX. |
+| Named profiles / layered config precedence | Built-in | Unclear | Built-in | Built-in | Codex has profile layering and config precedence; dsh has bundle/profile/layer overlays. |
+| MCP client support | Built-in | Extension | Built-in | Built-in | Pi uses adapters; the others have first-class support. |
+| MCP server transport breadth (stdio + HTTP/OAuth) | Partial | Unclear | Built-in | Built-in | GoHarness is stdio-only today; Codex and dsh are broader. |
+| Skills standard / reusable workflow catalog | Partial | Extension | Partial | Built-in | GoHarness only has flat guideline injection today, not a real skill system. |
+| Installable plugin/extension packaging | Planned | Built-in | Built-in | Built-in | Pi and Codex package skills/connectors explicitly; dsh packages plugins/modules internally. |
+| Typed append-only session/event log | Partial | Unclear | Built-in | Built-in | GoHarness persists per-turn files and traces; dsh and Codex expose much cleaner event streams. |
+| Tool-output spill to disk | Built-in | Unclear | Built-in | Unclear | GoHarness just shipped this; Codex output management is richer than ours but the exact spill primitive was not explicitly verified. |
+| Session resume / fork / archive / delete lifecycle | Partial | Built-in | Partial | Built-in | Codex has a broader first-class session inventory surface than GoHarness today. |
+| Doctor / self-diagnostic command | Missing | Unclear | Unclear | Built-in | Good operational polish target from Codex. |
 
-### Agent capabilities, tools, orchestration, and policy
+### Agent capabilities, automation, orchestration, and policy
 
-| Feature | GoHarness | Pi | DeepSeek Harness | Notes |
-|---|---|---|---|---|
-| File read/write/patch + command execution tools | Built-in | Built-in | Built-in | Baseline harness capability across all three. |
-| Environment-aware shell prompt guidance | Built-in | Unclear | Missing | GoHarness explicitly injects OS/shell guidance; we noted dsh largely leaves this to personas. |
-| Per-profile / per-connection request throttling | Built-in | Unclear | Unclear | GoHarness already has `max_concurrency` at the profile level. |
-| Built-in sub-agents | Built-in | Extension | Built-in | Pi needs `pi-subagents`; GoHarness and dsh have native sub-agent seams. |
-| Parallel sub-agent fan-out in one turn | Built-in | Extension | Built-in | GoHarness ships concurrent `spawn_sub_agent`; dsh supports richer providers/capabilities. |
-| Durable / continuable child agents | Missing | Unclear | Built-in | This is one of dsh's big architecture leads. |
-| Per-child tool filtering / persona override | Planned | Unclear | Built-in | dsh exposes capability-checked `toolFilter` + `persona`; GoHarness only has the roadmap plan today. |
-| Structured sub-agent output schema | Planned | Unclear | Built-in | dsh's `outputSchema` is materially ahead. |
-| Human-authored DAG workflow engine | Built-in | Extension | Built-in | GoHarness has the strongest *visual* DAG editor; Pi has dynamic-workflows via package; dsh has first-party workflow machinery. |
-| Visual DAG workflow editor | Built-in | Missing | Missing | Clear GoHarness lead right now. |
-| Model-authored workflows / worker-pool orchestration | Planned | Extension | Built-in | dsh `workflow`/`Ralph` style orchestration is ahead; Pi has ecosystem coverage; GoHarness has not shipped this yet. |
-| Hook / event bus around request/tool lifecycle | Planned | Unclear | Built-in | This is a major dsh architectural advantage and a recommended GoHarness next-wave item. |
-| Approval / permission gating pipeline | Planned | Missing | Built-in | Pi explicitly avoids permission popups in core philosophy. |
-| Ask-user / model-initiated question tool | Planned | Extension | Built-in | Pi has `rpiv-ask-user-question`; dsh has in-place question surfaces; GoHarness not yet. |
-| Persistent TODO / plan list | Planned | Extension | Built-in | Pi has `rpiv-todo`; dsh has `todo`; GoHarness only has roadmap intent. |
-| Plan mode (review before edits) | Planned | Missing | Built-in | Another dsh lead with clear transfer value. |
-| Goals / autonomous continuation across rounds | Planned | Unclear | Built-in | dsh `goal` + round-driver is ahead of both GoHarness and what we explicitly saw in Pi. |
-| Background jobs / detached long-running work | Planned | Extension | Built-in | Pi has `pi-background-tasks`; dsh has `jobs`; GoHarness not yet. |
-| Persistent PTY terminal session tools | Planned | Missing | Built-in | dsh has a real terminal subsystem; GoHarness currently does one-shot commands. |
-| LSP capability seam | Planned | Unclear | Built-in | dsh has a semantic LSP surface; GoHarness only has the roadmap item. |
-| Web search | Planned | Extension | Unclear | Pi has `pi-web-access`; dsh web-search depth was not explicitly audited in this pass. |
-| Web fetch / readability extraction / cache | Planned | Extension | Unclear | Pi's `pi-web-access` is very concrete here; GoHarness hasn't shipped its equivalent yet. |
-| Secret / policy guardrails around tool execution | Partial | Unclear | Built-in | GoHarness has blocked patterns and system-path write protection, but not the dsh-style guard/hook pipeline. |
+| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Notes |
+|---|---|---|---|---|---|
+| File read/write/patch + command execution tools | Built-in | Built-in | Built-in | Built-in | Baseline harness capability across all four. |
+| Environment-aware shell guidance in prompt | Built-in | Unclear | Missing | Unclear | GoHarness is explicit here; Codex likely handles more through product/runtime conventions than prompt text. |
+| Per-profile / per-connection concurrency throttling | Built-in | Unclear | Unclear | Unclear | Still one of our quiet advantages. |
+| Built-in sub-agents | Built-in | Extension | Built-in | Built-in | Codex exposes subagent lifecycle hooks and dedicated reviewer/auxiliary agents in product flows. |
+| Parallel sub-agent fan-out in one turn | Built-in | Extension | Built-in | Unclear | We did not verify a Codex equivalent to open fan-out `spawn_sub_agent(...)`. |
+| Durable / continuable child agents | Missing | Unclear | Built-in | Unclear | dsh remains the clear lead here. |
+| Per-child tool filtering / persona override | Planned | Unclear | Built-in | Unclear | Codex has personalities and skills, but explicit per-child tool filters were not verified. |
+| Structured sub-agent output schema | Planned | Unclear | Built-in | Unclear | Codex has `--output-schema` for non-interactive final output, which is adjacent but not the same as sub-agent structured returns. |
+| Human-authored DAG workflow engine | Built-in | Extension | Built-in | Missing | Codex focuses on conversational/runtime flows, not graph editing. |
+| Visual DAG workflow editor | Built-in | Missing | Missing | Missing | Clear GoHarness differentiator. |
+| Model-authored workflows / worker-pool orchestration | Planned | Extension | Built-in | Partial | Codex's SDK and MCP examples support orchestrated workflows, but not as a native graph/runtime surface like dsh. |
+| Hook / event bus around request and tool lifecycle | Planned | Unclear | Built-in | Built-in | Codex and dsh both strongly reinforce this as a core seam, not a bolt-on. |
+| Hook trust / review flow | Planned | Missing | Unclear | Built-in | Codex's hash-based hook trust is specifically worth copying. |
+| Approval / permission gating pipeline | Planned | Missing | Built-in | Built-in | Codex has explicit approval policies; Pi core intentionally does not. |
+| Explicit exec-policy evaluation tooling | Planned | Missing | Partial | Built-in | dsh has guards/policy pieces; Codex makes policy evaluation a real user-facing command. |
+| Plan mode (multi-step planning before edits) | Planned | Missing | Built-in | Built-in | Codex `/plan` and dsh `plan` both raise the bar here. |
+| Persistent goal mode | Planned | Unclear | Built-in | Built-in | Codex and dsh both treat goals as first-class long-running collaboration state. |
+| Persistent TODO / plan list | Planned | Extension | Built-in | Partial | Codex exposes plan/goal and memories/skills surfaces, but we did not verify a dsh-style dedicated todo subsystem. |
+| Ask-user / structured question flow | Planned | Extension | Built-in | Unclear | Codex approval flows are rich, but a generic model-initiated question tool was not explicitly verified. |
+| Background jobs / detached long-running work | Planned | Extension | Built-in | Partial | Codex supports local/cloud/remote long-running flows, but the exact job model differs from dsh. |
+| Persistent PTY terminal session tools | Planned | Missing | Built-in | Built-in | Codex's integrated terminal/product surface is closer to PTY-native operation than GoHarness today. |
+| LSP capability seam | Planned | Unclear | Built-in | Unclear | Not explicitly verified in Codex docs we audited. |
+| Web search | Planned | Extension | Unclear | Built-in | Codex exposes web search modes; Pi does via `pi-web-access`; GoHarness has not shipped it. |
+| Web fetch / readability extraction / content cache | Planned | Extension | Unclear | Unclear | Codex has web-search/product browsing surfaces, but we did not verify a Pi-style fetch/readability API. |
+| Dedicated code review mode | Planned | Missing | Partial | Built-in | Codex's `/review` / `codex review` is a concrete benchmark. |
+| Separate review model/profile | Planned | Missing | Unclear | Built-in | Codex explicitly supports `review_model`; GoHarness should copy that. |
+| Secret / policy guardrails around tool execution | Partial | Unclear | Built-in | Built-in | GoHarness has some guardrails, but not a full policy vocabulary yet. |
+| Cloud/local hybrid execution surface | Missing | Missing | Unclear | Built-in | Codex uniquely spans local, cloud, and remote app-server surfaces; not all of that is desirable for GoHarness, but it's part of the comparison. |
 
 ### UI / UX / operator experience
 
-| Feature | GoHarness | Pi | DeepSeek Harness | Notes |
-|---|---|---|---|---|
-| Collapsed tool calls / results by default | Built-in | Built-in | Built-in | GoHarness now does this; Pi and dsh already leaned hard into transcript compaction UX. |
-| Truthful blocked input states / empty hero surfaces | Partial | Unclear | Built-in | GoHarness just shipped the first truthful composer/hero pass; dsh is much more complete. |
-| Step-grouped transcript | Planned | Unclear | Built-in | dsh is materially ahead on step semantics and rendering. |
-| Typed blocks for terminal / diff / read / search / web | Planned | Unclear | Built-in | GoHarness still renders generic `<pre>` blocks. |
-| Trajectory / inspector view | Planned | Unclear | Built-in | dsh already has this as a first-class surface. |
-| Three-column shell with details panel | Planned | Missing | Built-in | GoHarness currently has a simpler sidebar + conversation layout. |
-| Grouped/searchable workspace-session browser with live statuses | Partial | Unclear | Built-in | GoHarness has session/workspace management, but not the dsh-level grouped search/status browser. |
-| Deliverables row from actual file mutations | Planned | Missing | Built-in | dsh's `ui-deliverables` is the model to copy. |
-| Image paste / drag-and-drop attachments | Partial | Built-in | Built-in | GoHarness has basic upload plumbing, but not the ergonomic image rail / drop overlay surface. |
-| Theme tokens / first-class theming | Partial | Unclear | Built-in | GoHarness now has token foundations; dsh already has a real theme presenter system. |
-| UI slot / surface plugin architecture | Planned | Missing | Built-in | dsh is the clear leader here; Pi is not a web-shell comparison target. |
-| Settings model testing / live provider interrogation | Planned | Unclear | Built-in | dsh's settings UX is much more mature. |
-| Stable drafts / caret / shell identity across session switches | Planned | Unclear | Built-in | GoHarness still remounts too much UI on session switch. |
-| Token/cost/cache/status footer or dock | Partial | Built-in | Built-in | GoHarness has token + spend cards, but not the full Pi/dsh richness. |
-| Keyboard-first `@` / `/` / `!` operator flows | Planned | Built-in | Built-in | Pi is especially strong here; dsh has trigger/commands modules; GoHarness needs this. |
-| Conversation branching/tree navigation UX | Partial | Built-in | Partial | GoHarness can branch/rollback, but Pi's `/tree`/`/fork`/`/clone` style ergonomics are ahead. |
+| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Notes |
+|---|---|---|---|---|---|
+| Collapsed tool calls / results by default | Built-in | Built-in | Built-in | Unclear | Codex definitely has polished transcript rendering, but this exact default behavior was not explicitly verified in the audited docs. |
+| Truthful blocked input states / hero surfaces | Partial | Unclear | Built-in | Built-in | Codex has explicit permission/status/goal rows and stronger session-state surfaces than we do. |
+| Step-grouped transcript / event stream semantics | Planned | Unclear | Built-in | Built-in | Codex JSONL events and app-server stream semantics are materially clearer than our current message blobs. |
+| Typed blocks for terminal / diff / read / search / web | Planned | Unclear | Built-in | Built-in | Codex explicitly syntax-highlights code blocks and file diffs, and review/terminal surfaces are typed, not just markdown blobs. |
+| Trajectory / inspector view | Planned | Unclear | Built-in | Partial | Codex has status/debug/config surfaces and review panes, but not a dsh-style general trajectory inspector we explicitly verified. |
+| Three-column shell / details panel | Planned | Missing | Built-in | Partial | Codex app/IDE surfaces have richer panes, but the exact dsh-style three-column shell was not the model there. |
+| Grouped/searchable workspace-session browser | Partial | Unclear | Built-in | Built-in | Codex product surfaces treat projects/chats/worktrees as first-class, ahead of our current sidebar. |
+| Deliverables/files row from actual mutations | Planned | Missing | Built-in | Partial | Codex review/app surfaces are more file-aware, but we did not verify a dsh-style dedicated deliverables row. |
+| Image paste / drag-and-drop attachments | Partial | Built-in | Built-in | Built-in | Codex CLI/app support image attachments; GoHarness only has basic upload plumbing. |
+| Theme tokens / first-class theming | Partial | Unclear | Built-in | Built-in | Codex has a theme picker and TUI theme config; GoHarness only just shipped token foundations. |
+| UI slot / surface plugin architecture | Planned | Missing | Built-in | Partial | Codex plugins can bring optional UI, but dsh is still the most explicit UI plugin architecture we audited. |
+| Settings model testing / provider interrogation | Planned | Unclear | Built-in | Partial | Codex has mature status/config inspection, but not the same provider-neutral settings problem. |
+| Stable drafts / shell identity across session switches | Planned | Unclear | Built-in | Built-in | Codex's app/IDE/project integration is stronger here than our current full rerenders. |
+| Token/cost/cache/status footer or dock | Partial | Built-in | Built-in | Built-in | Codex `/status` and product surfaces are stronger operationally. |
+| Keyboard-first `@` / `/` / `!` / `$` operator flows | Planned | Built-in | Built-in | Built-in | Codex's `/` + `$` skill flows are now part of the benchmark. |
+| Conversation branching / tree navigation UX | Partial | Built-in | Partial | Built-in | Codex exposes fork/resume/archive/unarchive/delete as first-class commands. |
+| Integrated terminal in the main client | Missing | Missing | Built-in | Built-in | Big current gap for GoHarness. |
+| Review pane with line-aware findings | Missing | Missing | Partial | Built-in | Another concrete Codex lead. |
+| Worktree-first workflow UX | Missing | Missing | Unclear | Built-in | Codex explicitly exposes `/worktree`; GoHarness branches sessions but not Git worktrees. |
+| `/init` style project bootstrap (`AGENTS.md`, etc.) | Planned | Missing | Unclear | Built-in | Codex has a clear scaffold flow; GoHarness already loads these files once they exist. |
 
-### Distribution, release engineering, and install posture
+### Distribution, install posture, and automation readiness
 
-| Feature | GoHarness | Pi | DeepSeek Harness | Notes |
-|---|---|---|---|---|
-| Multi-platform binary release pipeline | Built-in | Unclear | Unclear | GoHarness CI/releases were explicitly verified in this project. |
-| Zero-dependency app install story | Built-in | Missing | Missing | This is one of the strongest reasons to keep GoHarness' architecture opinionated. |
-| Works without a hosted control plane | Built-in | Built-in | Built-in | All three can operate locally; model providers may still be remote unless pointed at local models. |
+| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Notes |
+|---|---|---|---|---|---|
+| Multi-platform release pipeline | Built-in | Unclear | Unclear | Built-in | GoHarness and Codex both publish cross-platform install paths/binaries. |
+| Zero app-side runtime dependency story | Built-in | Missing | Missing | Partial | Codex now has standalone binaries, but its broader ecosystem still leans on app/IDE/npm surfaces. |
+| Works without a hosted control plane | Built-in | Built-in | Built-in | Built-in | Codex can run locally; some cloud features are additive, not mandatory. |
+| Strong CI / automation entrypoint | Partial | Unclear | Built-in | Built-in | Codex `exec`, SDK, JSONL, and schema output make this especially strong. |
+| Schema-driven machine-readable output mode | Planned | Missing | Partial | Built-in | Codex explicitly supports `--output-schema`; dsh has stronger typed internals but we did not audit an equivalent polished CLI flag. |
 
 ### What the matrix says strategically
 
 #### Where GoHarness is already strongest
-- **Single static binary + embedded web UI + no app-side Node runtime.** Neither Pi nor dsh match this install story.
-- **OpenAI-compatible HTTP gateway built into the product.** This is unusually useful and already shipped.
-- **Visual DAG workflow editor.** This is a real differentiator; the others lean textual/plugin orchestration instead.
-- **Environment-aware shell instructions and per-profile concurrency throttling.** Small, but technically meaningful advantages.
+- **Single-binary local-first install story** with an embedded web console and no app-side Node runtime.
+- **OpenAI-compatible gateway** built directly into the product.
+- **Visual DAG workflow editor**, which neither Pi, dsh, nor Codex match.
+- **Provider neutrality** across OpenAI, Anthropic, Gemini, Vertex, local OpenAI-compatible endpoints, and MCP tools.
+- **Per-profile concurrency throttling** and **environment-aware shell guidance** as core runtime features.
 
 #### Where Pi is strongest
-- **Operator ergonomics in the CLI.** `@` file insertion, path completion, `!`/`!!`, queued steering, `/tree`, `/fork`, `/clone`, `/compact`, `/export`, `/import`, `/share`, external editor, and image paste make it feel very mature for everyday driving.
-- **Minimal core, broad ecosystem.** Pi proves that not every feature must live in the privileged core — but it also means some important capabilities are optional packages rather than guaranteed behavior.
+- **Keyboard-first everyday ergonomics** in the terminal: `@`, `!`, queued steering/follow-up, `/tree`, `/fork`, `/clone`, `/compact`, `/export`, `/import`, `/share`, and external-editor workflows.
+- **Minimal core plus extension marketplace**: Pi proves how far a tiny kernel can go when the extension surface is clean.
 
 #### Where DeepSeek Harness is strongest
-- **Architecture discipline.** The typed event log, request/tool lifecycle seams, scope model, approval pipeline, spill layer, subagent capabilities, and pluginized UI are all more coherent than GoHarness today.
-- **UI completeness.** dsh already has trajectory, deliverables, typed blocks, settings testing, details panes, subagent drill-down, layout rules, and truthful composer takeovers.
-- **Durable agent orchestration.** Continuable subagents, jobs, goals, workflows, plans, and PTY terminals are a much broader execution model than our current foreground ReAct loop.
+- **Architecture discipline**: typed event log, request/tool lifecycle seams, scope model, spill layer, subagent capabilities, guards, approvals, jobs, workflows, PTY terminals, and pluginized UI all fit together coherently.
+- **UI completeness**: trajectory, typed blocks, details panes, deliverables, settings testing, and subagent drill-down are far ahead of GoHarness today.
+
+#### Where Codex is strongest
+- **Automation surfaces**: `exec`, JSONL events, `--output-schema`, SDKs, and app-server make Codex highly scriptable without screen-scraping.
+- **Review-first product workflows**: dedicated `/review` / `codex review`, review model separation, and line-aware diff UX are stronger than any current GoHarness equivalent.
+- **Operational polish**: profiles, config precedence, hook trust, doctor, completions, theme picker, `/status`, `/init`, integrated terminal, and worktree flows make the product feel deeply considered.
+- **Skills/plugins with progressive disclosure**: a practical answer to reusable workflows without permanently bloating the base prompt.
 
 #### What GoHarness should copy next without betraying its identity
-1. **dsh's event/hook discipline** (`12.3`) so approvals, guards, telemetry, and future plugins all have a sane seam.
-2. **Pi-style search/fetch ergonomics** (`11.1`) but implemented as pure-Go local-first primitives, now that spill-to-disk exists.
-3. **dsh's typed session/event model** so the UI stops reconstructing meaning from ad-hoc message blobs.
-4. **Pi's keyboard-first operator UX** (`@`, `/`, `!`, queued steering) because it delivers a lot of perceived quality without changing the backend philosophy.
-5. **dsh's typed blocks and details shell** so large tool output, diffs, and trajectory become inspectable instead of just scrollable.
+1. **Codex-style non-interactive `exec` + JSONL + `--output-schema`** (`13.1`) so GoHarness becomes automation-grade, not just chat-grade.
+2. **dsh/Codex hook discipline** (`12.3`, `12.17`, `13.3`) so approvals, policies, telemetry, post-checks, and memory extraction all stop being one-off features.
+3. **Codex review mode** (`13.5`) with optional dedicated review profile/model.
+4. **Pi-style web search/fetch ergonomics** (`11.1`) now that spill-to-disk exists.
+5. **Codex skills with progressive disclosure** (`13.4`) so reusable workflows do not become raw prompt clutter.
+6. **dsh typed blocks + details shell** (`12.29.9`, `12.29.1`) so large terminal/search/diff outputs become inspectable rather than just scrollable.
+7. **Codex/dsh permission vocabulary** (`13.7`) so the UI, CLI, hooks, and tools all speak the same safety model.
