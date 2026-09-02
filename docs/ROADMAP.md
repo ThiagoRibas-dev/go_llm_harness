@@ -951,3 +951,116 @@ dsh's client has a deliberately small, well-reasoned layout system rather than a
 8. **12.28.3 composer takeover** for approvals/questions (with 11.11, 12.3).
 9. **12.28.7 subagent fleet** in the details panel.
 10. **12.29.13 boot/hydrate polish**.
+
+## 📊 Competitive Feature Matrix: GoHarness vs Pi vs DeepSeek Harness
+
+> **Scope note:** the **Pi** column reflects the *practical Pi ecosystem we audited* (`pi`, `@earendil-works/pi-coding-agent`, `pi-web-access`, `pi-subagents`, `pi-background-tasks`, `pi-mcp-adapter`, `@juicesharp/rpiv-ask-user-question`, `@juicesharp/rpiv-todo`, `@quintinshaw/pi-dynamic-workflows`), not just the intentionally tiny `earendil-works/pi` core. The **DeepSeek Harness** column reflects capabilities present in the harness' first-party packages/subsystems, even when those capabilities are internally pluginized.
+>
+> **Status key:**
+> - **Built-in** = shipped in the product/runtime we audited.
+> - **Extension** = available mainly through an add-on package, not the default core.
+> - **Partial** = present, but materially incomplete / narrower / architecturally inconsistent versus the stronger implementations.
+> - **Planned** = explicitly on GoHarness' roadmap but not shipped.
+> - **Missing** = absent from what we audited.
+> - **Unclear** = not explicitly verified in this pass; don't over-read the cell.
+
+### Runtime, packaging, and extension model
+
+| Feature | GoHarness | Pi | DeepSeek Harness | Notes |
+|---|---|---|---|---|
+| Local-first workspace/session operation | Built-in | Built-in | Built-in | All three are meant to act directly on a local workspace/session rather than a hosted control plane. |
+| Single static binary / standalone app runtime | Built-in | Missing | Missing | Current GoHarness differentiator: one Go binary with embedded UI. Pi and dsh ride the Node/npm toolchain. |
+| Embedded web UI served by the app | Built-in | Missing | Built-in | GoHarness and dsh both have a web surface; Pi is primarily CLI-first. |
+| Interactive CLI/TUI workflow | Built-in | Built-in | Built-in | Pi is strongest here today; GoHarness has the basics; dsh has CLI/headless/web modes. |
+| Headless one-shot runner | Planned | Built-in | Built-in | We explicitly called this out as a GoHarness gap in Phase 12. |
+| SDK / embeddable session runtime | Partial | Built-in | Built-in | GoHarness now has an internal `Agent` runtime, but not a polished public SDK surface yet. |
+| Stdio / RPC automation mode | Planned | Built-in | Built-in | dsh architecture and Pi both expose this mode; GoHarness does not yet. |
+| OpenAI-compatible HTTP gateway | Built-in | Missing | Missing | A real GoHarness differentiator today. |
+| Multi-provider LLM connector seam | Built-in | Unclear | Built-in | GoHarness has OpenAI/Anthropic/Gemini/Vertex; dsh has adapter seams; Pi provider depth was not the focus of this audit. |
+| Named provider profiles / reusable connection configs | Built-in | Unclear | Built-in | GoHarness `providers.json` is real now; dsh has profile/bundle/config layering; Pi not explicitly audited here. |
+| MCP support | Built-in | Extension | Built-in | Pi uses `pi-mcp-adapter`; GoHarness and dsh have first-class MCP wiring. |
+| Runtime plugin / extension architecture | Planned | Built-in | Built-in | Pi and dsh are extension-first by philosophy; GoHarness is still mostly compiled-in. |
+| Structured, append-only session event log | Partial | Unclear | Built-in | GoHarness persists per-turn JSON files and traces, but not the typed JSONL event ledger dsh has. |
+| Tool-output spill to disk | Built-in | Unclear | Built-in | GoHarness shipped the first cut; dsh already treats this as a core primitive. |
+| Session branching / rewind / compaction commands | Partial | Built-in | Partial | GoHarness has rollback/branch/compaction; Pi has stronger conversation tree ergonomics; dsh session tree was audited less on branch UX. |
+
+### Agent capabilities, tools, orchestration, and policy
+
+| Feature | GoHarness | Pi | DeepSeek Harness | Notes |
+|---|---|---|---|---|
+| File read/write/patch + command execution tools | Built-in | Built-in | Built-in | Baseline harness capability across all three. |
+| Environment-aware shell prompt guidance | Built-in | Unclear | Missing | GoHarness explicitly injects OS/shell guidance; we noted dsh largely leaves this to personas. |
+| Per-profile / per-connection request throttling | Built-in | Unclear | Unclear | GoHarness already has `max_concurrency` at the profile level. |
+| Built-in sub-agents | Built-in | Extension | Built-in | Pi needs `pi-subagents`; GoHarness and dsh have native sub-agent seams. |
+| Parallel sub-agent fan-out in one turn | Built-in | Extension | Built-in | GoHarness ships concurrent `spawn_sub_agent`; dsh supports richer providers/capabilities. |
+| Durable / continuable child agents | Missing | Unclear | Built-in | This is one of dsh's big architecture leads. |
+| Per-child tool filtering / persona override | Planned | Unclear | Built-in | dsh exposes capability-checked `toolFilter` + `persona`; GoHarness only has the roadmap plan today. |
+| Structured sub-agent output schema | Planned | Unclear | Built-in | dsh's `outputSchema` is materially ahead. |
+| Human-authored DAG workflow engine | Built-in | Extension | Built-in | GoHarness has the strongest *visual* DAG editor; Pi has dynamic-workflows via package; dsh has first-party workflow machinery. |
+| Visual DAG workflow editor | Built-in | Missing | Missing | Clear GoHarness lead right now. |
+| Model-authored workflows / worker-pool orchestration | Planned | Extension | Built-in | dsh `workflow`/`Ralph` style orchestration is ahead; Pi has ecosystem coverage; GoHarness has not shipped this yet. |
+| Hook / event bus around request/tool lifecycle | Planned | Unclear | Built-in | This is a major dsh architectural advantage and a recommended GoHarness next-wave item. |
+| Approval / permission gating pipeline | Planned | Missing | Built-in | Pi explicitly avoids permission popups in core philosophy. |
+| Ask-user / model-initiated question tool | Planned | Extension | Built-in | Pi has `rpiv-ask-user-question`; dsh has in-place question surfaces; GoHarness not yet. |
+| Persistent TODO / plan list | Planned | Extension | Built-in | Pi has `rpiv-todo`; dsh has `todo`; GoHarness only has roadmap intent. |
+| Plan mode (review before edits) | Planned | Missing | Built-in | Another dsh lead with clear transfer value. |
+| Goals / autonomous continuation across rounds | Planned | Unclear | Built-in | dsh `goal` + round-driver is ahead of both GoHarness and what we explicitly saw in Pi. |
+| Background jobs / detached long-running work | Planned | Extension | Built-in | Pi has `pi-background-tasks`; dsh has `jobs`; GoHarness not yet. |
+| Persistent PTY terminal session tools | Planned | Missing | Built-in | dsh has a real terminal subsystem; GoHarness currently does one-shot commands. |
+| LSP capability seam | Planned | Unclear | Built-in | dsh has a semantic LSP surface; GoHarness only has the roadmap item. |
+| Web search | Planned | Extension | Unclear | Pi has `pi-web-access`; dsh web-search depth was not explicitly audited in this pass. |
+| Web fetch / readability extraction / cache | Planned | Extension | Unclear | Pi's `pi-web-access` is very concrete here; GoHarness hasn't shipped its equivalent yet. |
+| Secret / policy guardrails around tool execution | Partial | Unclear | Built-in | GoHarness has blocked patterns and system-path write protection, but not the dsh-style guard/hook pipeline. |
+
+### UI / UX / operator experience
+
+| Feature | GoHarness | Pi | DeepSeek Harness | Notes |
+|---|---|---|---|---|
+| Collapsed tool calls / results by default | Built-in | Built-in | Built-in | GoHarness now does this; Pi and dsh already leaned hard into transcript compaction UX. |
+| Truthful blocked input states / empty hero surfaces | Partial | Unclear | Built-in | GoHarness just shipped the first truthful composer/hero pass; dsh is much more complete. |
+| Step-grouped transcript | Planned | Unclear | Built-in | dsh is materially ahead on step semantics and rendering. |
+| Typed blocks for terminal / diff / read / search / web | Planned | Unclear | Built-in | GoHarness still renders generic `<pre>` blocks. |
+| Trajectory / inspector view | Planned | Unclear | Built-in | dsh already has this as a first-class surface. |
+| Three-column shell with details panel | Planned | Missing | Built-in | GoHarness currently has a simpler sidebar + conversation layout. |
+| Grouped/searchable workspace-session browser with live statuses | Partial | Unclear | Built-in | GoHarness has session/workspace management, but not the dsh-level grouped search/status browser. |
+| Deliverables row from actual file mutations | Planned | Missing | Built-in | dsh's `ui-deliverables` is the model to copy. |
+| Image paste / drag-and-drop attachments | Partial | Built-in | Built-in | GoHarness has basic upload plumbing, but not the ergonomic image rail / drop overlay surface. |
+| Theme tokens / first-class theming | Partial | Unclear | Built-in | GoHarness now has token foundations; dsh already has a real theme presenter system. |
+| UI slot / surface plugin architecture | Planned | Missing | Built-in | dsh is the clear leader here; Pi is not a web-shell comparison target. |
+| Settings model testing / live provider interrogation | Planned | Unclear | Built-in | dsh's settings UX is much more mature. |
+| Stable drafts / caret / shell identity across session switches | Planned | Unclear | Built-in | GoHarness still remounts too much UI on session switch. |
+| Token/cost/cache/status footer or dock | Partial | Built-in | Built-in | GoHarness has token + spend cards, but not the full Pi/dsh richness. |
+| Keyboard-first `@` / `/` / `!` operator flows | Planned | Built-in | Built-in | Pi is especially strong here; dsh has trigger/commands modules; GoHarness needs this. |
+| Conversation branching/tree navigation UX | Partial | Built-in | Partial | GoHarness can branch/rollback, but Pi's `/tree`/`/fork`/`/clone` style ergonomics are ahead. |
+
+### Distribution, release engineering, and install posture
+
+| Feature | GoHarness | Pi | DeepSeek Harness | Notes |
+|---|---|---|---|---|
+| Multi-platform binary release pipeline | Built-in | Unclear | Unclear | GoHarness CI/releases were explicitly verified in this project. |
+| Zero-dependency app install story | Built-in | Missing | Missing | This is one of the strongest reasons to keep GoHarness' architecture opinionated. |
+| Works without a hosted control plane | Built-in | Built-in | Built-in | All three can operate locally; model providers may still be remote unless pointed at local models. |
+
+### What the matrix says strategically
+
+#### Where GoHarness is already strongest
+- **Single static binary + embedded web UI + no app-side Node runtime.** Neither Pi nor dsh match this install story.
+- **OpenAI-compatible HTTP gateway built into the product.** This is unusually useful and already shipped.
+- **Visual DAG workflow editor.** This is a real differentiator; the others lean textual/plugin orchestration instead.
+- **Environment-aware shell instructions and per-profile concurrency throttling.** Small, but technically meaningful advantages.
+
+#### Where Pi is strongest
+- **Operator ergonomics in the CLI.** `@` file insertion, path completion, `!`/`!!`, queued steering, `/tree`, `/fork`, `/clone`, `/compact`, `/export`, `/import`, `/share`, external editor, and image paste make it feel very mature for everyday driving.
+- **Minimal core, broad ecosystem.** Pi proves that not every feature must live in the privileged core — but it also means some important capabilities are optional packages rather than guaranteed behavior.
+
+#### Where DeepSeek Harness is strongest
+- **Architecture discipline.** The typed event log, request/tool lifecycle seams, scope model, approval pipeline, spill layer, subagent capabilities, and pluginized UI are all more coherent than GoHarness today.
+- **UI completeness.** dsh already has trajectory, deliverables, typed blocks, settings testing, details panes, subagent drill-down, layout rules, and truthful composer takeovers.
+- **Durable agent orchestration.** Continuable subagents, jobs, goals, workflows, plans, and PTY terminals are a much broader execution model than our current foreground ReAct loop.
+
+#### What GoHarness should copy next without betraying its identity
+1. **dsh's event/hook discipline** (`12.3`) so approvals, guards, telemetry, and future plugins all have a sane seam.
+2. **Pi-style search/fetch ergonomics** (`11.1`) but implemented as pure-Go local-first primitives, now that spill-to-disk exists.
+3. **dsh's typed session/event model** so the UI stops reconstructing meaning from ad-hoc message blobs.
+4. **Pi's keyboard-first operator UX** (`@`, `/`, `!`, queued steering) because it delivers a lot of perceived quality without changing the backend philosophy.
+5. **dsh's typed blocks and details shell** so large tool output, diffs, and trajectory become inspectable instead of just scrollable.
