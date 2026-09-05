@@ -1056,11 +1056,128 @@ Reference repos/docs:
 6. **13.2** app-server / stdio JSONL protocol once the typed event log is real.
 7. **13.8/13.9/13.10** MCP transport breadth, PTY terminal, and operational polish.
 
-## 📊 Competitive Feature Matrix: GoHarness vs Pi vs DeepSeek Harness vs Codex
+## 🦀 Phase 14: Claude Code Comparative Backlog
 
-> **Scope note:** the **Pi** column reflects the *practical Pi ecosystem we audited* (`pi`, `@earendil-works/pi-coding-agent`, `pi-web-access`, `pi-subagents`, `pi-background-tasks`, `pi-mcp-adapter`, `@juicesharp/rpiv-ask-user-question`, `@juicesharp/rpiv-todo`, `@quintinshaw/pi-dynamic-workflows`), not just the intentionally tiny `earendil-works/pi` core. The **DeepSeek Harness** column reflects first-party packages/subsystems in the open-source harness, even when they are internally pluginized. The **Codex** column reflects the documented local product/runtime we audited: open-source `openai/codex` CLI/runtime plus its documented app-server, SDK, hooks, skills/plugins, review, plan/goal, and MCP surfaces — **not** proprietary cloud internals we did not inspect.
+This phase promotes **Claude Code** into the same roadmap tier as Pi, DeepSeek Harness, and Codex. The reference set here is intentionally split in two:
+
+1. **Official Claude Code docs** for product behavior, settings, hooks, permissions, skills, subagents, MCP, worktrees, review, and commands.
+2. The user-provided **`ultraworkers/claw-code`** repo as an **auxiliary public Rust-side reference** for filesystem conventions, command surfaces, and what a Claude-adjacent harness looks like in open source.
+
+That distinction matters. `claw-code` is **not** proof of Anthropic's internal implementation. Its own README says it is "not the serious production project here" and describes itself as a public Rust implementation / exhibit around the `claw` CLI surface. So we should use it for **shape** and **compatibility intuition**, not for claims about Claude Code internals.
+
+Claude Code's value to GoHarness is not "be Anthropic's product." It is: **explicit permission rules, lifecycle hooks with trust, repo-scoped config layering, skills/commands/workflows that load lazily, worktree-aware subagents, and a very mature review/debug/operator UX**.
+
+Reference repos/docs:
+- **Official commands:** https://code.claude.com/docs/en/commands
+- **Official hooks guide/reference:** https://code.claude.com/docs/en/hooks-guide and https://code.claude.com/docs/en/hooks
+- **Official permissions:** https://code.claude.com/docs/en/permissions
+- **Official `.claude` directory layout:** https://code.claude.com/docs/en/claude-directory
+- **Official subagents:** https://code.claude.com/docs/en/sub-agents
+- **Official MCP docs:** https://code.claude.com/docs/en/mcp
+- **Official skills/slash-command model:** https://code.claude.com/docs/en/slash-commands
+- **Official changelog:** https://code.claude.com/docs/en/changelog
+- **Official SDK hook/features references:** https://code.claude.com/docs/en/agent-sdk/hooks and https://code.claude.com/docs/en/agent-sdk/claude-code-features
+- **Auxiliary public Rust reference:** https://github.com/ultraworkers/claw-code
+
+### 14.1 Repo-scoped configuration hierarchy (`.claude/`) instead of one flat instruction file **[IMPROVEMENT]**
+* **Reference:** Claude Code's project/global layout differentiates `CLAUDE.md`, `settings.json`, `settings.local.json`, `rules/*.md`, `skills/<name>/SKILL.md`, `commands/*.md`, `agents/*.md`, `workflows/*.js`, `agent-memory/<name>/`, `.mcp.json`, and `.worktreeinclude`.
+* **Why it matters:** this is a better information architecture than piling everything into one root instruction file or one monolithic settings blob. It separates always-on memory from path-scoped rules, reusable skills, subagents, workflow scripts, local overrides, and MCP wiring.
+* **GoHarness today:** we inject `AGENTS.md`, `SKILLS.md`, `INSTRUCTIONS.md`, and `CLAUDE.md`, but we still mostly treat them as undifferentiated prompt text.
+* **Plan:** keep our existing file compatibility, but introduce a real hierarchy in `.goharness/` and repo-local metadata: global instructions, project instructions, path-scoped rules, skill folders, subagent definitions, workflow presets, and local-only overrides. The model should not receive all of it up front; only the right layer should load at the right time.
+* **Effort:** M.
+
+### 14.2 Permission rules as a first-class user contract, not just hidden guardrails **[IMPROVEMENT]**
+* **Reference:** Claude Code distinguishes read-only operations, bash execution, file modification, web fetch, and web search; supports `allow`, `ask`, and `deny` rules; enforces deny → ask → allow precedence; and server-side enforcement is explicitly separate from prompt text.
+* **Why it matters:** this is the cleanest documented proof that a harness can expose a readable policy DSL without letting the model bypass it. The key product insight is honesty: instructions influence intent, but **permissions decide authority**.
+* **GoHarness today:** we have `sandbox_mode`, `sandbox_fallback`, blocked command substrings, and write-protection for `.goharness`/system files, but not a unified policy vocabulary or rule inspector.
+* **Plan:** define a GoHarness permission DSL spanning `read`, `write`, `command`, `web_fetch`, `web_search`, `mcp`, and `subagent`; evaluate in `deny > ask > allow` order; expose it in UI/CLI; simulate it with an `execpolicy check` command/tool; and keep enforcement outside the prompt.
+* **Effort:** M.
+
+### 14.3 Lifecycle hooks with matcher DSL, typed input/output, and trust review **[IMPROVEMENT]**
+* **Reference:** Claude Code hooks fire on events like `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PostToolBatch`, `Notification`, `SubagentStart`, `SubagentStop`, `WorktreeCreate`, `PreCompact`, `PostCompact`, `PreModelSwitch`, `PostModelSwitch`, `Elicitation`, `SessionEnd`, etc.; hooks can be `command`, `http`, `mcp_tool`, `prompt`, or `agent` handlers; non-managed hooks go through review/trust.
+* **Why it matters:** this is a more complete and more production-tested expression of the same architecture pressure that also pushed us toward dsh's hook bus and Codex's hook system. Hooks are the seam for enforcement, enrichment, validation, notifications, and memory extraction.
+* **GoHarness today:** `12.3` and `12.17` are planned, not shipped.
+* **Plan:** build the internal typed event bus first, then support `~/.goharness/hooks.json` and repo-local `.goharness/hooks.json` with typed stdin JSON, exit-code decisions, timeouts, and persisted trust hashes. Start with `BeforeTool`, `AfterTool`, `AfterToolFailure`, `BeforeRequest`, `AfterChunk`, `AfterToolBatch`, `SessionStart`, `SessionEnd`, `PreCompact`, and `PostCompact`.
+* **Effort:** M.
+
+### 14.4 Skills, commands, and dynamic context injection that load lazily **[NEW — strategic]**
+* **Reference:** Claude Code treats custom commands as skills, supports `/skill-name`, allows skill chaining, and supports dynamic context injection like embedding `git diff` output into a skill before the model sees it. The skill body loads only when the skill is used.
+* **Why it matters:** this is the most concrete answer we have for "how do we avoid dumping giant prompt catalogs into every turn?" It also aligns well with your preference for not pretending something is configurable if it is not actually wired into runtime behavior.
+* **GoHarness today:** flat instruction injection only; no real skill registry, no lazy loading, no dynamic input pre-expansion.
+* **Plan:** add a skill registry with explicit invocation and implicit matching, a strict description budget, lazy skill-body loading, and safe dynamic context expansion primitives (initially file reads, diffs, and command captures under policy). Skill folders should be first-class in both TUI and future ESM frontend.
+* **Effort:** M.
+
+### 14.5 Subagents as data files: tools, model, permission mode, memory, hooks, and isolation **[IMPROVEMENT]**
+* **Reference:** Claude Code subagents can specify `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`, `hooks`, `memory`, `background`, `effort`, `isolation`, `color`, and `initialPrompt`.
+* **Why it matters:** our current `spawn_sub_agent` is runtime-good but config-thin. Claude Code shows how far a harness can go by making subagent definitions declarative and check-in-able.
+* **GoHarness today:** structured `task/context/expect/description`, depth cap 2, writes allowed under a lock, shared profile throttles, no persisted role/subagent spec format yet.
+* **Plan:** introduce `.goharness/agents/*.yaml` (and support `.claude/agents/*.md` compatibility later if useful) for named agent roles with enforced tool filters, permission mode, default profile/model, prompt/persona, optional hooks, optional memory scope, and optional isolation mode.
+* **Effort:** M.
+
+### 14.6 Worktree-aware isolation for branches, background agents, and risky experiments **[NEW]**
+* **Reference:** Claude Code treats worktrees as a first-class isolation surface: commands and workflows can create separate worktrees, subagents can request `isolation: worktree`, and worktree lifecycle is hookable.
+* **Why it matters:** this is a better answer than "copy the whole session directory and hope file rollback is enough" when the real source of truth is a Git repo with concurrent experiments.
+* **GoHarness today:** we branch sessions and restore workspace files, but we do not create Git worktrees as an execution substrate.
+* **Plan:** add optional worktree-backed runs for review, risky edits, and background subagents. Keep the current file-backup/rollback path for non-git workspaces. The important design choice is dual mode: **Git repos get worktree isolation; plain folders keep local-first snapshot/rollback isolation.**
+* **Effort:** L.
+
+### 14.7 Review and security review as first-class flows, not generic chat prompts **[NEW]**
+* **Reference:** Claude Code exposes `/diff`, `/code-review`, `/review`, `/security-review`, and can apply review fixes with `--fix`; review can target current diff, PRs, and branch state.
+* **Why it matters:** this strengthens the Codex-derived case for a dedicated review lane. Review wants different defaults: read-only first, diff-scoped evidence, severity ordering, and zero transcript clutter from incidental exploratory tool spam.
+* **GoHarness today:** no dedicated review mode, no security-review mode, no line-aware diff pane, no review-specific model/profile.
+* **Plan:** build a review subsystem with scopes `{unstaged, staged, commit, branch, last_turn}` and modes `{review, security_review}`. Output: prioritized findings with file/line spans and suggested fix notes. Later pair it with a typed diff panel and optional `--fix` / apply pass.
+* **Effort:** M.
+
+### 14.8 Background agents, task roster, and queued command semantics **[IMPROVEMENT]**
+* **Reference:** Claude Code distinguishes foreground work, background sessions, `/tasks`, `/background`, queued commands while Claude is still responding, and visible agent/team state.
+* **Why it matters:** we already know from Pi and dsh that the "single locked prompt box" model degrades badly once runs get long. Claude Code independently reinforces that conclusion.
+* **GoHarness today:** no steering/follow-up queue yet; subagents are foreground fan-out/fan-in only; no durable task roster beyond the lightweight subagent card.
+* **Plan:** unify `11.2`, `11.7`, and the future details panel into a visible task system: running parent turn, queued steering, background jobs, resumable subagents, and per-task status rows. Commands/questions should be allowed to queue while the current tool batch is still resolving.
+* **Effort:** M.
+
+### 14.9 MCP prompts, resources, remote transports, OAuth, and elicitation **[IMPROVEMENT]**
+* **Reference:** Claude Code's MCP surface includes project `.mcp.json`, remote HTTP/WebSocket support, OAuth, MCP prompts surfacing as slash commands, resources that can be `@`-mentioned, and elicitation flows where servers ask the user for more information mid-tool-call.
+* **Why it matters:** our MCP client is good by Phase 3 standards, but still narrow. Claude Code shows the difference between "can call a local tool server" and "MCP is a first-class extension fabric."
+* **GoHarness today:** stdio MCP only; no prompt/resources surfacing; no elicitation; no remote transport auth.
+* **Plan:** extend MCP in layers: (1) prompt/resource discovery, (2) HTTP transport, (3) OAuth/session credential storage, (4) user-question elicitation integrated with `ask_user`, (5) prompt-as-command UX in the composer.
+* **Effort:** M-L.
+
+### 14.10 Operator polish: `/init`, `/doctor`, `/status`, `/memory`, `/permissions`, `/tasks` **[IMPROVEMENT]**
+* **Reference:** Claude Code's in-session command surface is broad and workflow-aware: initialize repo instructions, inspect permissions, list tasks, rewind, diff, review, debug, and diagnose install/config issues.
+* **Why it matters:** a lot of perceived sophistication comes from these boring-but-frequent workflows being productized instead of left to ad-hoc prompting.
+* **GoHarness today:** some raw capability exists under the hood, but the operator surface is inconsistent: no `doctor`, no `init`, no permissions inspector, no task view, no diff review surface, and only partial session/status UX.
+* **Plan:** define a short, opinionated first set of slash commands for both TUI and web: `/init`, `/status`, `/permissions`, `/tasks`, `/review`, `/compact`, `/workflow`, `/agents`. Back them with real runtime state, not fake menu items.
+* **Effort:** S-M.
+
+### Where GoHarness is already ahead of Claude Code
+- **Provider neutrality** across OpenAI, Anthropic, Gemini, Vertex, local OpenAI-compatible servers, and MCP tools.
+- **Single static Go binary with embedded web console** instead of a more multi-surface product stack.
+- **Visual DAG workflow editor** as a native concept rather than command/skill/workflow files only.
+- **OpenAI-compatible gateway** for external clients.
+- **Per-profile concurrency throttling** as an explicit runtime primitive.
+
+### What Claude Code changes in our priorities
+1. It raises the priority of **policy/permissions as a user-facing system**, not just backend guardrails.
+2. It strengthens the case that **hooks must be typed and trusted**, not a post-hoc shell escape hatch.
+3. It makes **skills + lazy loading + dynamic context injection** feel like a missing architecture layer, not a nice-to-have.
+4. It validates **review/security-review** as their own product lanes.
+5. It makes **Git worktree isolation** look like the right long-term complement to our current file-backup rollback for git repos.
+
+### Claude Code-driven implementation order (recommended)
+1. **14.3 / 12.3 / 12.17** typed hook bus + trusted `hooks.json` bridge.
+2. **14.2** permission DSL + `/permissions` + `execpolicy check`.
+3. **14.7** dedicated review / security-review subsystem.
+4. **14.4** skills registry + lazy load + dynamic context injection.
+5. **14.5** declarative agent roles / subagent files.
+6. **14.8** queued commands + background task roster.
+7. **14.6 / 14.9** worktree isolation + richer MCP surface.
+8. **14.10** operator slash-command polish.
+
+## 📊 Competitive Feature Matrix: GoHarness vs Pi vs DeepSeek Harness vs Codex vs Claude Code
+
+> **Scope note:** the **Pi** column reflects the *practical Pi ecosystem we audited* (`pi`, `@earendil-works/pi-coding-agent`, `pi-web-access`, `pi-subagents`, `pi-background-tasks`, `pi-mcp-adapter`, `@juicesharp/rpiv-ask-user-question`, `@juicesharp/rpiv-todo`, `@quintinshaw/pi-dynamic-workflows`), not just the intentionally tiny `earendil-works/pi` core. The **DeepSeek Harness** column reflects first-party packages/subsystems in the open-source harness, even when they are internally pluginized. The **Codex** column reflects the documented local product/runtime we audited: open-source `openai/codex` CLI/runtime plus its documented app-server, SDK, hooks, skills/plugins, review, plan/goal, and MCP surfaces — **not** proprietary cloud internals we did not inspect. The **Claude Code** column reflects official Claude Code docs for product behavior, with the user-provided `ultraworkers/claw-code` repo used only as an auxiliary public/open reference for repo shape and compatibility intuition — **not** as proof of Anthropic internals.
 >
-> Adjacent systems like **Claude Code**, **Cline**, **Continue**, **Hermes**, **OpenCode**, **OptMem**, and **TencentDB Agent Memory** remain documented in `docs/COMPARISON_MATRIX.md` and `docs/RESEARCH.md`. This matrix now focuses on the four harnesses we have audited deeply enough to roadmap directly against.
+> Adjacent systems like **Cline**, **Continue**, **Hermes**, **OpenCode**, **OptMem**, and **TencentDB Agent Memory** remain documented in `docs/COMPARISON_MATRIX.md` and `docs/RESEARCH.md`. This matrix now focuses on the five harnesses we have audited deeply enough to roadmap directly against.
 >
 > **Status key:**
 > - **Built-in** = shipped in the product/runtime we audited.
@@ -1072,103 +1189,111 @@ Reference repos/docs:
 
 ### Runtime, packaging, configuration, and extension model
 
-| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Notes |
-|---|---|---|---|---|---|
-| Local-first workspace/session operation | Built-in | Built-in | Built-in | Built-in | All four operate directly on a local workspace/session rather than requiring a hosted control plane. |
-| Standalone native binary available | Built-in | Missing | Missing | Built-in | GoHarness ships as one Go binary; Codex publishes standalone platform binaries in addition to npm/homebrew installers. |
-| Single-binary embedded web UI | Built-in | Missing | Built-in | Missing | GoHarness and dsh expose a browser surface; Codex's rich surfaces are app/IDE/app-server rather than an embedded web server. |
-| Interactive CLI/TUI | Built-in | Built-in | Built-in | Built-in | Pi and Codex are especially strong here. |
-| Headless one-shot runner | Planned | Built-in | Built-in | Built-in | Codex `exec` is now one of the clearest reference implementations for this gap. |
-| SDK / embeddable session runtime | Partial | Built-in | Built-in | Built-in | GoHarness has an internal `Agent` runtime but not a polished public SDK yet. |
-| Structured RPC / app-server protocol | Planned | Built-in | Built-in | Built-in | Pi and dsh already expose this class of seam; Codex's app-server makes the case concrete. |
-| Remote client/server mode | Planned | Built-in | Built-in | Built-in | Codex TUI can connect to remote app-server endpoints over WebSocket or Unix socket. |
-| OpenAI-compatible HTTP gateway | Built-in | Missing | Missing | Missing | Still a real GoHarness differentiator. |
-| Multi-provider LLM connector seam | Built-in | Unclear | Built-in | Partial | Codex is primarily OpenAI-centered but does support local OSS providers. |
-| Local open-source provider mode | Partial | Unclear | Unclear | Built-in | Codex explicitly supports `--oss` with LM Studio or Ollama; GoHarness can target local OpenAI-compatible endpoints but not with the same operator UX. |
-| Named profiles / layered config precedence | Built-in | Unclear | Built-in | Built-in | Codex has profile layering and config precedence; dsh has bundle/profile/layer overlays. |
-| MCP client support | Built-in | Extension | Built-in | Built-in | Pi uses adapters; the others have first-class support. |
-| MCP server transport breadth (stdio + HTTP/OAuth) | Partial | Unclear | Built-in | Built-in | GoHarness is stdio-only today; Codex and dsh are broader. |
-| Skills standard / reusable workflow catalog | Partial | Extension | Partial | Built-in | GoHarness only has flat guideline injection today, not a real skill system. |
-| Installable plugin/extension packaging | Planned | Built-in | Built-in | Built-in | Pi and Codex package skills/connectors explicitly; dsh packages plugins/modules internally. |
-| Typed append-only session/event log | Partial | Unclear | Built-in | Built-in | GoHarness persists per-turn files and traces; dsh and Codex expose much cleaner event streams. |
-| Tool-output spill to disk | Built-in | Unclear | Built-in | Unclear | GoHarness just shipped this; Codex output management is richer than ours but the exact spill primitive was not explicitly verified. |
-| Session resume / fork / archive / delete lifecycle | Partial | Built-in | Partial | Built-in | Codex has a broader first-class session inventory surface than GoHarness today. |
-| Doctor / self-diagnostic command | Missing | Unclear | Unclear | Built-in | Good operational polish target from Codex. |
+| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Claude Code | Notes |
+|---|---|---|---|---|---|---|
+| Local-first workspace/session operation | Built-in | Built-in | Built-in | Built-in | Built-in | All five operate directly on a local workspace/session rather than requiring a hosted control plane for basic use. |
+| Standalone native binary available | Built-in | Missing | Missing | Built-in | Unclear | GoHarness ships as one Go binary; Codex publishes standalone binaries; official Claude Code packaging detail was not the focus of this audit. |
+| Single-binary embedded web UI | Built-in | Missing | Built-in | Missing | Missing | GoHarness and dsh expose a browser surface; Codex and Claude Code focus on CLI/app/IDE surfaces instead. |
+| Interactive CLI/TUI | Built-in | Built-in | Built-in | Built-in | Built-in | Pi, Codex, and Claude Code are especially strong here. |
+| Headless one-shot runner | Planned | Built-in | Built-in | Built-in | Partial | Claude Code clearly supports automation-oriented flows, but the exact polished `codex exec`-style parity was not verified to the same degree in this pass. |
+| SDK / embeddable session runtime | Partial | Built-in | Built-in | Built-in | Built-in | GoHarness has an internal `Agent` runtime but not a polished public SDK yet. |
+| Structured RPC / app-server protocol | Planned | Built-in | Built-in | Built-in | Partial | Claude Code has SDK and remote-control style surfaces, but not the same explicitly documented app-server seam as Codex. |
+| Remote client/server mode | Planned | Built-in | Built-in | Built-in | Partial | Claude Code supports remote continuation/control workflows, but the architecture emphasis differs from Codex app-server. |
+| OpenAI-compatible HTTP gateway | Built-in | Missing | Missing | Missing | Missing | Still a real GoHarness differentiator. |
+| Multi-provider LLM connector seam | Built-in | Unclear | Built-in | Partial | Partial | Claude Code spans Anthropic-first and third-party Claude-hosting surfaces, but not the same model-neutral connector story as GoHarness. |
+| Local open-source provider mode | Partial | Unclear | Unclear | Built-in | Missing | Codex explicitly supports LM Studio/Ollama; GoHarness can target local OpenAI-compatible endpoints but not with the same operator UX. |
+| Named profiles / layered config precedence | Built-in | Unclear | Built-in | Built-in | Built-in | Claude Code and Codex both have much more mature config layering than our current config.json plus providers.json split. |
+| Repo-scoped config hierarchy (`rules`, `skills`, `agents`, workflows, local overrides) | Planned | Partial | Partial | Partial | Built-in | Claude Code is strongest here as a documented filesystem contract. |
+| MCP client support | Built-in | Extension | Built-in | Built-in | Built-in | Pi uses adapters; the others have first-class support. |
+| MCP server transport breadth (stdio + remote HTTP/OAuth/etc.) | Partial | Unclear | Built-in | Built-in | Built-in | GoHarness is stdio-only today; Codex and Claude Code are broader. |
+| Skills standard / reusable workflow catalog | Partial | Extension | Partial | Built-in | Built-in | GoHarness only has flat guideline injection today, not a real skill system. |
+| Installable plugin/extension packaging | Planned | Built-in | Built-in | Built-in | Built-in | Pi, Codex, and Claude Code package extensions explicitly; dsh packages modules/plugins internally. |
+| Typed append-only session/event log | Partial | Unclear | Built-in | Built-in | Partial | Claude Code exposes rich lifecycle and SDK events, but we did not audit a dsh-like public event ledger format in depth. |
+| Tool-output spill to disk | Built-in | Unclear | Built-in | Unclear | Unclear | GoHarness just shipped this; Claude Code manages long outputs well, but the exact primitive was not verified. |
+| Session resume / fork / archive / delete lifecycle | Partial | Built-in | Partial | Built-in | Built-in | Claude Code and Codex both feel more productized around session lifecycle than GoHarness today. |
+| Doctor / self-diagnostic command | Missing | Unclear | Unclear | Built-in | Built-in | High-value operational polish target. |
 
 ### Agent capabilities, automation, orchestration, and policy
 
-| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Notes |
-|---|---|---|---|---|---|
-| File read/write/patch + command execution tools | Built-in | Built-in | Built-in | Built-in | Baseline harness capability across all four. |
-| Environment-aware shell guidance in prompt | Built-in | Unclear | Missing | Unclear | GoHarness is explicit here; Codex likely handles more through product/runtime conventions than prompt text. |
-| Per-profile / per-connection concurrency throttling | Built-in | Unclear | Unclear | Unclear | Still one of our quiet advantages. |
-| Built-in sub-agents | Built-in | Extension | Built-in | Built-in | Codex exposes subagent lifecycle hooks and dedicated reviewer/auxiliary agents in product flows. |
-| Parallel sub-agent fan-out in one turn | Built-in | Extension | Built-in | Unclear | We did not verify a Codex equivalent to open fan-out `spawn_sub_agent(...)`. |
-| Durable / continuable child agents | Missing | Unclear | Built-in | Unclear | dsh remains the clear lead here. |
-| Per-child tool filtering / persona override | Planned | Unclear | Built-in | Unclear | Codex has personalities and skills, but explicit per-child tool filters were not verified. |
-| Structured sub-agent output schema | Planned | Unclear | Built-in | Unclear | Codex has `--output-schema` for non-interactive final output, which is adjacent but not the same as sub-agent structured returns. |
-| Human-authored DAG workflow engine | Built-in | Extension | Built-in | Missing | Codex focuses on conversational/runtime flows, not graph editing. |
-| Visual DAG workflow editor | Built-in | Missing | Missing | Missing | Clear GoHarness differentiator. |
-| Model-authored workflows / worker-pool orchestration | Planned | Extension | Built-in | Partial | Codex's SDK and MCP examples support orchestrated workflows, but not as a native graph/runtime surface like dsh. |
-| Hook / event bus around request and tool lifecycle | Planned | Unclear | Built-in | Built-in | Codex and dsh both strongly reinforce this as a core seam, not a bolt-on. |
-| Hook trust / review flow | Planned | Missing | Unclear | Built-in | Codex's hash-based hook trust is specifically worth copying. |
-| Approval / permission gating pipeline | Planned | Missing | Built-in | Built-in | Codex has explicit approval policies; Pi core intentionally does not. |
-| Explicit exec-policy evaluation tooling | Planned | Missing | Partial | Built-in | dsh has guards/policy pieces; Codex makes policy evaluation a real user-facing command. |
-| Plan mode (multi-step planning before edits) | Planned | Missing | Built-in | Built-in | Codex `/plan` and dsh `plan` both raise the bar here. |
-| Persistent goal mode | Planned | Unclear | Built-in | Built-in | Codex and dsh both treat goals as first-class long-running collaboration state. |
-| Persistent TODO / plan list | Planned | Extension | Built-in | Partial | Codex exposes plan/goal and memories/skills surfaces, but we did not verify a dsh-style dedicated todo subsystem. |
-| Ask-user / structured question flow | Planned | Extension | Built-in | Unclear | Codex approval flows are rich, but a generic model-initiated question tool was not explicitly verified. |
-| Background jobs / detached long-running work | Planned | Extension | Built-in | Partial | Codex supports local/cloud/remote long-running flows, but the exact job model differs from dsh. |
-| Persistent PTY terminal session tools | Planned | Missing | Built-in | Built-in | Codex's integrated terminal/product surface is closer to PTY-native operation than GoHarness today. |
-| LSP capability seam | Planned | Unclear | Built-in | Unclear | Not explicitly verified in Codex docs we audited. |
-| Web search | Planned | Extension | Unclear | Built-in | Codex exposes web search modes; Pi does via `pi-web-access`; GoHarness has not shipped it. |
-| Web fetch / readability extraction / content cache | Planned | Extension | Unclear | Unclear | Codex has web-search/product browsing surfaces, but we did not verify a Pi-style fetch/readability API. |
-| Dedicated code review mode | Planned | Missing | Partial | Built-in | Codex's `/review` / `codex review` is a concrete benchmark. |
-| Separate review model/profile | Planned | Missing | Unclear | Built-in | Codex explicitly supports `review_model`; GoHarness should copy that. |
-| Secret / policy guardrails around tool execution | Partial | Unclear | Built-in | Built-in | GoHarness has some guardrails, but not a full policy vocabulary yet. |
-| Cloud/local hybrid execution surface | Missing | Missing | Unclear | Built-in | Codex uniquely spans local, cloud, and remote app-server surfaces; not all of that is desirable for GoHarness, but it's part of the comparison. |
+| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Claude Code | Notes |
+|---|---|---|---|---|---|---|
+| File read/write/patch + command execution tools | Built-in | Built-in | Built-in | Built-in | Built-in | Baseline harness capability across all five. |
+| Environment-aware shell guidance in prompt | Built-in | Unclear | Missing | Unclear | Unclear | GoHarness is explicit here; the others often rely more on product/runtime surfaces. |
+| Per-profile / per-connection concurrency throttling | Built-in | Unclear | Unclear | Unclear | Unclear | Still one of our quiet advantages. |
+| Built-in sub-agents | Built-in | Extension | Built-in | Built-in | Built-in | Claude Code has built-in and custom subagents with their own tools/permissions. |
+| Parallel sub-agent fan-out in one turn | Built-in | Extension | Built-in | Unclear | Partial | Claude Code clearly supports background/parallel agent patterns, but not with the same explicit open fan-out API we have. |
+| Durable / continuable child agents | Missing | Unclear | Built-in | Unclear | Built-in | Claude Code's background sessions/task roster make this feel more durable than our current foreground-only subagents. |
+| Declarative subagent definitions (tools/model/permissions/memory/hooks) | Planned | Partial | Built-in | Partial | Built-in | Claude Code is the clearest open documentation target here. |
+| Worktree-isolated subagents / background sessions | Missing | Missing | Partial | Missing | Built-in | Important long-term differentiator for git-backed workflows. |
+| Structured sub-agent output schema | Planned | Unclear | Built-in | Unclear | Unclear | Not verified for Claude Code in this pass. |
+| Human-authored DAG workflow engine | Built-in | Extension | Built-in | Missing | Partial | Claude Code uses dynamic workflows and commands, not a graphical DAG editor. |
+| Visual DAG workflow editor | Built-in | Missing | Missing | Missing | Missing | Clear GoHarness differentiator. |
+| Model-authored workflows / worker-pool orchestration | Planned | Extension | Built-in | Partial | Built-in | Claude Code exposes workflow files and bundled workflow skills/commands. |
+| Hook / event bus around request and tool lifecycle | Planned | Unclear | Built-in | Built-in | Built-in | Claude Code and dsh both strongly reinforce this as a core seam, not a bolt-on. |
+| Hook trust / review flow | Planned | Missing | Unclear | Built-in | Built-in | Claude Code and Codex both validate the importance of trusted hooks. |
+| Approval / permission gating pipeline | Planned | Missing | Built-in | Built-in | Built-in | Claude Code has the richest user-facing permission DSL we audited. |
+| Explicit exec-policy evaluation tooling | Planned | Missing | Partial | Built-in | Partial | Claude Code has explicit permission rules and UI, but we did not verify a direct Codex-style separate execpolicy command. |
+| Plan mode (multi-step planning before edits) | Planned | Missing | Built-in | Built-in | Built-in | Strongly validated by both Codex and Claude Code. |
+| Persistent goal mode | Planned | Unclear | Built-in | Built-in | Partial | Goal-like collaboration exists around tasks/background work, but we did not verify a direct Codex-style `/goal` equivalent in official Claude docs during this pass. |
+| Persistent TODO / plan list | Planned | Extension | Built-in | Partial | Partial | Claude Code has workflows/tasks/background execution, but a dedicated todo primitive was not the center of the docs we audited. |
+| Ask-user / structured question flow | Planned | Extension | Built-in | Unclear | Partial | Claude Code supports permissions comments and MCP elicitation, which is adjacent but not the same as a generic ask-user tool. |
+| Background jobs / detached long-running work | Planned | Extension | Built-in | Partial | Built-in | Claude Code's background agents and `/tasks` are materially ahead of GoHarness. |
+| Persistent PTY terminal session tools | Planned | Missing | Built-in | Built-in | Built-in | Another major gap for us. |
+| LSP capability seam | Planned | Unclear | Built-in | Unclear | Unclear | Not explicitly verified for Claude Code in this pass. |
+| Web search | Planned | Extension | Unclear | Built-in | Built-in | Claude Code treats web as permission-governed tool surface. |
+| Web fetch / readability extraction / content cache | Planned | Extension | Unclear | Unclear | Partial | Claude Code clearly has WebFetch, but we did not verify Pi-style fetch/content-cache semantics. |
+| Dedicated code review mode | Planned | Missing | Partial | Built-in | Built-in | Claude Code and Codex both make this a first-class surface. |
+| Dedicated security review mode | Planned | Missing | Missing | Missing | Built-in | Distinctly useful Claude Code contribution to the roadmap. |
+| Separate review model/profile | Planned | Missing | Unclear | Built-in | Unclear | Worth adding even if the Claude side is less explicit in docs. |
+| Secret / policy guardrails around tool execution | Partial | Unclear | Built-in | Built-in | Built-in | GoHarness has some guardrails, but not a full policy vocabulary yet. |
+| MCP prompts/resources as model-facing surfaces | Missing | Partial | Partial | Partial | Built-in | Claude Code pushes MCP beyond raw tool calling into prompt/resource UX. |
+| Dynamic context injection inside reusable workflows | Missing | Unclear | Partial | Partial | Built-in | Very compelling transfer idea from Claude Code skills. |
 
 ### UI / UX / operator experience
 
-| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Notes |
-|---|---|---|---|---|---|
-| Collapsed tool calls / results by default | Built-in | Built-in | Built-in | Unclear | Codex definitely has polished transcript rendering, but this exact default behavior was not explicitly verified in the audited docs. |
-| Truthful blocked input states / hero surfaces | Partial | Unclear | Built-in | Built-in | Codex has explicit permission/status/goal rows and stronger session-state surfaces than we do. |
-| Step-grouped transcript / event stream semantics | Planned | Unclear | Built-in | Built-in | Codex JSONL events and app-server stream semantics are materially clearer than our current message blobs. |
-| Typed blocks for terminal / diff / read / search / web | Planned | Unclear | Built-in | Built-in | Codex explicitly syntax-highlights code blocks and file diffs, and review/terminal surfaces are typed, not just markdown blobs. |
-| Trajectory / inspector view | Planned | Unclear | Built-in | Partial | Codex has status/debug/config surfaces and review panes, but not a dsh-style general trajectory inspector we explicitly verified. |
-| Three-column shell / details panel | Planned | Missing | Built-in | Partial | Codex app/IDE surfaces have richer panes, but the exact dsh-style three-column shell was not the model there. |
-| Grouped/searchable workspace-session browser | Partial | Unclear | Built-in | Built-in | Codex product surfaces treat projects/chats/worktrees as first-class, ahead of our current sidebar. |
-| Deliverables/files row from actual mutations | Planned | Missing | Built-in | Partial | Codex review/app surfaces are more file-aware, but we did not verify a dsh-style dedicated deliverables row. |
-| Image paste / drag-and-drop attachments | Partial | Built-in | Built-in | Built-in | Codex CLI/app support image attachments; GoHarness only has basic upload plumbing. |
-| Theme tokens / first-class theming | Partial | Unclear | Built-in | Built-in | Codex has a theme picker and TUI theme config; GoHarness only just shipped token foundations. |
-| UI slot / surface plugin architecture | Planned | Missing | Built-in | Partial | Codex plugins can bring optional UI, but dsh is still the most explicit UI plugin architecture we audited. |
-| Settings model testing / provider interrogation | Planned | Unclear | Built-in | Partial | Codex has mature status/config inspection, but not the same provider-neutral settings problem. |
-| Stable drafts / shell identity across session switches | Planned | Unclear | Built-in | Built-in | Codex's app/IDE/project integration is stronger here than our current full rerenders. |
-| Token/cost/cache/status footer or dock | Partial | Built-in | Built-in | Built-in | Codex `/status` and product surfaces are stronger operationally. |
-| Keyboard-first `@` / `/` / `!` / `$` operator flows | Planned | Built-in | Built-in | Built-in | Codex's `/` + `$` skill flows are now part of the benchmark. |
-| Conversation branching / tree navigation UX | Partial | Built-in | Partial | Built-in | Codex exposes fork/resume/archive/unarchive/delete as first-class commands. |
-| Integrated terminal in the main client | Missing | Missing | Built-in | Built-in | Big current gap for GoHarness. |
-| Review pane with line-aware findings | Missing | Missing | Partial | Built-in | Another concrete Codex lead. |
-| Worktree-first workflow UX | Missing | Missing | Unclear | Built-in | Codex explicitly exposes `/worktree`; GoHarness branches sessions but not Git worktrees. |
-| `/init` style project bootstrap (`AGENTS.md`, etc.) | Planned | Missing | Unclear | Built-in | Codex has a clear scaffold flow; GoHarness already loads these files once they exist. |
+| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Claude Code | Notes |
+|---|---|---|---|---|---|---|
+| Collapsed tool calls / results by default | Built-in | Built-in | Built-in | Unclear | Unclear | Codex and Claude Code definitely care about transcript hygiene, but we did not verify this exact default in docs. |
+| Truthful blocked input states / hero surfaces | Partial | Unclear | Built-in | Built-in | Built-in | GoHarness only recently started catching up here. |
+| Step-grouped transcript / event stream semantics | Planned | Unclear | Built-in | Built-in | Partial | Claude Code exposes rich lifecycle states and task surfaces, but not a dsh-style public event log UI contract in the docs we inspected. |
+| Typed blocks for terminal / diff / read / search / web | Planned | Unclear | Built-in | Built-in | Built-in | Claude Code's diff/review/terminal surfaces are much more typed than our current `<pre>` world. |
+| Trajectory / inspector view | Planned | Unclear | Built-in | Partial | Partial | Claude Code has many inspection surfaces, but not the exact dsh-style trajectory panel. |
+| Three-column shell / details panel | Planned | Missing | Built-in | Partial | Partial | Claude Code has richer client surfaces, but the layout philosophy is not the same as dsh's web shell. |
+| Grouped/searchable workspace-session browser | Partial | Unclear | Built-in | Built-in | Built-in | Claude Code product surfaces treat project/session/task navigation as first-class. |
+| Deliverables/files row from actual mutations | Planned | Missing | Built-in | Partial | Partial | Not the strongest Claude signal, but still more mature than current GoHarness. |
+| Image paste / drag-and-drop attachments | Partial | Built-in | Built-in | Built-in | Built-in | GoHarness only has basic upload plumbing today. |
+| Theme tokens / first-class theming | Partial | Unclear | Built-in | Built-in | Built-in | Claude Code has themes and statusline/operator polish. |
+| UI slot / surface plugin architecture | Planned | Missing | Built-in | Partial | Partial | dsh is still the clearest architectural reference for pluggable UI. |
+| Settings model testing / provider interrogation | Planned | Unclear | Built-in | Partial | Unclear | This remains more of a dsh/Codex lesson than a Claude Code one. |
+| Stable drafts / shell identity across session switches | Planned | Unclear | Built-in | Built-in | Built-in | Claude Code's app/IDE/session integration is ahead of our current rerender-heavy web UI. |
+| Token/cost/cache/status footer or dock | Partial | Built-in | Built-in | Built-in | Built-in | Claude Code `/status` / usage / tasks / permissions surfaces are very operator-oriented. |
+| Keyboard-first `@` / `/` / `!` / `$` operator flows | Planned | Built-in | Built-in | Built-in | Built-in | All four comparator harnesses reinforce this now. |
+| Conversation branching / tree navigation UX | Partial | Built-in | Partial | Built-in | Built-in | Claude Code has branch/fork/resume/rewind concepts as first-class commands. |
+| Integrated terminal in the main client | Missing | Missing | Built-in | Built-in | Built-in | Big current gap for GoHarness. |
+| Review pane with line-aware findings | Missing | Missing | Partial | Built-in | Built-in | Concrete gap. |
+| Worktree-first workflow UX | Missing | Missing | Unclear | Built-in | Built-in | Another strong git-centric lesson. |
+| `/init` style project bootstrap (`AGENTS.md` / `CLAUDE.md`, etc.) | Planned | Missing | Unclear | Built-in | Built-in | GoHarness already loads these files once they exist; it just doesn't scaffold them yet. |
+| `/permissions` / policy inspector UX | Missing | Missing | Partial | Partial | Built-in | Claude Code is strongest here. |
+| Background agent roster / `/tasks` UX | Missing | Missing | Built-in | Partial | Built-in | Important for long-lived multi-agent work. |
+| `/hooks` browser / hook introspection UX | Missing | Missing | Partial | Partial | Built-in | Another clear operator affordance worth copying. |
 
 ### Distribution, install posture, and automation readiness
 
-| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Notes |
-|---|---|---|---|---|---|
-| Multi-platform release pipeline | Built-in | Unclear | Unclear | Built-in | GoHarness and Codex both publish cross-platform install paths/binaries. |
-| Zero app-side runtime dependency story | Built-in | Missing | Missing | Partial | Codex now has standalone binaries, but its broader ecosystem still leans on app/IDE/npm surfaces. |
-| Works without a hosted control plane | Built-in | Built-in | Built-in | Built-in | Codex can run locally; some cloud features are additive, not mandatory. |
-| Strong CI / automation entrypoint | Partial | Unclear | Built-in | Built-in | Codex `exec`, SDK, JSONL, and schema output make this especially strong. |
-| Schema-driven machine-readable output mode | Planned | Missing | Partial | Built-in | Codex explicitly supports `--output-schema`; dsh has stronger typed internals but we did not audit an equivalent polished CLI flag. |
+| Feature | GoHarness | Pi | DeepSeek Harness | Codex | Claude Code | Notes |
+|---|---|---|---|---|---|---|
+| Multi-platform release pipeline | Built-in | Unclear | Unclear | Built-in | Unclear | GoHarness and Codex were explicitly verified here. |
+| Zero app-side runtime dependency story | Built-in | Missing | Missing | Partial | Unclear | One of the strongest reasons to keep GoHarness opinionated and local-first. |
+| Works without a hosted control plane | Built-in | Built-in | Built-in | Built-in | Built-in | Claude Code and Codex both have cloud-adjacent features, but local/project work remains real. |
+| Strong CI / automation entrypoint | Partial | Unclear | Built-in | Built-in | Partial | Claude Code is clearly automation-capable, but we verified Codex's explicit CLI/JSONL automation story more deeply. |
+| Schema-driven machine-readable output mode | Planned | Missing | Partial | Built-in | Unclear | Codex is still the clearest benchmark for this row. |
+| Repo-trust / workspace-trust model | Missing | Missing | Partial | Unclear | Built-in | Claude Code's trust model around project settings/hooks is strategically important. |
 
 ### What the matrix says strategically
 
 #### Where GoHarness is already strongest
 - **Single-binary local-first install story** with an embedded web console and no app-side Node runtime.
 - **OpenAI-compatible gateway** built directly into the product.
-- **Visual DAG workflow editor**, which neither Pi, dsh, nor Codex match.
+- **Visual DAG workflow editor**, which Pi, dsh, Codex, and Claude Code do not match.
 - **Provider neutrality** across OpenAI, Anthropic, Gemini, Vertex, local OpenAI-compatible endpoints, and MCP tools.
 - **Per-profile concurrency throttling** and **environment-aware shell guidance** as core runtime features.
 
@@ -1186,11 +1311,17 @@ Reference repos/docs:
 - **Operational polish**: profiles, config precedence, hook trust, doctor, completions, theme picker, `/status`, `/init`, integrated terminal, and worktree flows make the product feel deeply considered.
 - **Skills/plugins with progressive disclosure**: a practical answer to reusable workflows without permanently bloating the base prompt.
 
+#### Where Claude Code is strongest
+- **Permissions as a real product surface**: explicit rule types, rule precedence, persistent repository-scoped approvals, and the clear separation between prompt guidance and enforcement.
+- **Hooks as a full lifecycle system**: broad event coverage, matcher DSL, multiple handler types, trust review, and hookable worktree/model/compaction/session transitions.
+- **Repo-scoped customization architecture**: `CLAUDE.md`, rules, skills, agents, workflows, `.mcp.json`, and local overrides make the system configurable without forcing everything into one prompt blob.
+- **Git-centric execution**: worktrees, diff/review/security-review, branch/fork/rewind, and background task views are stronger than our current file-rollback-only model for git repos.
+
 #### What GoHarness should copy next without betraying its identity
-1. **Codex-style non-interactive `exec` + JSONL + `--output-schema`** (`13.1`) so GoHarness becomes automation-grade, not just chat-grade.
-2. **dsh/Codex hook discipline** (`12.3`, `12.17`, `13.3`) so approvals, policies, telemetry, post-checks, and memory extraction all stop being one-off features.
-3. **Codex review mode** (`13.5`) with optional dedicated review profile/model.
+1. **Claude/dsh/Codex typed hook bus + trusted hook files** (`12.3`, `12.17`, `13.3`, `14.3`).
+2. **Claude-style permission DSL and `/permissions` UX** (`14.2`).
+3. **Codex + Claude dedicated review/security-review lane** (`13.5`, `14.7`).
 4. **Pi-style web search/fetch ergonomics** (`11.1`) now that spill-to-disk exists.
-5. **Codex skills with progressive disclosure** (`13.4`) so reusable workflows do not become raw prompt clutter.
-6. **dsh typed blocks + details shell** (`12.29.9`, `12.29.1`) so large terminal/search/diff outputs become inspectable rather than just scrollable.
-7. **Codex/dsh permission vocabulary** (`13.7`) so the UI, CLI, hooks, and tools all speak the same safety model.
+5. **Codex/Claude skills with lazy load and dynamic context injection** (`13.4`, `14.4`).
+6. **Claude-style declarative subagent files and worktree isolation** (`14.5`, `14.6`).
+7. **dsh typed blocks + details shell** (`12.29.9`, `12.29.1`) so large terminal/search/diff outputs become inspectable rather than just scrollable.
