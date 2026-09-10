@@ -387,6 +387,7 @@ Reference repos:
 * **What `pi-web-access` actually does (verified from source, v0.24.2):** there is **no headless browser**. Dependencies are just `undici` (HTTP), `linkedom` (HTML parse), `@mozilla/readability` (Firefox Reader View article extraction), `turndown` (HTML→Markdown), `unpdf` (local PDF text), and `p-limit` (concurrency cap). The pipeline for a page is: manual-redirect `fetch` with SSRF validation per hop → check `Content-Type` → parse HTML with `linkedom` → run Readability → convert article HTML to Markdown with Turndown. If Readability fails, it tries Next.js RSC flight data; if the page looks JS-rendered it returns an explicit error rather than hallucinating. JS-heavy pages are delegated to *remote hosted* extractors (Jina Reader `r.jina.ai`, Firecrawl, Kagi, Bright Data, Gemini URL Context) which run headless browsers server-side — never locally.
 * **What Crawl4AI adds to the picture:** the product demand for **JS-rendered extraction**, **deep crawl traversal**, **fit/clean Markdown**, **structured extraction**, **screenshots**, and **crawl-time control knobs** is absolutely real. The dependency lesson is different, though: GoHarness should copy the **capability shape**, not necessarily the **Playwright/Python runtime shape**.
 * **Search:** provider JSON APIs (OpenAI Responses, Brave, Exa, Tavily, etc.) with an ordered fallback chain; zero-config defaults to keyless Exa MCP + DuckDuckGo HTML scraping; self-hosted SearXNG if configured.
+* **Adjacent product reference:** `tldw_chatbook` is useful here not because of its crawler stack, but because it keeps **Search** and **RAG Answer** as visibly different modes, stages evidence into the active conversation explicitly, and blocks unavailable retrieval paths with clear recovery instructions instead of pretending they worked. We should copy that UX honesty for `web_search`/`web_fetch` and any later grounded-answer mode.
 * **Smart extras:** GitHub URLs are `git clone --depth 1`'d locally instead of scraped; PRs/issues via `gh pr view`/`gh issue view`; YouTube via Gemini transcript+frames; PDFs via a Datalab→Gemini→local-unpdf fallback chain.
 * **GoHarness plan:** two tools first — `web_search.go` and `web_fetch.go` — with an explicit later path for deeper crawling.
   - **Phase A (default path):** pure-Go search + fetch. Search backend interface with fallback chain: self-hosted SearXNG (if configured) → DuckDuckGo HTML scrape (keyless) → Tavily/Brave/Exa (keyed via Providers screen).
@@ -424,6 +425,7 @@ Reference repos:
 * **GoHarness plan:** adopt JSONL as an *additional* index alongside existing turn files: write each event as one JSONL record with a stable ULID and `parent_id`. Branching appends rather than duplicating. Web sidebar gets a tree view, labels, search. Compaction writes a summary record but leaves prior records intact.
 * **Effort:** L (migration/dual-write is delicate; do incrementally with import/export).
 * **Companion pieces (from Pi):** `/copy` last response, `/export` to HTML/JSONL/Markdown, `/import` to resume, `/share` (private gist with rendered HTML).
+* **Adjacent product reference:** `tldw_chatbook`'s **Chatbooks** / artifact bundles are a good reminder that export should not just dump raw transcript files; we should eventually support a portable bundle of selected conversation state plus referenced sources/deliverables so a branch/export can travel as a working packet, not only as logs.
 
 ### 11.7 Durable/background sub-agent jobs **[IMPROVEMENT]**
 * **Reference:** `pi-subagents` FleetView + `pi-background-tasks`; agents run after the parent turn settles with a persistent inspector for transcripts/steer/stop.
@@ -480,8 +482,8 @@ Reference repos:
 * **Effort:** XS-S.
 
 ### 11.17 Richer live status & cost footer **[IMPROVEMENT]**
-* **Reference:** Pi's footer shows cwd, session name, input tokens (↑), output (↓), cache reads (R), cache writes (W), cache-hit rate (CH), cost, context %.
-* **GoHarness plan:** we already broadcast prompt/completion tokens and cost. Extend usage parsing for Anthropic `cache_read_input_tokens`/`cache_creation_input_tokens` and Gemini `cached_content_token_count`; render R/W/CH beside the existing widgets plus a context-usage % bar. Add a `/session` JSON view.
+* **Reference:** Pi's footer shows cwd, session name, input tokens (↑), output (↓), cache reads (R), cache writes (W), cache-hit rate (CH), cost, context %. `tldw_chatbook` usefully reinforces the broader product shape here: a visible status/action row where provider, model, tools, approvals, sources, and scope are inspectable from the active chat surface, not buried in settings.
+* **GoHarness plan:** we already broadcast prompt/completion tokens and cost. Extend usage parsing for Anthropic `cache_read_input_tokens`/`cache_creation_input_tokens` and Gemini `cached_content_token_count`; render R/W/CH beside the existing widgets plus a context-usage % bar. Add a `/session` JSON view. Later, graduate this from a passive footer into clickable status chips for provider/model/tools/approvals/scope as the composer and inspector surfaces mature.
 * **Effort:** S.
 
 ### 11.18 Collapsible "thinking" blocks **[NEW]**
@@ -558,9 +560,9 @@ DeepSeek Harness is architecturally the most ambitious of the three (Pi, Claude 
 * **Effort:** M.
 
 ### 12.4 First-class persistent terminals (PTY) **[NEW]**
-* **Reference:** dsh `terminal/` family — `ctx.terminals` backend registry; `terminal-bash` provides shell sessions with readiness detection, bounded state, and sandbox policy; `tool-terminal` exposes **six** model-facing tools for spawn/send/ctrl/await/log/kill, plus background-send integration. PTYs are owner-scoped (each agent owns its sessions) and complement one-shot bash for REPLs, dev servers, and interactive CLIs.
+* **Reference:** dsh `terminal/` family — `ctx.terminals` backend registry; `terminal-bash` provides shell sessions with readiness detection, bounded state, and sandbox policy; `tool-terminal` exposes **six** model-facing tools for spawn/send/ctrl/await/log/kill, plus background-send integration. PTYs are owner-scoped (each agent owns its sessions) and complement one-shot bash for REPLs, dev servers, and interactive CLIs. `tldw_chatbook` contributes an important UX distinction here too: a user-owned persistent Terminal is **not** just another model tool call. It can stay explicitly armed, retain its own working state, and avoid silently feeding its entire buffer back into the model or durable transcript.
 * **GoHarness today:** one-shot `execute_command` only.
-* **Plan:** `github.com/creack/pty` backend behind the `Runner`/`Terminals` interface from 12.1; tools `terminal_start`, `terminal_send`, `terminal_poll` (with bounded reads and a deadline), `terminal_kill`. Reuse our workspace lock and sandbox modes. Document `tmux` as the non-PTY fallback for v1 (already in 11.22).
+* **Plan:** `github.com/creack/pty` backend behind the `Runner`/`Terminals` interface from 12.1; tools `terminal_start`, `terminal_send`, `terminal_poll` (with bounded reads and a deadline), `terminal_kill`. Reuse our workspace lock and sandbox modes. Keep a clear product distinction between (a) model-invoked sandboxed terminal tools and (b) any future explicitly user-owned persistent terminal surface. Document `tmux` as the non-PTY fallback for v1 (already in 11.22).
 * **Effort:** M.
 
 ### 12.5 LSP as a capability seam, not a JSON-RPC tunnel **[NEW]**
@@ -786,7 +788,7 @@ dsh's web frontend is as pluginized as its backend. The client (`packages/client
 
 #### 12.28.12 Message-level feedback, deliverables, and references **[NEW]**
 * **Reference:** `ui-message-feedback` adds 👍/👎 + optional note per assistant message in a **storage sidecar** that never enters model context (12.23); `ui-deliverables` tracks files/artifacts the agent produced; `ui-reference` renders `@file`/`@folder`/`@session` mentions as colored inline chips in both the transcript and the composer, with the actual reference text preserved for editing (so a mention survives a remount as canonical parseable text rather than a display-only bubble).
-* **Plan:** add per-message rating (sidecar, not model context); surface files written in a turn as a "deliverables" group; render `@` mentions as chips in sent and received messages using the same serialization as the composer.
+* **Plan:** add per-message rating (sidecar, not model context); surface files written in a turn as a "deliverables" group; render `@` mentions as chips in sent and received messages using the same serialization as the composer. `tldw_chatbook`'s **Artifacts / Chatbooks** idea is a useful adjacent reference for outputs that should live beyond one message, so leave room for an exportable artifact bundle later instead of treating every deliverable as a disposable chip.
 * **Effort:** S-M.
 
 #### 12.28.13 Drag-and-drop, image attachments, and drop overlay **[NEW]**
@@ -796,9 +798,9 @@ dsh's web frontend is as pluginized as its backend. The client (`packages/client
 * **Effort:** M.
 
 #### 12.28.14 Empty/hero state and block reasons **[IMPROVEMENT]**
-* **Reference:** with no workspace selected the whole composer card is the workspace-picker trigger (textarea read-only, keyboard accessible); when sending is blocked the composer shows the reason as placeholder text ("Select a model first", "Plan awaiting review", "No workspace selected") with the one missing action kept live. Blocks are *affordances* explaining why and what to do.
+* **Reference:** with no workspace selected the whole composer card is the workspace-picker trigger (textarea read-only, keyboard accessible); when sending is blocked the composer shows the reason as placeholder text ("Select a model first", "Plan awaiting review", "No workspace selected") with the one missing action kept live. Blocks are *affordances* explaining why and what to do. `tldw_chatbook` is a strong adjacent reference for this same philosophy across search/RAG/workflow screens: if a dependency, index, provider, or backend is missing, the UI should say exactly what is unavailable, why, and what recovers it.
 * **GoHarness today:** the composer is always editable; errors are toasts.
-* **Plan:** make the composer reflect state: disable + reason when no workspace/model/profile is selected; make the whole card a CTA for the missing prerequisite.
+* **Plan:** make the composer reflect state: disable + reason when no workspace/model/profile is selected; make the whole card a CTA for the missing prerequisite. Extend the same truthfulness to future RAG, MCP, workflow, and terminal surfaces — blocked with a reason and recovery action, never cosmetically enabled-but-ignored.
 * **Effort:** S.
 
 #### 12.28.15 Reliability details worth copying
@@ -885,8 +887,9 @@ dsh's client has a deliberately small, well-reasoned layout system rather than a
   - **Todo/plan strip** — the active todo list/plan state (11.12/12.7).
   - **Bar** — the textarea plus its access row (permission preset chip, model picker, send).
   - **Overlay** — the `@`/`/` candidate menu.
+  - **Staged evidence / source handoff strip** — `tldw_chatbook` is a useful adjacent reference here: evidence gathered in search/RAG should be visibly staged into the active conversation rather than silently stuffed into every turn.
 * **Approvals and questions replace the composer in place** (an amber strip with the question + allow/refuse controls) rather than opening a modal; pending waits leave no placeholder card in the message flow. A block reason (no workspace, no model, plan review pending) renders the same disabled textarea with the reason as its placeholder, and leaves exactly one action live (the thing that unblocks it).
-* **Plan:** when building 11.2/11.11/12.3/12.7, mount them into these composer regions; never as floating cards in chat.
+* **Plan:** when building 11.2/11.11/12.3/12.7, mount them into these composer regions; never as floating cards in chat. Reserve a slot here for staged files/search hits/web results so the user can see exactly what context will be handed into the next turn.
 * **Effort:** M (architectural).
 
 #### 12.29.7 Message flow: steps, streaming isolation, compaction placement **[IMPROVEMENT]**
