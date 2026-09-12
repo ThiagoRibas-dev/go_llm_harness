@@ -38,26 +38,15 @@ export function createShellModule({ state, actions, escapeHtml, deliverablePaths
     state.currentPrimarySurface = target;
     const consoleSurface = document.getElementById("console-surface");
     const workflowSurface = document.getElementById("workflow-lab-surface");
-    const consoleBtn = document.getElementById("view-console-btn");
-    const workflowBtn = document.getElementById("view-workflow-btn");
-    if (!consoleSurface || !workflowSurface || !consoleBtn || !workflowBtn) return;
-
-    const consoleActive = "px-2 py-1 rounded bg-slate-800 text-slate-100 font-bold";
-    const consoleIdle = "px-2 py-1 rounded text-slate-400 hover:text-slate-200";
-    const workflowActive = "px-2 py-1 rounded bg-purple-950/50 text-purple-200 font-bold border border-purple-700/60";
-    const workflowIdle = "px-2 py-1 rounded text-slate-400 hover:text-slate-200";
+    if (!consoleSurface || !workflowSurface) return;
 
     if (target === "workflow") {
       consoleSurface.classList.add("hidden");
       workflowSurface.classList.remove("hidden");
-      consoleBtn.className = consoleIdle;
-      workflowBtn.className = workflowActive;
       if (actions.loadWorkflowsSchema) actions.loadWorkflowsSchema();
     } else {
       workflowSurface.classList.add("hidden");
       consoleSurface.classList.remove("hidden");
-      consoleBtn.className = consoleActive;
-      workflowBtn.className = workflowIdle;
     }
     syncRailButtons();
     enforceShellConcession();
@@ -381,8 +370,6 @@ export function createShellModule({ state, actions, escapeHtml, deliverablePaths
     document.getElementById("rail-details-btn")?.addEventListener("click", () => toggleDetailsPanel());
     document.getElementById("rail-settings-btn")?.addEventListener("click", () => actions.openSettingsModal && actions.openSettingsModal());
     document.getElementById("manual-compact-btn")?.addEventListener("click", () => actions.triggerCompaction && actions.triggerCompaction());
-    document.getElementById("view-console-btn")?.addEventListener("click", () => switchPrimarySurface("console"));
-    document.getElementById("view-workflow-btn")?.addEventListener("click", () => switchPrimarySurface("workflow"));
     document.getElementById("conversation-tab-chat")?.addEventListener("click", () => switchConversationView("chat"));
     document.getElementById("conversation-tab-trajectory")?.addEventListener("click", () => switchConversationView("trajectory"));
     document.getElementById("conversation-tab-subagents")?.addEventListener("click", () => switchConversationView("subagents"));

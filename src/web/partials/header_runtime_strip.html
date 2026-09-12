@@ -1,0 +1,33 @@
+<div id="header-runtime-strip" class="flex flex-1 items-center gap-2 min-w-0 overflow-x-auto whitespace-nowrap text-xs pr-1">
+    <span class="text-slate-500 shrink-0">|</span>
+    <div class="flex items-center gap-2 shrink-0">
+        <i class="fa-solid fa-diagram-project text-purple-400"></i>
+        <span class="text-slate-400">Workflow:</span>
+        <select id="workflow-selector" class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono font-bold text-xs rounded px-1.5 py-0.5 outline-none focus:border-purple-500 cursor-pointer max-w-[220px]">
+            <option value="">Loading...</option>
+        </select>
+    </div>
+    <span class="text-slate-500 shrink-0">|</span>
+    <div class="flex items-center gap-2 shrink-0">
+        <span class="text-slate-400">Connection:</span>
+        <span class="text-cyan-400 font-mono font-bold" id="model-name">gpt-4o</span>
+    </div>
+    <span class="text-slate-500 shrink-0">|</span>
+    <div class="flex items-center gap-2 shrink-0 text-cyan-400">
+        <i class="fa-solid fa-calculator"></i>
+        <span class="font-bold">Tokens:</span>
+        <span class="font-mono font-bold text-sm" id="session-tokens">0</span>
+        <span class="text-slate-400 font-mono text-[10px]" id="session-chars">(0 chars)</span>
+    </div>
+    <span class="text-slate-500 shrink-0">|</span>
+    <div class="flex items-center gap-2 shrink-0 text-emerald-400">
+        <i class="fa-solid fa-dollar-sign"></i>
+        <span class="font-bold">Spent:</span>
+        <span class="font-mono font-bold text-sm" id="session-cost">$0.0000</span>
+    </div>
+    <span class="text-slate-500 shrink-0">|</span>
+    <div class="flex items-center gap-2 shrink-0 text-slate-300">
+        <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" id="status-dot"></div>
+        <span id="status-text">Connected</span>
+    </div>
+</div>

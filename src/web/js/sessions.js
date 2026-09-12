@@ -78,6 +78,7 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
       .then(() => {
         actions.fetchConfig && actions.fetchConfig();
         refreshWorkspaceTree();
+        fetchWorkspaces();
         fetchSessions();
         fetchPinnedFiles();
         const chatContainer = document.getElementById("chat-messages");
@@ -184,6 +185,7 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
       .then(data => {
         actions.fetchConfig && actions.fetchConfig();
         refreshWorkspaceTree();
+        fetchWorkspaces();
         fetchSessions();
         fetchPinnedFiles();
         const chatContainer = document.getElementById("chat-messages");

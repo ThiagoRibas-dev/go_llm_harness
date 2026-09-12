@@ -214,7 +214,7 @@ The frontend no longer lives in a single inline-script page. It is now served as
 - `src/web/index.html`
 - `src/web/partials/*.html`
   - composition roots like `styles.html`, `shell_body.html`, and `primary_surface.html`
-  - smaller shell fragments like `primary_status_row.html`, `composer_surface.html`, and the `workflow_lab_*` partials
+  - smaller shell fragments like `header_runtime_strip.html`, `composer_surface.html`, and the `workflow_lab_*` partials
 - `src/web/js/app.js`
 - `src/web/js/state.js`
 - `src/web/js/shell.js`
@@ -582,7 +582,7 @@ These are the concrete UI reassignments we should make from the current `src/web
 | `#workspace-tree` | styled tree dump | either become a real interaction surface (open/pin/stage/preview) or move behind details/search | DSH contextual file access |
 | `#chat-messages` | flat transcript stack | evolve into step-grouped transcript with typed blocks and deliverables | DSH message flow |
 | `#prompt-form` / `#prompt-input` | simple composer | become stack owner: status row, queue rows, staged context, plan strip, editor, access row, triggers | DSH composer stack |
-| header metrics cards | top-level cost/token chrome | move closer to composer as status chips or dock | DSH stats dock + tldw status rows |
+| header metrics cards | top-level cost/token chrome | consolidate into stable shell chrome with the active session/runtime strip | DSH stats dock + tldw status rows |
 | fork/branch modal | mixed safe/destructive history actions | keep temporarily, then split into clearer history model actions | current recovery UX audit |
 
 ---
@@ -722,7 +722,7 @@ src/web/
 │   ├── rail.html
 │   ├── sidebar.html
 │   ├── primary_surface.html
-│   ├── primary_status_row.html
+│   ├── header_runtime_strip.html
 │   ├── console_surface.html
 │   ├── composer_surface.html
 │   ├── workflow_lab_surface.html
@@ -805,7 +805,7 @@ Split it according to the new ownership model:
 - [x] Promote New Session from the Sessions sub-panel into stable visible chrome (rail or sidebar head).
 - [x] Collapse raw advanced provider fields (`#input-model`, `#input-base-url`, compaction endpoint/model overrides, scan-dir comma lists) behind disclosure UI where a picker/list cannot replace them yet.
 - [x] Clarify labels between `#workflow-selector` (**active runtime workflow**) and `#wf-lab-selector` (**workflow being edited**).
-- [x] Reduce header metrics clutter by moving token/cost/runtime state toward a lower status row closer to `#prompt-form`.
+- [x] Reduce duplicated shell chrome by consolidating session/runtime state into a single header runtime strip and removing the redundant center-column view toggle.
 - [x] Make `switchSidebarTab(...)` either truly support each visible destination or remove the misleading destination if it is not first-class.
 
 ---
@@ -913,6 +913,7 @@ What is true now:
 - `app.js` is no longer exporting a runtime bridge onto `window`
 - `index.html` is now an HTML composition root instead of a giant static document blob
 - `styles.html` and `primary_surface.html` are now second-level composition roots instead of oversized partials
+- the runtime/session strip is consolidated into header chrome, and the redundant center-column console/workflow toggle has been removed
 - the page is assembled server-side from embedded partials, so HTML can be split without adding a bundler or browser-side fragment fetches
 - static shell, settings, workflow, composer, and fork controls are bound through module-owned listeners
 - dynamic transcript, details, queue, staged-context, workspace, provider, snapshot, MCP, and workflow-inspector actions now use delegated `data-*` hooks instead of inline handler strings
