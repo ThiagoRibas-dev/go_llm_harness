@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -107,6 +108,10 @@ func StartWebGUI(port int) {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		_, _ = w.Write(jsBytes)
 	})
+
+	if jsFS, err := fs.Sub(embeddedWebFS, "web/js"); err == nil {
+		mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.FS(jsFS))))
+	}
 
 	// 2. SSE Streaming endpoint
 	mux.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {

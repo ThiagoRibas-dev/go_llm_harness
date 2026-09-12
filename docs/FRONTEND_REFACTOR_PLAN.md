@@ -842,12 +842,12 @@ Split it according to the new ownership model:
 - stop growing the monolith
 
 ### Tasks
-- [ ] Add `<script type="module" src="/js/app.js">`
-- [ ] Scaffold new module tree
-- [ ] Move util/state/sse first
+- [x] Add `<script type="module" src="/js/app.js">`
+- [x] Scaffold new module tree
+- [ ] Move util/state/sse first *(Partially started: helpers and typed renderers are externalized; state + SSE plumbing still live in `app.js` for now.)*
 - [ ] Move shell modules next
 - [ ] Move sessions/files/chat/settings/workflow modules incrementally
-- [ ] Delete inline script only after behavior parity is verified
+- [x] Delete inline script only after behavior parity is verified
 
 ---
 

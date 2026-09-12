@@ -1,0 +1,4292 @@
+import { escapeHtml, toolCallTitle, toolResultTitle, knownModelsForProvider, populateKnownModelList } from "./helpers.js";
+import { deliverablePathsFromTool, renderDeliverableChips, renderTerminalBlock, renderReadBlock, renderSearchBlock, renderWebBlock, renderPatchArgumentDiff, renderToolCallArgumentsBody, renderToolBody } from "./renderers.js";
+
+let sseSource = null;
+        let activeCost = 0.0;
+        let turnCounter = 0;
+        let isSidebarCollapsed = false;
+        let selectedForkTurn = 0;
+        let activeWorkspaceDir = "";
+        let currentPrimarySurface = "console";
+        let currentSidebarSection = "sessions";
+        let currentConversationView = "chat";
+        let currentDetailsTab = "trajectory";
+        let detailsPanelOpen = true;
+        let detailsPanelWidth = 340;
+        let currentUIState = { composer_enabled: true, status: "ready", title: "GoHarness is ready", summary: "" };
+        let workspaceTreeEntries = [];
+        let trajectoryEvents = [];
+        let subagentRegistry = {};
+        let deliverableRegistry = [];
+        let currentFilePreview = null;
+        let currentToolPreview = null;
+        let sessionQueues = {};
+        let stagedContextBySession = {};
+        let queueItemSeq = 1;
+        let queueDispatchInFlight = false;
+        let currentSettingsRevision = 0;
+        let currentProvidersRevision = 0;
+        const DEFAULT_PROMPT_PLACEHOLDER = "Type a prompt to solve (e.g., 'Write a python calculation script and test it')....";
+
+        window.addEventListener("DOMContentLoaded", () => {
+            applyThemeChrome();
+            fetchConfig();
+            refreshWorkspaceTree();
+            fetchWorkspaces();
+            fetchSessions();
+            fetchPinnedFiles();
+            loadWorkflowSelector();
+            connectSSE();
+            appendGreeting();
+            switchPrimarySurface("console");
+            switchSidebarTab("sessions");
+            switchConversationView("chat");
+            switchDetailsTab("trajectory");
+            initShellResizers();
+            syncRailButtons();
+        });
+
+        // Toggle Workspace Explorer Sidebar
+        function toggleSidebar() {
+            const sidebar = document.getElementById("sidebar");
+            const resizer = document.getElementById("sidebar-resizer");
+            isSidebarCollapsed = !isSidebarCollapsed;
+            if (isSidebarCollapsed) {
+                sidebar.style.width = "0px";
+                sidebar.style.opacity = "0";
+                sidebar.style.pointerEvents = "none";
+                sidebar.style.borderRightWidth = "0px";
+                if (resizer) {
+                    resizer.style.width = "0px";
+                    resizer.style.pointerEvents = "none";
+                }
+            } else {
+                sidebar.style.width = "320px";
+                sidebar.style.opacity = "1";
+                sidebar.style.pointerEvents = "auto";
+                sidebar.style.borderRightWidth = "1px";
+                if (resizer) {
+                    resizer.style.width = "6px";
+                    resizer.style.pointerEvents = "auto";
+                }
+            }
+            enforceShellConcession();
+        }
+
+        function workflowLabVisible() {
+            const lab = document.getElementById("workflow-lab-surface");
+            return !!lab && !lab.classList.contains("hidden");
+        }
+
+        function switchPrimarySurface(surface) {
+            const target = surface === "workflow" ? "workflow" : "console";
+            currentPrimarySurface = target;
+            const consoleSurface = document.getElementById("console-surface");
+            const workflowSurface = document.getElementById("workflow-lab-surface");
+            const consoleBtn = document.getElementById("view-console-btn");
+            const workflowBtn = document.getElementById("view-workflow-btn");
+            if (!consoleSurface || !workflowSurface || !consoleBtn || !workflowBtn) return;
+            const consoleActive = "px-2 py-1 rounded bg-slate-800 text-slate-100 font-bold";
+            const consoleIdle = "px-2 py-1 rounded text-slate-400 hover:text-slate-200";
+            const workflowActive = "px-2 py-1 rounded bg-purple-950/50 text-purple-200 font-bold border border-purple-700/60";
+            const workflowIdle = "px-2 py-1 rounded text-slate-400 hover:text-slate-200";
+
+            if (target === "workflow") {
+                consoleSurface.classList.add("hidden");
+                workflowSurface.classList.remove("hidden");
+                consoleBtn.className = consoleIdle;
+                workflowBtn.className = workflowActive;
+                loadWorkflowsSchema();
+            } else {
+                workflowSurface.classList.add("hidden");
+                consoleSurface.classList.remove("hidden");
+                consoleBtn.className = consoleActive;
+                workflowBtn.className = workflowIdle;
+            }
+            syncRailButtons();
+            enforceShellConcession();
+        }
+
+        function syncRailButtons() {
+            const map = {
+                sessions: document.getElementById("rail-sessions-btn"),
+                files: document.getElementById("rail-files-btn"),
+                snapshots: document.getElementById("rail-history-btn"),
+                workflow: document.getElementById("rail-workflow-btn"),
+            };
+            Object.entries(map).forEach(([key, el]) => {
+                if (!el) return;
+                const active = (key === currentSidebarSection && currentPrimarySurface === "console") || (key === "workflow" && currentPrimarySurface === "workflow");
+                el.classList.toggle("active", active);
+            });
+            const detailsBtn = document.getElementById("rail-details-btn");
+            if (detailsBtn) detailsBtn.classList.toggle("active", detailsPanelOpen);
+        }
+
+        function activateRailSection(section) {
+            if (section === "workflow") {
+                switchPrimarySurface("workflow");
+                return;
+            }
+            switchPrimarySurface("console");
+            switchSidebarTab(section);
+        }
+
+        function switchConversationView(view) {
+            currentConversationView = view === "trajectory" || view === "subagents" ? view : "chat";
+            const views = {
+                chat: document.getElementById("chat-view"),
+                trajectory: document.getElementById("trajectory-view"),
+                subagents: document.getElementById("subagents-view"),
+            };
+            const buttons = {
+                chat: document.getElementById("conversation-tab-chat"),
+                trajectory: document.getElementById("conversation-tab-trajectory"),
+                subagents: document.getElementById("conversation-tab-subagents"),
+            };
+            Object.values(views).forEach(el => el && el.classList.add("hidden"));
+            Object.values(buttons).forEach(el => el && el.classList.remove("active"));
+            if (views[currentConversationView]) views[currentConversationView].classList.remove("hidden");
+            if (buttons[currentConversationView]) buttons[currentConversationView].classList.add("active");
+            if (currentConversationView === "trajectory") {
+                switchDetailsTab("trajectory");
+            }
+            if (currentConversationView === "subagents") {
+                renderSubagentsView();
+            }
+        }
+
+        function detailsEmptyState(title, body) {
+            return `<div class="rounded-lg border border-[#334155] bg-slate-900/25 p-4"><div class="font-bold text-slate-200">${escapeHtml(title)}</div><div class="mt-1 text-[11px] leading-relaxed text-slate-400">${escapeHtml(body)}</div></div>`;
+        }
+
+        function recordTrajectoryEvent(kind, title, detail) {
+            trajectoryEvents.unshift({
+                at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+                kind,
+                title,
+                detail,
+            });
+            if (trajectoryEvents.length > 80) trajectoryEvents.length = 80;
+            renderTrajectoryPanels();
+        }
+
+        function rememberDeliverable(path) {
+            if (!path) return;
+            if (!deliverableRegistry.includes(path)) deliverableRegistry.unshift(path);
+            if (deliverableRegistry.length > 20) deliverableRegistry.length = 20;
+            renderDeliverablesPanel();
+        }
+
+        function extractDeliverablesFromTool(turn) {
+            if (!turn || turn.role !== "tool") return;
+            deliverablePathsFromTool(turn).forEach(rememberDeliverable);
+        }
+
+        function updateSubagentRegistry(data, state) {
+            const key = data.session_id || data.description || String(Date.now());
+            subagentRegistry[key] = {
+                label: data.description || data.session_id || "sub-agent",
+                state,
+                duration: data.duration_ms || 0,
+            };
+            renderSubagentsView();
+        }
+
+        function renderTrajectoryPanels() {
+            const html = trajectoryEvents.length === 0
+                ? detailsEmptyState("No trajectory events yet", "Run the agent, tools, or workflow lab to populate a live event ledger.")
+                : trajectoryEvents.map(ev => `<div class="rounded-lg border border-[#334155] bg-slate-900/25 p-3"><div class="flex items-center gap-2 text-[11px]"><span class="font-mono text-slate-500">${escapeHtml(ev.at)}</span><span class="font-bold text-slate-200">${escapeHtml(ev.title)}</span></div><div class="mt-1 text-[11px] text-slate-400">${escapeHtml(ev.detail || "")}</div><div class="mt-2 text-[10px] uppercase tracking-wider text-slate-500">${escapeHtml(ev.kind)}</div></div>`).join("");
+            const detail = document.getElementById("details-tab-trajectory");
+            const view = document.getElementById("trajectory-view-body");
+            if (detail) detail.innerHTML = html;
+            if (view) view.innerHTML = html;
+        }
+
+        function renderSubagentsView() {
+            const entries = Object.values(subagentRegistry);
+            const html = entries.length === 0
+                ? detailsEmptyState("No sub-agent activity yet", "Spawned sub-agents and background workers will appear here.")
+                : entries.map(sa => `<div class="rounded-lg border border-cyan-900/40 bg-slate-900/25 p-3 flex items-center justify-between gap-3"><div><div class="font-mono text-slate-200">${escapeHtml(sa.label)}</div><div class="text-[11px] text-slate-500">${sa.state === "done" ? "Completed" : "Running"}</div></div><div class="text-[11px] font-mono ${sa.state === "done" ? "text-emerald-400" : "text-cyan-400"}">${sa.duration ? escapeHtml(String(sa.duration)) + " ms" : "live"}</div></div>`).join("");
+            const view = document.getElementById("subagents-view-body");
+            if (view) view.innerHTML = html;
+        }
+
+        function renderFilePanel() {
+            const panel = document.getElementById("details-tab-file");
+            if (!panel) return;
+            if (!currentFilePreview) {
+                panel.innerHTML = detailsEmptyState("No file selected", "Choose Files in the rail, then click a file row to preview it here.");
+                return;
+            }
+            panel.innerHTML = `<div class="rounded-lg border border-[#334155] bg-slate-900/25 overflow-hidden"><div class="px-3 py-2 border-b border-[#334155]/60 flex items-center justify-between gap-2"><span class="font-mono text-xs text-slate-200 truncate">${escapeHtml(currentFilePreview.path)}</span><div class="flex items-center gap-2"><button type="button" onclick="stageWorkspaceFile(${JSON.stringify(currentFilePreview.path)})" class="text-[10px] text-cyan-400 hover:text-cyan-300">Stage for next prompt</button><button type="button" onclick="switchSidebarTab('files')" class="text-[10px] text-blue-400 hover:text-blue-300">Back to files</button></div></div><pre class="max-h-[420px] overflow-auto p-3 text-[11px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap">${escapeHtml(currentFilePreview.content)}</pre></div>`;
+        }
+
+        function renderToolPanel() {
+            const panel = document.getElementById("details-tab-tool");
+            if (!panel) return;
+            if (!currentToolPreview) {
+                panel.innerHTML = detailsEmptyState("No tool selected", "Open or expand a tool result in the transcript to inspect it here.");
+                return;
+            }
+            const paths = deliverablePathsFromTool({ role: "tool", name: currentToolPreview.name, content: currentToolPreview.content });
+            panel.innerHTML = `<div class="rounded-lg border border-[#334155] bg-slate-900/25 overflow-hidden"><div class="px-3 py-2 border-b border-[#334155]/60"><span class="font-mono text-xs text-slate-200">${escapeHtml(currentToolPreview.name || "tool")}</span></div><div class="typed-tool-body">${renderToolBody(currentToolPreview.name, currentToolPreview.content || "")}${renderDeliverableChips(paths)}</div></div>`;
+        }
+
+        function renderDeliverablesPanel() {
+            const panel = document.getElementById("details-tab-deliverable");
+            if (!panel) return;
+            if (deliverableRegistry.length === 0) {
+                panel.innerHTML = detailsEmptyState("No deliverables yet", "Files written or patched by successful tool calls will be listed here.");
+                return;
+            }
+            panel.innerHTML = deliverableRegistry.map(path => `<div class="rounded-lg border border-[#334155] bg-slate-900/25 p-3"><div class="font-mono text-xs text-slate-200 truncate">${escapeHtml(path)}</div><div class="mt-2 flex items-center gap-3 text-[11px]"><button type="button" onclick="openWorkspaceFile(${JSON.stringify(path)})" class="text-blue-400 hover:text-blue-300">Open preview</button><button type="button" onclick="stageWorkspaceFile(${JSON.stringify(path)})" class="text-cyan-400 hover:text-cyan-300">Stage for next prompt</button></div></div>`).join("");
+        }
+
+        function renderHistoryPanel() {
+            const panel = document.getElementById("details-tab-history");
+            if (!panel) return;
+            panel.innerHTML = `
+                <div class="rounded-lg border border-[#334155] bg-slate-900/25 p-4 space-y-3">
+                    <div>
+                        <div class="font-bold text-slate-200">History utilities</div>
+                        <div class="mt-1 text-[11px] leading-relaxed text-slate-400">Snapshots and compaction are currently utility actions. This panel is their long-term home once the dedicated details surface matures.</div>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="activateRailSection('snapshots')" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 text-xs font-bold">Open Snapshots</button>
+                        <button type="button" onclick="triggerCompaction()" class="px-3 py-1.5 rounded border border-indigo-900 bg-indigo-950/40 text-indigo-300 text-xs font-bold">Run Compaction</button>
+                    </div>
+                    <div class="text-[10px] font-mono text-slate-500">Session: ${escapeHtml(currentSessionId() || 'loading')}</div>
+                </div>`;
+        }
+
+        function switchDetailsTab(tab) {
+            currentDetailsTab = ["trajectory", "file", "tool", "deliverable", "history"].includes(tab) ? tab : "trajectory";
+            const tabs = ["trajectory", "file", "tool", "deliverable", "history"];
+            const subtitles = {
+                trajectory: "Live session and workflow event ledger",
+                file: "Preview a selected workspace file",
+                tool: "Inspect the currently selected tool output",
+                deliverable: "Files produced by successful mutations",
+                history: "Snapshots, compaction, and recovery utilities",
+            };
+            tabs.forEach(name => {
+                const body = document.getElementById(`details-tab-${name}`);
+                const btn = document.getElementById(`details-tab-${name}-btn`);
+                if (body) body.classList.toggle("hidden", name !== currentDetailsTab);
+                if (btn) {
+                    btn.className = name === currentDetailsTab
+                        ? "px-2.5 py-1 rounded bg-slate-800 text-white font-bold"
+                        : "px-2.5 py-1 rounded text-slate-400 hover:text-slate-200";
+                }
+            });
+            const subtitle = document.getElementById("details-subtitle");
+            if (subtitle) subtitle.textContent = subtitles[currentDetailsTab];
+            if (!detailsPanelOpen) toggleDetailsPanel(true);
+            renderTrajectoryPanels();
+            renderSubagentsView();
+            renderFilePanel();
+            renderToolPanel();
+            renderDeliverablesPanel();
+            renderHistoryPanel();
+            syncRailButtons();
+        }
+
+        function toggleDetailsPanel(forceOpen) {
+            if (typeof forceOpen === "boolean") detailsPanelOpen = forceOpen;
+            else detailsPanelOpen = !detailsPanelOpen;
+            const panel = document.getElementById("details-panel");
+            const resizer = document.getElementById("details-resizer");
+            if (!panel || !resizer) return;
+            panel.dataset.open = String(detailsPanelOpen);
+            resizer.dataset.open = String(detailsPanelOpen);
+            if (detailsPanelOpen) {
+                panel.style.width = detailsPanelWidth + "px";
+            }
+            syncRailButtons();
+        }
+
+        function enforceShellConcession() {
+            const minConversation = 760;
+            const occupied = 56 + (isSidebarCollapsed ? 0 : 320) + 6 + 6 + detailsPanelWidth;
+            if (window.innerWidth < occupied + minConversation && detailsPanelOpen) {
+                toggleDetailsPanel(false);
+            }
+        }
+
+        function initShellResizers() {
+            const sidebarResizer = document.getElementById("sidebar-resizer");
+            const detailsResizer = document.getElementById("details-resizer");
+            const sidebar = document.getElementById("sidebar");
+            const details = document.getElementById("details-panel");
+            if (sidebarResizer && sidebar) {
+                sidebarResizer.addEventListener("mousedown", (e) => {
+                    if (isSidebarCollapsed) return;
+                    e.preventDefault();
+                    sidebarResizer.classList.add("dragging");
+                    const startX = e.clientX;
+                    const startW = sidebar.getBoundingClientRect().width;
+                    const onMove = (ev) => {
+                        const next = Math.max(240, Math.min(460, startW + (ev.clientX - startX)));
+                        sidebar.style.width = next + "px";
+                    };
+                    const onUp = () => {
+                        sidebarResizer.classList.remove("dragging");
+                        document.removeEventListener("mousemove", onMove);
+                        document.removeEventListener("mouseup", onUp);
+                        enforceShellConcession();
+                    };
+                    document.addEventListener("mousemove", onMove);
+                    document.addEventListener("mouseup", onUp);
+                });
+            }
+            if (detailsResizer && details) {
+                detailsResizer.addEventListener("mousedown", (e) => {
+                    if (!detailsPanelOpen) return;
+                    e.preventDefault();
+                    detailsResizer.classList.add("dragging");
+                    const startX = e.clientX;
+                    const startW = details.getBoundingClientRect().width;
+                    const onMove = (ev) => {
+                        const next = Math.max(220, Math.min(520, startW - (ev.clientX - startX)));
+                        detailsPanelWidth = next;
+                        details.style.width = next + "px";
+                    };
+                    const onUp = () => {
+                        detailsResizer.classList.remove("dragging");
+                        document.removeEventListener("mousemove", onMove);
+                        document.removeEventListener("mouseup", onUp);
+                        if (detailsPanelWidth < 240) toggleDetailsPanel(false);
+                        enforceShellConcession();
+                    };
+                    document.addEventListener("mousemove", onMove);
+                    document.addEventListener("mouseup", onUp);
+                });
+            }
+            window.addEventListener("resize", enforceShellConcession);
+        }
+
+        async function openWorkspaceFile(path) {
+            if (!path) return;
+            try {
+                const res = await fetch("/api/workspace/file?path=" + encodeURIComponent(path));
+                if (!res.ok) throw new Error("Failed to read file");
+                const data = await res.json();
+                currentFilePreview = data;
+                switchDetailsTab("file");
+            } catch (err) {
+                currentFilePreview = { path, content: "Failed to read file preview: " + err.message };
+                switchDetailsTab("file");
+            }
+        }
+
+        function currentSessionKey() {
+            return currentSessionId() || "pending-session";
+        }
+
+        function storageKey(kind, sessionKey) {
+            return `goharness:${kind}:${sessionKey}`;
+        }
+
+        function persistSessionUIState() {
+            try {
+                const key = currentSessionKey();
+                sessionStorage.setItem(storageKey("queue", key), JSON.stringify(sessionQueues[key] || []));
+                sessionStorage.setItem(storageKey("staged", key), JSON.stringify(stagedContextBySession[key] || []));
+            } catch {}
+        }
+
+        function restoreSessionUIState(sessionKey) {
+            const key = sessionKey || currentSessionKey();
+            try {
+                const q = sessionStorage.getItem(storageKey("queue", key));
+                const s = sessionStorage.getItem(storageKey("staged", key));
+                sessionQueues[key] = q ? JSON.parse(q) : (sessionQueues[key] || []);
+                stagedContextBySession[key] = s ? JSON.parse(s) : (stagedContextBySession[key] || []);
+            } catch {
+                sessionQueues[key] = sessionQueues[key] || [];
+                stagedContextBySession[key] = stagedContextBySession[key] || [];
+            }
+        }
+
+        function isSessionBusy() {
+            return currentUIState && currentUIState.status === "busy";
+        }
+
+        function queueForCurrentSession() {
+            const key = currentSessionKey();
+            if (!sessionQueues[key]) restoreSessionUIState(key);
+            sessionQueues[key] = sessionQueues[key] || [];
+            return sessionQueues[key];
+        }
+
+        function stagedContextForCurrentSession() {
+            const key = currentSessionKey();
+            if (!stagedContextBySession[key]) restoreSessionUIState(key);
+            stagedContextBySession[key] = stagedContextBySession[key] || [];
+            return stagedContextBySession[key];
+        }
+
+        function queuePromptText(text, kind) {
+            const clean = String(text || "").trim();
+            if (!clean) return;
+            const queue = queueForCurrentSession();
+            const item = { id: "q-" + (queueItemSeq++), text: clean, kind: kind === "follow_up" ? "follow_up" : "steering" };
+            if (item.kind === "follow_up") {
+                queue.push(item);
+            } else {
+                const firstFollow = queue.findIndex(entry => entry.kind === "follow_up");
+                if (firstFollow === -1) queue.push(item);
+                else queue.splice(firstFollow, 0, item);
+            }
+            persistSessionUIState();
+            renderQueuedMessages();
+            renderComposerActionRow();
+        }
+
+        function removeQueuedMessage(id) {
+            sessionQueues[currentSessionKey()] = queueForCurrentSession().filter(item => item.id !== id);
+            persistSessionUIState();
+            renderQueuedMessages();
+            renderComposerActionRow();
+        }
+
+        function editQueuedMessage(id) {
+            const queue = queueForCurrentSession();
+            const idx = queue.findIndex(item => item.id === id);
+            if (idx === -1) return;
+            const [item] = queue.splice(idx, 1);
+            const input = document.getElementById("prompt-input");
+            if (input) {
+                input.value = item.text;
+                input.style.height = "auto";
+                input.style.height = input.scrollHeight + "px";
+                input.focus();
+            }
+            persistSessionUIState();
+            renderQueuedMessages();
+            renderComposerActionRow();
+            updateTriggerOverlay();
+        }
+
+        function renderQueuedMessages() {
+            const el = document.getElementById("queued-messages-strip");
+            if (!el) return;
+            const queue = queueForCurrentSession();
+            if (queue.length === 0) {
+                el.classList.add("hidden");
+                el.innerHTML = "";
+                return;
+            }
+            el.classList.remove("hidden");
+            el.innerHTML = `<div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Queued messages</div>` + queue.map(item => `
+                <div class="flex items-center gap-2 rounded border border-[#334155] bg-slate-950/40 px-3 py-2 text-xs mb-2 last:mb-0">
+                    <span class="px-1.5 py-0.5 rounded ${item.kind === "follow_up" ? "bg-purple-950/50 text-purple-300" : "bg-amber-950/40 text-amber-300"} font-mono">${item.kind === "follow_up" ? "follow-up" : "steering"}</span>
+                    <span class="flex-1 text-slate-300 truncate">${escapeHtml(item.text)}</span>
+                    <button type="button" onclick="editQueuedMessage('${item.id}')" class="text-slate-400 hover:text-white">Edit</button>
+                    <button type="button" onclick="removeQueuedMessage('${item.id}')" class="text-slate-500 hover:text-red-400">✕</button>
+                </div>`).join("");
+        }
+
+        async function stageWorkspaceFile(path) {
+            if (!path) return;
+            const staged = stagedContextForCurrentSession();
+            if (staged.some(item => item.path === path)) {
+                renderStagedContextStrip();
+                return;
+            }
+            try {
+                const res = await fetch("/api/workspace/file?path=" + encodeURIComponent(path));
+                if (!res.ok) throw new Error("Failed to read file");
+                const data = await res.json();
+                staged.push({ id: "ctx-" + (queueItemSeq++), type: "file", path: data.path, content: data.content });
+                persistSessionUIState();
+                renderStagedContextStrip();
+                renderComposerActionRow();
+                switchDetailsTab("file");
+                currentFilePreview = data;
+                renderFilePanel();
+            } catch (err) {
+                appendSystemAlert("Stage Context Failed", "Could not stage file: " + err.message, "fa-triangle-exclamation text-red-400");
+            }
+        }
+
+        function removeStagedContext(id) {
+            stagedContextBySession[currentSessionKey()] = stagedContextForCurrentSession().filter(item => item.id !== id);
+            persistSessionUIState();
+            renderStagedContextStrip();
+            renderComposerActionRow();
+        }
+
+        function clearStagedContext() {
+            stagedContextBySession[currentSessionKey()] = [];
+            persistSessionUIState();
+            renderStagedContextStrip();
+            renderComposerActionRow();
+        }
+
+        function renderStagedContextStrip() {
+            const el = document.getElementById("staged-context-strip");
+            if (!el) return;
+            const staged = stagedContextForCurrentSession();
+            if (staged.length === 0) {
+                el.classList.add("hidden");
+                el.innerHTML = "";
+                return;
+            }
+            el.classList.remove("hidden");
+            el.innerHTML = `
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <div class="text-[10px] uppercase tracking-wider text-slate-500">Staged context for next send</div>
+                    <button type="button" onclick="clearStagedContext()" class="text-[10px] text-slate-500 hover:text-red-400">Clear all</button>
+                </div>
+                <div class="flex flex-wrap gap-2">` + staged.map(item => `
+                    <div class="inline-flex items-center gap-2 rounded border border-cyan-900/40 bg-cyan-950/10 px-2.5 py-1.5 text-xs">
+                        <span class="text-cyan-300 font-mono truncate max-w-[260px]">${escapeHtml(item.path)}</span>
+                        <button type="button" onclick="openWorkspaceFile(${JSON.stringify(item.path)})" class="text-cyan-400 hover:text-cyan-300">Open</button>
+                        <button type="button" onclick="removeStagedContext('${item.id}')" class="text-slate-500 hover:text-red-400">✕</button>
+                    </div>`).join("") + `</div>`;
+        }
+
+        function buildPromptWithStagedContext(prompt) {
+            const staged = stagedContextForCurrentSession();
+            if (staged.length === 0) return prompt;
+            const blocks = staged.map(item => `\n\n## Staged file: ${item.path}\n\n\`\`\`text\n${item.content}\n\`\`\``).join("");
+            stagedContextBySession[currentSessionKey()] = [];
+            persistSessionUIState();
+            renderStagedContextStrip();
+            renderComposerActionRow();
+            return prompt + blocks;
+        }
+
+        function renderComposerActionRow() {
+            const providerChip = document.getElementById("composer-provider-chip");
+            const modelChip = document.getElementById("composer-model-chip");
+            const toolsChip = document.getElementById("composer-tools-chip");
+            const approvalsChip = document.getElementById("composer-approvals-chip");
+            const sourcesChip = document.getElementById("composer-sources-chip");
+            const scopeChip = document.getElementById("composer-scope-chip");
+            const queueChip = document.getElementById("composer-queue-chip");
+            if (!providerChip) return;
+            providerChip.textContent = `Provider · ${(currentUIState && currentUIState.status === "blocked" && !activeWorkspaceDir) ? "unset" : ((window.__cfgProvider || "openai").toUpperCase())}`;
+            modelChip.textContent = `Model · ${window.__cfgModel || "unset"}`;
+            toolsChip.textContent = `Tools · ${currentToolPreview ? "latest output" : "inspect"}`;
+            approvalsChip.textContent = `Approvals · ${isSessionBusy() ? "none pending" : "idle"}`;
+            sourcesChip.textContent = `Sources · ${stagedContextForCurrentSession().length} staged`;
+            scopeChip.textContent = `Scope · ${stagedContextForCurrentSession().length > 0 ? "staged files" : "workspace-wide"}`;
+            queueChip.textContent = `Queue · ${queueForCurrentSession().length}`;
+        }
+
+        function renderComposerTakeover() {
+            const el = document.getElementById("composer-takeover");
+            if (!el) return;
+            if (isSessionBusy()) {
+                el.classList.add("hidden");
+                el.innerHTML = "";
+                return;
+            }
+            const blocked = currentUIState && currentUIState.status === "blocked";
+            if (!blocked || !currentUIState.cta_action) {
+                el.classList.add("hidden");
+                el.innerHTML = "";
+                return;
+            }
+            el.classList.remove("hidden");
+            el.innerHTML = `
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <div class="font-bold text-amber-300">${escapeHtml(currentUIState.title || "Blocked")}</div>
+                        <div class="text-[11px] text-slate-300">${escapeHtml(currentUIState.blocked_reason || currentUIState.summary || "GoHarness is blocked.")}</div>
+                    </div>
+                    <button type="button" onclick="runComposerCta()" class="px-3 py-2 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold">${escapeHtml(currentUIState.cta_label || "Resolve")}</button>
+                </div>`;
+        }
+
+        const SLASH_COMMAND_SUGGESTIONS = [
+            { label: "/workflows", insert: "/workflows", description: "List registered workflows" },
+            { label: "/workflow ", insert: "/workflow ", description: "Switch active runtime workflow" },
+            { label: "/compact", insert: "/compact", description: "Run manual context compaction" },
+            { label: "/new", insert: "/new", description: "Start a new session" },
+            { label: "/settings", insert: "/settings", description: "Open Settings" },
+            { label: "/workflow-lab", insert: "/workflow-lab", description: "Open Workflow Lab" },
+        ];
+
+        function updateTriggerOverlay() {
+            const overlay = document.getElementById("trigger-overlay");
+            const input = document.getElementById("prompt-input");
+            if (!overlay || !input) return;
+            const value = input.value || "";
+            const trimmed = value.trimStart();
+            let items = [];
+            let mode = null;
+            if (trimmed.startsWith("/")) {
+                mode = "slash";
+                const q = trimmed.slice(1).toLowerCase();
+                items = SLASH_COMMAND_SUGGESTIONS.filter(item => item.label.slice(1).toLowerCase().includes(q)).slice(0, 6)
+                    .map(item => ({ ...item, action: () => applySlashSuggestion(item.insert) }));
+            } else {
+                const atMatch = value.match(/(?:^|\s)@([^\s]*)$/);
+                if (atMatch) {
+                    mode = "file";
+                    const q = atMatch[1].toLowerCase();
+                    items = workspaceTreeEntries.filter(entry => !entry.isDir && entry.path.toLowerCase().includes(q)).slice(0, 8)
+                        .map(entry => ({ label: "@" + entry.path, description: "Stage file into the next prompt", action: () => applyFileSuggestion(entry.path) }));
+                } else if (/^!!?/.test(trimmed)) {
+                    mode = "shell";
+                    items = [
+                        { label: "!command", description: "Run a sandboxed shell command, then send its output to the model", action: () => applyShellSuggestion("!") },
+                        { label: "!!command", description: "Run a sandboxed shell command without sending its output to the model", action: () => applyShellSuggestion("!!") },
+                    ];
+                }
+            }
+            if (!mode || items.length === 0) {
+                overlay.classList.add("hidden");
+                overlay.innerHTML = "";
+                return;
+            }
+            overlay.classList.remove("hidden");
+            overlay.innerHTML = `<div class="text-[10px] uppercase tracking-wider text-slate-500 px-3 py-2 border-b border-[#334155]/60">${mode === "slash" ? "Commands" : mode === "file" ? "Stage file" : "Shell shortcuts"}</div>` + items.map((item, idx) => `
+                <button type="button" data-trigger-index="${idx}" class="w-full text-left px-3 py-2 hover:bg-slate-800/60 border-b border-[#334155]/40 last:border-b-0">
+                    <div class="text-xs font-mono text-slate-200">${escapeHtml(item.label)}</div>
+                    <div class="text-[11px] text-slate-500">${escapeHtml(item.description || "")}</div>
+                </button>`).join("");
+            overlay.querySelectorAll("[data-trigger-index]").forEach((btn, idx) => {
+                btn.addEventListener("click", () => items[idx].action());
+            });
+        }
+
+        function hideTriggerOverlay() {
+            const overlay = document.getElementById("trigger-overlay");
+            if (!overlay) return;
+            overlay.classList.add("hidden");
+            overlay.innerHTML = "";
+        }
+
+        function handleComposerInput() {
+            updateTriggerOverlay();
+        }
+
+        function applySlashSuggestion(insert) {
+            const input = document.getElementById("prompt-input");
+            if (!input) return;
+            input.value = insert;
+            input.focus();
+            input.style.height = "auto";
+            input.style.height = input.scrollHeight + "px";
+            hideTriggerOverlay();
+        }
+
+        function applyFileSuggestion(path) {
+            stageWorkspaceFile(path);
+            const input = document.getElementById("prompt-input");
+            if (input) {
+                input.value = input.value.replace(/(?:^|\s)@([^\s]*)$/, "").trimStart();
+                input.focus();
+                input.style.height = "auto";
+                input.style.height = input.scrollHeight + "px";
+            }
+            hideTriggerOverlay();
+        }
+
+        function applyShellSuggestion(prefix) {
+            const input = document.getElementById("prompt-input");
+            if (!input) return;
+            if (!input.value.trim()) input.value = prefix;
+            else if (!input.value.trimStart().startsWith("!")) input.value = prefix + " ";
+            input.focus();
+            input.style.height = "auto";
+            input.style.height = input.scrollHeight + "px";
+            hideTriggerOverlay();
+        }
+
+        function maybeHandleSlashCommand(prompt) {
+            const trimmed = prompt.trim();
+            if (trimmed === "/compact") {
+                triggerCompaction();
+                appendSystemAlert("Compaction Requested", "Queued a manual context compaction in the background.", "fa-compress text-indigo-400");
+                return true;
+            }
+            if (trimmed === "/settings") {
+                openSettingsModal();
+                setTimeout(() => switchSettingsTab("standard"), 0);
+                return true;
+            }
+            if (trimmed === "/workflow-lab") {
+                switchPrimarySurface("workflow");
+                return true;
+            }
+            if (trimmed === "/new") {
+                triggerNewSession();
+                return true;
+            }
+            return false;
+        }
+
+        async function executeDirectCommand(command) {
+            const res = await fetch("/api/command", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ command }),
+            });
+            if (!res.ok) throw new Error("Command execution failed");
+            const data = await res.json();
+            currentToolPreview = { role: "tool", name: `shell · ${command}`, content: data.result || "", meta: { artifacts: data.artifacts || [] } };
+            recordTrajectoryEvent("tool", "direct_shell_command", command);
+            switchDetailsTab("tool");
+            appendSystemAlert("Shell Command Completed", `Executed sandboxed command: ${command}`, "fa-terminal text-cyan-400");
+            return data.result || "";
+        }
+
+        async function dispatchPromptText(prompt, options = {}) {
+            const text = String(prompt || "").trim();
+            if (!text) return;
+            if (maybeHandleSlashCommand(text)) return;
+
+            const directOnly = text.trimStart().startsWith("!!");
+            const shellToModel = !directOnly && text.trimStart().startsWith("!");
+            if (directOnly || shellToModel) {
+                const command = text.trimStart().replace(/^!!?\s*/, "");
+                if (!command) return;
+                const result = await executeDirectCommand(command);
+                if (directOnly) return;
+                const forwarded = `Direct shell command executed before this prompt:\n$ ${command}\n\n${result}\n\nPlease analyze the command output and continue from there.`;
+                return dispatchPromptText(forwarded, { ...options, shellForwarded: true });
+            }
+
+            const finalPrompt = buildPromptWithStagedContext(text);
+            turnCounter++;
+            appendTurnToChat({
+                role: "user",
+                content: text,
+                turn_number: turnCounter
+            });
+            setLocalBusyState();
+            const res = await fetch("/api/prompt", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt: finalPrompt })
+            });
+            if (!res.ok) throw new Error("API call failed");
+        }
+
+        async function processQueuedMessages() {
+            if (queueDispatchInFlight || isSessionBusy()) return;
+            if (currentUIState && currentUIState.status === "blocked") return;
+            const queue = queueForCurrentSession();
+            if (queue.length === 0) return;
+            const item = queue.shift();
+            persistSessionUIState();
+            renderQueuedMessages();
+            renderComposerActionRow();
+            queueDispatchInFlight = true;
+            try {
+                await dispatchPromptText(item.text, { fromQueue: true, queueKind: item.kind });
+            } catch (err) {
+                appendSystemAlert("Queued Message Failed", err.message || String(err), "fa-triangle-exclamation text-red-400");
+                fetchConfig();
+            } finally {
+                queueDispatchInFlight = false;
+                setTimeout(processQueuedMessages, 0);
+            }
+        }
+
+        // Switch Left Panel Sidebar tabs / utilities
+        function switchSidebarTab(tabName) {
+            currentSidebarSection = ["files", "snapshots"].includes(tabName) ? tabName : "sessions";
+            const filesTab = document.getElementById("tab-files");
+            const sessionsTab = document.getElementById("tab-sessions");
+            const snapshotsTab = document.getElementById("tab-snapshots");
+            const title = document.getElementById("sidebar-surface-title");
+            const subtitle = document.getElementById("sidebar-surface-subtitle");
+            filesTab.classList.add("hidden");
+            sessionsTab.classList.add("hidden");
+            snapshotsTab.classList.add("hidden");
+
+            if (currentSidebarSection === "files") {
+                filesTab.classList.remove("hidden");
+                if (title) title.textContent = "Files";
+                if (subtitle) subtitle.textContent = "Browse workspace files and staged prompt context";
+                refreshWorkspaceTree();
+            } else if (currentSidebarSection === "snapshots") {
+                snapshotsTab.classList.remove("hidden");
+                if (title) title.textContent = "History Utilities";
+                if (subtitle) subtitle.textContent = "Snapshots and workspace recovery tools";
+                fetchSnapshots();
+                switchDetailsTab("history");
+            } else {
+                sessionsTab.classList.remove("hidden");
+                if (title) title.textContent = "Workspaces & Sessions";
+                if (subtitle) subtitle.textContent = "Navigate local workspaces and session threads";
+                fetchSessions();
+                fetchWorkspaces();
+            }
+            syncRailButtons();
+        }
+
+
+        // Suggest Base URL based on provider selection
+        function suggestBaseURL(provider) {
+            const urlInput = document.getElementById("input-base-url");
+            const modelInput = document.getElementById("input-model");
+            const vFields = document.getElementById("vertex-fields");
+            populateKnownModelList("known-models-chat", provider);
+
+            if (provider === "vertex") {
+                vFields.classList.remove("hidden");
+                urlInput.value = ""; // Clear manual override URL for auto-build
+                modelInput.value = "gemini-3.1-flash-lite";
+            } else {
+                vFields.classList.add("hidden");
+                if (provider === "anthropic") {
+                    urlInput.value = "https://api.anthropic.com/v1/messages";
+                    modelInput.value = "claude-3-5-sonnet-latest";
+                } else if (provider === "gemini") {
+                    urlInput.value = ""; // Let backend build URL automatically!
+                    modelInput.value = "gemini-1.5-flash";
+                } else {
+                    urlInput.value = "https://api.openai.com/v1/chat/completions";
+                    modelInput.value = "gpt-4o";
+                }
+            }
+        }
+
+        // WORKSPACE MANAGEMENT
+        function fetchWorkspaces() {
+            fetch("/api/workspaces")
+                .then(res => res.json())
+                .then(data => {
+                    const summary = document.getElementById("workspace-active-summary");
+                    if (summary) summary.textContent = data.active || "./workspace";
+
+                    // Render gorgeous workspace history list
+                    let wsHtml = "";
+                    data.workspaces.forEach(ws => {
+                        const isActive = ws === data.active;
+                        const activeClass = isActive 
+                            ? "bg-blue-950/40 border-blue-500 text-blue-400 font-bold font-mono" 
+                            : "bg-slate-900/30 border-transparent text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 font-mono";
+                        wsHtml += `
+                            <div class="flex items-center justify-between p-1.5 rounded border border-[#334155]/60 text-[10px] ${activeClass}">
+                                <span class="truncate cursor-pointer flex-1" onclick="changeWorkspaceFromSelector('${ws.replace(/\\/g, '\\\\')}')" title="Click to swap to this workspace">${ws}</span>
+                                ${!isActive ? `
+                                <button onclick="removeWorkspaceFromHistory(event, '${ws.replace(/\\/g, '\\\\')}')" class="text-slate-500 hover:text-red-400 p-0.5 ml-1" title="Remove from history">
+                                    <i class="fa-solid fa-times text-[10px]"></i>
+                                </button>` : ''}
+                            </div>
+                        `;
+                    });
+                    document.getElementById("workspaces-history-list").innerHTML = wsHtml || '<div class="text-slate-500 italic text-[10px]">No workspace history.</div>';
+                })
+                .catch(err => console.error("Error loading workspaces:", err));
+        }
+
+        function removeWorkspaceFromHistory(e, path) {
+            if (e) e.stopPropagation();
+            if (!confirm(`Are you sure you want to remove workspace '${path}' from history?`)) return;
+            fetch("/api/workspaces/remove", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: path })
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchWorkspaces();
+            })
+            .catch(err => alert("Error removing workspace: " + err));
+        }
+
+        function addNewWorkspace() {
+            const input = document.getElementById("new-workspace-input");
+            const path = input.value.trim();
+            if (!path) return;
+            fetch("/api/workspaces/select", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: path })
+            })
+            .then(res => res.json())
+            .then(data => {
+                input.value = "";
+                fetchConfig();
+                refreshWorkspaceTree();
+                fetchWorkspaces();
+                fetchSessions();
+                const chatContainer = document.getElementById("chat-messages");
+                chatContainer.innerHTML = "";
+                appendGreeting();
+                appendSystemAlert("Workspace Swapped", `Active directory is now aligned to: ${path}. Spun up a new thread.`, "fa-folder-open text-cyan-400");
+                turnCounter = 0;
+            })
+            .catch(err => alert("Error adding workspace: " + err));
+        }
+
+        function changeWorkspaceFromSelector(path) {
+            if (!path) return;
+            fetch("/api/workspaces/select", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: path })
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchConfig();
+                refreshWorkspaceTree();
+                fetchSessions();
+                fetchPinnedFiles();
+                const chatContainer = document.getElementById("chat-messages");
+                chatContainer.innerHTML = "";
+                appendGreeting();
+                appendSystemAlert("Workspace Swapped", `Active directory is now aligned to: ${path}. Spun up a new thread.`, "fa-folder-open text-cyan-400");
+                turnCounter = 0;
+            });
+        }
+
+        // SESSIONS MANAGEMENT
+        function fetchSessions() {
+            let url = "/api/sessions";
+            if (activeWorkspaceDir) {
+                url += "?workspace=" + encodeURIComponent(activeWorkspaceDir);
+            }
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    const listContainer = document.getElementById("sessions-list");
+                    let html = "";
+                    
+                    if (!data.sessions || data.sessions.length === 0) {
+                        listContainer.innerHTML = '<div class="text-slate-500 italic">No recorded sessions.</div>';
+                        return;
+                    }
+
+                    data.sessions.sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+                    data.sessions.forEach(sess => {
+                        const isActive = sess.session_id === document.getElementById("session-id").innerText.replace("Session: ", "").trim();
+                        const activeClass = isActive 
+                            ? "bg-slate-800 border-blue-500/80 text-white font-bold" 
+                            : "bg-slate-900/30 border-transparent text-slate-400 hover:bg-slate-800/40 hover:text-slate-200";
+                        
+                        const date = new Date(sess.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+                        html += `
+                            <div onclick="selectSession('${sess.session_id}')" class="group relative p-2.5 rounded-lg border-l-4 cursor-pointer transition flex flex-col justify-between space-y-1 ${activeClass}">
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <span class="truncate pr-8 text-slate-200 font-medium" id="sess-display-${sess.session_id}">${sess.name}</span>
+                                    <span class="text-[10px] text-slate-500 shrink-0 font-mono">${date}</span>
+                                </div>
+                                <div class="text-[10px] text-slate-500 truncate font-mono">Dir: ${sess.workspace_dir}</div>
+                                
+                                <!-- Session Action Buttons -->
+                                <div class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition duration-150 flex items-center space-x-1">
+                                    <button onclick="renameSessionPrompt(event, '${sess.session_id}', '${sess.name.replace(/'/g, "\\'")}')" class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white" title="Rename Session">
+                                        <i class="fa-solid fa-pen text-[9px]"></i>
+                                    </button>
+                                    <button onclick="deleteSessionConfirm(event, '${sess.session_id}')" class="p-1 rounded bg-red-950/60 hover:bg-red-900 text-red-400 hover:text-white" title="Delete Session">
+                                        <i class="fa-solid fa-trash text-[9px]"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    listContainer.innerHTML = html;
+                })
+                .catch(err => console.error("Error loading sessions:", err));
+        }
+
+        function renameSessionPrompt(e, id, currentName) {
+            if (e) e.stopPropagation();
+            const newName = prompt(`Enter a new name for session '${currentName}':`, currentName);
+            if (newName === null || newName.trim() === "" || newName.trim() === currentName) return;
+            fetch("/api/sessions/rename", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: id, name: newName.trim() })
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchSessions();
+            })
+            .catch(err => alert("Error renaming session: " + err));
+        }
+
+        function deleteSessionConfirm(e, id) {
+            if (e) e.stopPropagation();
+            if (!confirm("Are you sure you want to permanently delete this conversation session and its turn logs? This cannot be undone.")) return;
+            fetch("/api/sessions/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                const activeId = document.getElementById("session-id").innerText.replace("Session: ", "").trim();
+                if (id === activeId) {
+                    // We deleted the active session, let's load what the backend set as new active session
+                    fetchConfig();
+                    refreshWorkspaceTree();
+                    fetchSessions();
+                    const chatContainer = document.getElementById("chat-messages");
+                    chatContainer.innerHTML = "";
+                    appendGreeting();
+                    turnCounter = 0;
+                } else {
+                    fetchSessions();
+                }
+            })
+            .catch(err => alert("Error deleting session: " + err));
+        }
+
+        function selectSession(id) {
+            fetch("/api/sessions/select", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchConfig();
+                refreshWorkspaceTree();
+                fetchSessions();
+                fetchPinnedFiles();
+                
+                const chatContainer = document.getElementById("chat-messages");
+                chatContainer.innerHTML = "";
+                appendGreeting();
+                
+                if (data.history) {
+                    data.history.forEach((turn, index) => {
+                        turn.turn_number = index + 1; // Dynamically restore turn indices (Phase 8.6 rendering fix)
+                        appendTurnToChat(turn);
+                    });
+                }
+                turnCounter = data.history ? data.history.length : 0;
+            })
+            .catch(err => alert("Failed to switch session: " + err));
+        }
+
+        function triggerNewSession() {
+            const name = prompt("Enter a name for this new conversation thread (optional):", `New Session`);
+            if (name === null) return;
+
+            fetch("/api/sessions/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    workspace_dir: activeWorkspaceDir,
+                    name: name.trim() || "New Session"
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchConfig();
+                fetchSessions();
+                refreshWorkspaceTree();
+                fetchPinnedFiles();
+                
+                const chatContainer = document.getElementById("chat-messages");
+                chatContainer.innerHTML = "";
+                appendGreeting();
+                appendSystemAlert("New Session Started", `Spun up a fresh, clean conversation thread '${data.name}' inside your active workspace.`, "fa-comment-medical text-green-400");
+                turnCounter = 0;
+            })
+            .catch(err => alert("Failed to start session: " + err));
+        }
+
+        // TIMELINE FORK / BRANCHING OVERLAYS
+        function triggerFork(turn) {
+            selectedForkTurn = turn;
+            document.getElementById("fork-turn-display").innerText = turn;
+            const subs = document.getElementsByClassName("fork-turn-sub");
+            for (let s of subs) s.innerText = turn;
+            
+            document.getElementById("input-branch-name").value = `Branch_from_Turn_${turn}`;
+            document.getElementById("fork-modal").classList.remove("hidden");
+        }
+
+        // Close branching modal
+        function closeForkModal() {
+            document.getElementById("fork-modal").classList.add("hidden");
+        }
+
+        function toggleForkFields(type) {
+            const bFields = document.getElementById("branch-fields");
+            if (type === "branch") {
+                bFields.classList.remove("hidden");
+            } else {
+                bFields.classList.add("hidden");
+            }
+        }
+
+        function executeForkAction() {
+            const isBranch = document.getElementById("fork-type-branch").checked;
+            
+            if (isBranch) {
+                const branchName = document.getElementById("input-branch-name").value.trim() || `Branch Turn ${selectedForkTurn}`;
+                const payload = {
+                    parent_session_id: document.getElementById("session-id").innerText.replace("Session: ", "").trim(),
+                    turn: selectedForkTurn,
+                    branch_name: branchName
+                };
+
+                fetch("/api/sessions/branch", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                })
+                .then(res => res.json())
+                .then(data => {
+                    closeForkModal();
+                    fetchConfig();
+                    refreshWorkspaceTree();
+                    fetchSessions();
+
+                    const chatContainer = document.getElementById("chat-messages");
+                    chatContainer.innerHTML = "";
+                    appendGreeting();
+                    appendSystemAlert("New Timeline Created", `Spun up parallel timeline branch '${branchName}' from Turn ${selectedForkTurn}. The original timeline is completely preserved.`, "fa-code-branch text-green-400");
+                    
+                    if (data.history) {
+                        data.history.forEach((turn, index) => {
+                            turn.turn_number = index + 1; // Dynamically restore turn indices
+                            appendTurnToChat(turn);
+                        });
+                    }
+                    turnCounter = selectedForkTurn;
+                    switchSidebarTab("sessions");
+                })
+                .catch(err => alert("Failed to create branch: " + err));
+            } else {
+                const payload = { turn: selectedForkTurn };
+                fetch("/api/fork", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                })
+                .then(res => res.json())
+                .then(data => {
+                    closeForkModal();
+                    refreshWorkspaceTree();
+                    fetchSessions();
+
+                    const chatContainer = document.getElementById("chat-messages");
+                    chatContainer.innerHTML = "";
+                    appendGreeting();
+                    appendSystemAlert("Session Truncated", `Timeline rolled back to Turn ${selectedForkTurn}. All future turn files deleted.`, "fa-scissors text-amber-400");
+                    
+                    if (data.history) {
+                        data.history.forEach((turn, index) => {
+                            turn.turn_number = index + 1; // Dynamically restore turn indices
+                            appendTurnToChat(turn);
+                        });
+                    }
+                    turnCounter = selectedForkTurn;
+                })
+                .catch(err => alert("Fork failed: " + err));
+            }
+        }
+
+        // Settings Modal controls
+        function renderSettingsConnectionsSummary(cfg) {
+            const host = document.getElementById("settings-connections-summary");
+            if (!host) return;
+            const activeProfile = cfg.provider_profile ? `@${cfg.provider_profile}` : "inline";
+            const compProfile = cfg.compaction && cfg.compaction.provider_profile ? `@${cfg.compaction.provider_profile}` : "inline";
+            host.innerHTML = `
+                <div class="rounded border border-[#334155]/60 bg-slate-950/30 p-3">
+                    <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Active chat</div>
+                    <div class="font-mono text-slate-200 text-xs">${escapeHtml(activeProfile)}</div>
+                    <div class="mt-1 text-[11px] text-slate-400">${escapeHtml((cfg.api.provider || "openai").toUpperCase())} · ${escapeHtml(cfg.api.model || "unset")}</div>
+                </div>
+                <div class="rounded border border-[#334155]/60 bg-slate-950/30 p-3">
+                    <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Compaction</div>
+                    <div class="font-mono text-slate-200 text-xs">${escapeHtml(compProfile)}</div>
+                    <div class="mt-1 text-[11px] text-slate-400">${escapeHtml(((cfg.compaction && cfg.compaction.provider) || "openai").toUpperCase())} · ${escapeHtml((cfg.compaction && cfg.compaction.model) || "unset")}</div>
+                </div>`;
+        }
+
+        function openSettingsModal() {
+            fetch("/api/config")
+                .then(res => res.json())
+                .then(cfg => {
+                    currentSettingsRevision = cfg.settings_revision || 0;
+                    const provider = cfg.api.provider || "openai";
+                    document.getElementById("input-provider").value = provider;
+                    document.getElementById("input-api-key").value = cfg.api.key || "";
+                    document.getElementById("input-model").value = cfg.api.model || "gpt-4o";
+                    document.getElementById("input-base-url").value = cfg.api.base_url || "";
+                    document.getElementById("input-sandbox-mode").value = cfg.security.sandbox_mode || "host";
+                    document.getElementById("input-sandbox-fallback").value = String(cfg.security.sandbox_fallback || false);
+                    document.getElementById("input-max-turns").value = cfg.agent.max_turns || 15;
+                    document.getElementById("input-target-scan-dirs").value = (cfg.agent.target_scan_dirs || []).join(", ");
+
+                    // Compaction parameters
+                    if (cfg.compaction) {
+                        const compProvider = cfg.compaction.provider || "openai";
+                        document.getElementById("input-compact-provider").value = compProvider;
+                        document.getElementById("input-compact-api-key").value = cfg.compaction.key || "";
+                        document.getElementById("input-compact-base-url").value = cfg.compaction.base_url || "";
+                        document.getElementById("input-compact-model").value = cfg.compaction.model || "gpt-4o-mini";
+                        document.getElementById("input-compact-temp").value = cfg.compaction.temperature !== undefined ? cfg.compaction.temperature : 0.2;
+                        
+                        document.getElementById("input-compact-project-id").value = cfg.compaction.project_id || "";
+                        document.getElementById("input-compact-region").value = cfg.compaction.region || "";
+
+                        // Toggle compaction vertex fields based on provider selection
+                        const compVFields = document.getElementById("compact-vertex-fields");
+                        if (compProvider === "vertex") {
+                            compVFields.classList.remove("hidden");
+                        } else {
+                            compVFields.classList.add("hidden");
+                        }
+
+                        document.getElementById("input-compact-turns").value = cfg.compaction.auto_compact_turns || 6;
+                        document.getElementById("input-compact-keep-n").value = cfg.compaction.keep_last_n || 2;
+                        document.getElementById("input-compact-prompt").value = cfg.compaction.system_prompt || "";
+                    }
+                    
+                    // Advanced parameters (Phase 8.6)
+                    document.getElementById("input-temperature").value = cfg.api.temperature !== undefined ? cfg.api.temperature : 0.0;
+                    document.getElementById("input-top-p").value = cfg.api.top_p !== undefined ? cfg.api.top_p : 0.95;
+                    document.getElementById("input-top-k").value = cfg.api.top_k !== undefined ? cfg.api.top_k : 40;
+                    document.getElementById("input-thinking").value = cfg.api.thinking_level || "off";
+                    document.getElementById("input-project-id").value = cfg.api.project_id || "";
+                    document.getElementById("input-region").value = cfg.api.region || "";
+                    document.getElementById("input-debug").checked = cfg.debug || false;
+
+                    // Toggle fields based on active provider
+                    const vFields = document.getElementById("vertex-fields");
+                    if (provider === "vertex") {
+                        vFields.classList.remove("hidden");
+                    } else {
+                        vFields.classList.add("hidden");
+                    }
+                    populateKnownModelList("known-models-chat", provider);
+                    populateKnownModelList("known-models-compact", (cfg.compaction && cfg.compaction.provider) || "openai");
+
+                    renderSettingsConnectionsSummary(cfg);
+
+                    // Fetch exclusions
+                    fetch("/api/config/exclusions")
+                        .then(res => res.json())
+                        .then(ex => {
+                            currentIgnoredPatterns = ex.ignored_patterns || [];
+                            currentCollapsedPatterns = ex.collapsed_patterns || [];
+                            renderExclusionChips();
+                        });
+
+                    // Fetch MCP servers
+                    fetchMCPServers();
+
+                    // Populate the two profile selectors and set active values.
+                    populateProfileSelectors(cfg.provider_profile, cfg.compaction ? cfg.compaction.provider_profile : "");
+                    
+                    document.getElementById("settings-modal").classList.remove("hidden");
+                })
+                .catch(err => alert("Failed to fetch settings: " + err));
+        }
+
+        function closeSettingsModal() {
+            document.getElementById("settings-modal").classList.add("hidden");
+        }
+
+        // Save Settings
+        function saveSettings(e) {
+            e.preventDefault();
+            
+            const payload = {
+                provider: document.getElementById("input-provider").value,
+                provider_profile: document.getElementById("input-provider-profile").value,
+                api_key: document.getElementById("input-api-key").value.trim(),
+                model: document.getElementById("input-model").value.trim(),
+                base_url: document.getElementById("input-base-url").value.trim(),
+                sandbox_mode: document.getElementById("input-sandbox-mode").value,
+                sandbox_fallback: document.getElementById("input-sandbox-fallback").value === "true",
+                max_turns: parseInt(document.getElementById("input-max-turns").value) || 15,
+                target_scan_dirs: document.getElementById("input-target-scan-dirs").value.split(",").map(s => s.trim()).filter(s => s),
+
+                // Compaction parameters
+                compact_profile: document.getElementById("input-compact-profile").value,
+                compact_provider: document.getElementById("input-compact-provider").value,
+                compact_api_key: document.getElementById("input-compact-api-key").value.trim(),
+                compact_base_url: document.getElementById("input-compact-base-url").value.trim(),
+                compact_model: document.getElementById("input-compact-model").value.trim() || "gpt-4o-mini",
+                compact_temp: parseFloat(document.getElementById("input-compact-temp").value) || 0.2,
+                compact_project_id: document.getElementById("input-compact-project-id").value.trim(),
+                compact_region: document.getElementById("input-compact-region").value.trim(),
+                compact_turns: parseInt(document.getElementById("input-compact-turns").value) || 6,
+                compact_keep_n: parseInt(document.getElementById("input-compact-keep-n").value) || 2,
+                compact_prompt: document.getElementById("input-compact-prompt").value.trim(),
+                
+                // Advanced params (Phase 8.6)
+                temperature: parseFloat(document.getElementById("input-temperature").value) || 0.0,
+                top_p: parseFloat(document.getElementById("input-top-p").value) || 0.95,
+                top_k: parseInt(document.getElementById("input-top-k").value) || 40,
+                thinking_level: document.getElementById("input-thinking").value,
+                project_id: document.getElementById("input-project-id").value.trim(),
+                region: document.getElementById("input-region").value.trim(),
+                debug: document.getElementById("input-debug").checked,
+                expected_revision: currentSettingsRevision
+            };
+
+            // Save exclusions
+            fetch("/api/config/exclusions/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    ignored_patterns: currentIgnoredPatterns,
+                    collapsed_patterns: currentCollapsedPatterns
+                })
+            })
+            .then(() => {
+                return fetch("/api/config/save", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+            })
+            .then(async res => {
+                if (!res.ok) {
+                    const msg = await res.text();
+                    throw new Error(msg || "Failed to save config");
+                }
+                return res.json();
+            })
+            .then(data => {
+                currentSettingsRevision = data.settings_revision || currentSettingsRevision;
+                closeSettingsModal();
+                fetchConfig();
+                appendSystemAlert("System Settings Saved", `Configurations and scan exclusions successfully updated. Now running on provider '${payload.provider.toUpperCase()}' using model '${payload.model}'.`, "fa-check-double text-green-400");
+                refreshWorkspaceTree();
+                fetchWorkspaces();
+            })
+            .catch(err => {
+                const msg = String(err && err.message ? err.message : err);
+                if (msg.includes("settings-conflict")) {
+                    alert("Settings changed elsewhere. Please reopen Settings, review the latest values, and try again.");
+                    openSettingsModal();
+                    return;
+                }
+                alert("Error saving settings: " + err);
+            });
+        }
+
+        // Fetch config details
+        function fetchConfig() {
+            return fetch("/api/config")
+                .then(res => res.json())
+                .then(cfg => {
+                    activeWorkspaceDir = cfg.agent.workspace_dir;
+                    window.__cfgProvider = cfg.api.provider || "openai";
+                    window.__cfgModel = cfg.api.model || "";
+                    document.getElementById("model-name").innerText = cfg.api.model + " (" + (cfg.api.provider || "openai").toUpperCase() + ")";
+                    document.getElementById("workspace-path").innerText = "Path: " + cfg.agent.workspace_dir;
+                    document.getElementById("session-id").innerText = "Session: " + cfg.session_id;
+                    currentUIState = cfg.ui_state || currentUIState;
+                    applyThemeChrome();
+                    updateComposerState();
+                    renderComposerActionRow();
+                    renderQueuedMessages();
+                    renderStagedContextStrip();
+                    renderComposerTakeover();
+                    renderEmptyHero();
+                    fetchSessions();
+                    return cfg;
+                })
+                .catch(err => console.error("Error fetching config:", err));
+        }
+
+        // Fetch and render workspace tree
+        function refreshWorkspaceTree() {
+            const treeContainer = document.getElementById("workspace-tree");
+            treeContainer.innerHTML = '<div class="text-slate-500 italic"><i class="fa-solid fa-spinner animate-spin mr-2"></i>Scanning workspace...</div>';
+            
+            fetch("/api/workspace/tree")
+                .then(res => res.json())
+                .then(data => {
+                    workspaceTreeEntries = Array.isArray(data.entries) ? data.entries : [];
+                    const lines = data.tree.split("\n");
+                    let html = "";
+                    let entryIndex = 0;
+                    lines.forEach(line => {
+                        if (!line.trim()) return;
+
+                        const matchesTreeRow = /^((?:│   |    )*)(?:├── |└── )(.+)$/.test(line);
+                        const entry = matchesTreeRow ? workspaceTreeEntries[entryIndex++] : null;
+                        let processedLine = line
+                            .replace("[collapsed]", '<span class="text-slate-500 italic text-[10px] bg-slate-900 px-1.5 py-0.5 rounded ml-1">[collapsed]</span>')
+                            .replace(/\[Modified (.*?) ago\]/, '<span class="text-amber-400 text-[10px] bg-amber-950/40 border border-amber-800 px-1.5 py-0.5 rounded ml-2 font-mono"><i class="fa-solid fa-clock mr-0.5"></i>$1</span>')
+                            .replace("[New / Untracked]", '<span class="text-emerald-400 text-[10px] bg-emerald-950/40 border border-emerald-800 px-1.5 py-0.5 rounded ml-2 font-mono font-bold"><i class="fa-solid fa-plus-circle mr-0.5"></i>New</span>');
+
+                        if (entry && !entry.isDir) {
+                            html += `<div class="workspace-file-row group hover:bg-slate-800/40 px-2 py-0.5 rounded transition duration-75"><button type="button" data-workspace-file="${escapeHtml(entry.path)}" class="workspace-file-row-preview truncate">${processedLine}</button><div class="workspace-file-row-actions opacity-0 group-hover:opacity-100 transition"><button type="button" data-stage-file="${escapeHtml(entry.path)}" class="typed-action-btn">Stage</button></div></div>`;
+                        } else {
+                            html += `<div class="hover:bg-slate-800/20 px-2 py-0.5 rounded transition duration-75 truncate">${processedLine}</div>`;
+                        }
+                    });
+                    treeContainer.innerHTML = html;
+                    treeContainer.querySelectorAll("[data-workspace-file]").forEach(row => {
+                        row.addEventListener("click", () => openWorkspaceFile(row.getAttribute("data-workspace-file")));
+                    });
+                    treeContainer.querySelectorAll("[data-stage-file]").forEach(row => {
+                        row.addEventListener("click", (event) => {
+                            event.stopPropagation();
+                            stageWorkspaceFile(row.getAttribute("data-stage-file"));
+                        });
+                    });
+                })
+                .catch(err => {
+                    treeContainer.innerHTML = `<div class="text-red-400">Failed to load directory tree: ${err}</div>`;
+                });
+        }
+
+        // Connect Server-Sent Events (SSE)
+        function connectSSE() {
+            if (sseSource) sseSource.close();
+            sseSource = new EventSource("/stream");
+            
+            sseSource.onmessage = (event) => {
+                const packet = JSON.parse(event.data);
+                handleIncomingEvent(packet);
+            };
+
+            sseSource.onerror = (err) => {
+                document.getElementById("status-dot").className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
+                document.getElementById("status-text").innerText = "Reconnecting...";
+                setTimeout(connectSSE, 2000);
+            };
+
+            sseSource.onopen = () => {
+                document.getElementById("status-dot").className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
+                document.getElementById("status-text").innerText = "Connected";
+            };
+        }
+
+        function handleIncomingEvent(packet) {
+            if (packet.event === "session_init") {
+                document.getElementById("session-id").innerText = "Session: " + packet.data.session_id;
+                trajectoryEvents = [];
+                subagentRegistry = {};
+                deliverableRegistry = [];
+                currentFilePreview = null;
+                currentToolPreview = null;
+                restoreSessionUIState(packet.data.session_id);
+                recordTrajectoryEvent("session", "session_init", `Active session is now ${packet.data.session_id}.`);
+                renderSubagentsView();
+                renderDeliverablesPanel();
+                renderFilePanel();
+                renderToolPanel();
+                fetchConfig();
+            }
+
+            if (packet.event === "run_state") {
+                if (packet.data && packet.data.session_id === currentSessionId()) {
+                    recordTrajectoryEvent("run", packet.data.running ? "run_state:start" : "run_state:end", packet.data.running ? "Session execution started." : "Session execution completed.");
+                    fetchConfig();
+                }
+            }
+
+            if (packet.event === "turn_secured") {
+                const turnData = packet.data;
+                appendTurnToChat(turnData);
+                extractDeliverablesFromTool(turnData);
+                recordTrajectoryEvent(turnData.role || "turn", `turn_secured:${turnData.role || "message"}`, (turnData.name ? `${turnData.name} · ` : "") + ((turnData.content || "").slice(0, 140) || "(no content)"));
+                refreshWorkspaceTree();
+            }
+
+            if (packet.event === "compaction") {
+                recordTrajectoryEvent("compaction", "compaction", `Compacted history up to turn ${packet.data.boundary_turn}.`);
+                appendSystemAlert("Compaction Engaged", `Context compacted up to Turn ${packet.data.boundary_turn}. History older than this turn has been summarized to save tokens.`, "fa-compress text-indigo-400");
+            }
+
+            if (packet.event === "cost_update") {
+                // Update spent cost (Phase 8.6)
+                activeCost += parseFloat(packet.data.cost);
+                document.getElementById("session-cost").innerText = "$" + activeCost.toFixed(4);
+
+                // Increment and update cumulative tokens indicator (Phase 8.6)
+                let currentTokens = parseInt(document.getElementById("session-tokens").innerText) || 0;
+                currentTokens += packet.data.total_tokens || 0;
+                document.getElementById("session-tokens").innerText = currentTokens;
+
+                // Update cumulative character count indicator (Phase 8.6)
+                document.getElementById("session-chars").innerText = `(${packet.data.char_count} chars)`;
+
+                // Real-time Intermediate Node Metrics population (Observability!)
+                const lastTurnCostId = `metric-cost-${turnCounter}`;
+                const lastTokensCardId = `metric-tokens-${turnCounter}`;
+
+                if (document.getElementById(lastTurnCostId)) {
+                    document.getElementById(lastTurnCostId).innerText = "$" + parseFloat(packet.data.cost).toFixed(6);
+                    document.getElementById(lastTokensCardId).innerText = `${packet.data.prompt_tokens} In / ${packet.data.completion_tokens} Out (${packet.data.total_tokens} total)`;
+                }
+            }
+
+            // ===== v2.0 LIVE WORKFLOW TRACE =====
+            if (packet.event === "workflow_start") {
+                recordTrajectoryEvent("workflow", "workflow_start", packet.data.name || packet.data.workflow_id || "workflow started");
+                renderWorkflowTrace(packet.data);
+            }
+            if (packet.event === "workflow_node") {
+                recordTrajectoryEvent("workflow_node", `${packet.data.node_id || "node"} · ${packet.data.status || "update"}`, packet.data.preview || packet.data.error || packet.data.label || packet.data.type || "");
+                updateWorkflowNode(packet.data);
+            }
+            if (packet.event === "workflow_end") {
+                recordTrajectoryEvent("workflow", `workflow_${packet.data.status || "end"}`, packet.data.name || packet.data.workflow_id || "workflow finished");
+                finalizeWorkflowTrace(packet.data);
+            }
+
+            // ===== PARALLEL SUB-AGENTS =====
+            if (packet.event === "subagent_start") {
+                updateSubagentRegistry(packet.data, "running");
+                recordTrajectoryEvent("subagent", "subagent_start", packet.data.description || packet.data.session_id || "sub-agent started");
+                renderSubAgentRow(packet.data, "running");
+            }
+            if (packet.event === "subagent_done") {
+                updateSubagentRegistry(packet.data, "done");
+                recordTrajectoryEvent("subagent", "subagent_done", packet.data.description || packet.data.session_id || "sub-agent finished");
+                renderSubAgentRow(packet.data, "done");
+            }
+        }
+
+        // Sub-agent progress card. Groups concurrent sub-agents by parent
+        // turn/session; rows update as start/done events arrive.
+        function subAgentCardId(data) {
+            return "subagents-" + (data.parent_session || "root");
+        }
+
+        function ensureSubAgentCard(data) {
+            const chat = document.getElementById("chat-messages");
+            removeEmptyHero();
+            let card = document.getElementById(subAgentCardId(data));
+            if (card) return card;
+            card = document.createElement("div");
+            card.id = subAgentCardId(data);
+            card.className = "max-w-4xl mx-auto rounded-lg border border-cyan-500/30 bg-slate-900/40 overflow-hidden";
+            card.innerHTML = `
+                <div class="flex items-center justify-between px-4 py-2 bg-cyan-950/30 border-b border-cyan-500/20">
+                    <div class="flex items-center gap-2 text-cyan-300 font-bold text-xs uppercase tracking-wider">
+                        <i class="fa-solid fa-diagram-project text-sm"></i>
+                        <span class="sa-title">Sub-agents</span>
+                    </div>
+                    <span class="sa-status text-[10px] font-mono text-cyan-400 flex items-center">
+                        <i class="fa-solid fa-spinner fa-spin mr-1.5"></i> running
+                    </span>
+                </div>
+                <div class="px-4 py-2 sa-rows space-y-1.5"></div>`;
+            chat.appendChild(card);
+            chat.scrollTop = chat.scrollHeight;
+            return card;
+        }
+
+        function renderSubAgentRow(data, state) {
+            const card = ensureSubAgentCard(data);
+            const rows = card.querySelector(".sa-rows");
+            const rowId = "sa-" + (data.session_id || data.description || Date.now());
+            let row = document.getElementById(rowId);
+            const label = data.description || data.session_id || "sub-agent";
+            if (!row) {
+                row = document.createElement("div");
+                row.id = rowId;
+                row.className = "flex items-center gap-2 text-[11px]";
+                rows.appendChild(row);
+            }
+            const icon = state === "done"
+                ? '<i class="fa-solid fa-circle-check text-emerald-400"></i>'
+                : '<i class="fa-solid fa-spinner fa-spin text-cyan-400"></i>';
+            const dur = data.duration_ms ? ` · ${data.duration_ms} ms` : "";
+            row.innerHTML = `${icon}<span class="font-mono text-slate-300 truncate">${escapeHtml(label)}</span><span class="text-slate-500 text-[10px]">${dur}</span>`;
+            if (state === "done") {
+                const pending = rows.querySelectorAll(".fa-spinner").length;
+                if (pending === 0) {
+                    const st = card.querySelector(".sa-status");
+                    st.innerHTML = '<i class="fa-solid fa-circle-check mr-1.5 text-emerald-400"></i> completed';
+                    st.classList.remove("text-cyan-400");
+                    st.classList.add("text-emerald-400");
+                }
+            }
+            const chat = document.getElementById("chat-messages");
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function currentSessionId() {
+            return document.getElementById("session-id").innerText.replace("Session: ", "").trim();
+        }
+
+        function applyThemeChrome() {
+            if (!document.body.dataset.theme) document.body.dataset.theme = "dark";
+            window.requestAnimationFrame(() => {
+                const bg = getComputedStyle(document.body).getPropertyValue("--gh-bg-app").trim() || "#0f172a";
+                const meta = document.querySelector('meta[name="theme-color"]');
+                if (meta) meta.setAttribute("content", bg);
+                document.documentElement.style.colorScheme = document.body.dataset.theme === "light" ? "light" : "dark";
+            });
+        }
+
+        function removeEmptyHero() {
+            const hero = document.getElementById("empty-hero");
+            if (hero) hero.remove();
+        }
+
+        function seedPromptExample(prompt) {
+            const input = document.getElementById("prompt-input");
+            if (!input || input.disabled) return;
+            input.value = prompt;
+            input.style.height = "auto";
+            input.style.height = input.scrollHeight + "px";
+            input.focus();
+        }
+
+        function runComposerCta() {
+            const action = currentUIState && currentUIState.cta_action;
+            if (action === "open_settings") {
+                openSettingsModal();
+                setTimeout(() => switchSettingsTab("standard"), 0);
+                return;
+            }
+            if (action === "open_workspace") {
+                switchSidebarTab("sessions");
+                setTimeout(() => {
+                    const input = document.getElementById("new-workspace-input");
+                    if (input) input.focus();
+                }, 0);
+                return;
+            }
+            const input = document.getElementById("prompt-input");
+            if (input && !input.disabled) input.focus();
+        }
+
+        function handleComposerShellClick(event) {
+            if (event.target.closest("button")) return;
+            if (isSessionBusy()) {
+                const input = document.getElementById("prompt-input");
+                if (input) input.focus();
+                return;
+            }
+            if (currentUIState && currentUIState.composer_enabled) return;
+            if (!currentUIState || !currentUIState.cta_action) return;
+            runComposerCta();
+        }
+
+        function setLocalBusyState() {
+            currentUIState = {
+                composer_enabled: false,
+                status: "busy",
+                blocked_reason: "GoHarness is already executing this session. Queue a steering message or wait for the current run to finish.",
+                cta_action: "",
+                cta_label: "",
+                title: "Current session is running",
+                summary: "Live tool output and assistant replies will continue streaming below until the run finishes."
+            };
+            updateComposerState();
+            renderComposerActionRow();
+            renderComposerTakeover();
+            renderEmptyHero();
+        }
+
+        function updateComposerState() {
+            const state = currentUIState || { composer_enabled: true, status: "ready" };
+            const form = document.getElementById("prompt-form");
+            const shell = document.getElementById("composer-shell");
+            const input = document.getElementById("prompt-input");
+            const submit = document.getElementById("prompt-submit");
+            const submitLabel = document.getElementById("prompt-submit-label");
+            const reroll = document.getElementById("reroll-btn");
+            const cta = document.getElementById("composer-cta");
+            const ctaLabel = document.getElementById("composer-cta-label");
+            const hint = document.getElementById("composer-state-hint");
+            if (!form || !shell || !input || !submit || !submitLabel || !reroll || !cta || !ctaLabel || !hint) return;
+
+            const busy = state.status === "busy";
+            const enabled = !!state.composer_enabled || busy;
+            input.disabled = !enabled;
+            input.readOnly = !enabled;
+            input.placeholder = busy
+                ? "Queue a steering message for after the current run, or use Alt+Enter for a follow-up..."
+                : (enabled ? DEFAULT_PROMPT_PLACEHOLDER : (state.blocked_reason || "GoHarness is not ready yet."));
+            submit.disabled = !enabled;
+            submitLabel.textContent = busy ? "Queue" : "Execute";
+            reroll.disabled = !state.composer_enabled;
+            shell.classList.toggle("is-disabled", !enabled);
+            shell.classList.toggle("is-clickable", !enabled && !!state.cta_action);
+            form.setAttribute("aria-disabled", enabled ? "false" : "true");
+
+            if (busy) {
+                cta.classList.add("hidden");
+                cta.classList.remove("inline-flex");
+                hint.innerHTML = 'Current run active. Press <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Enter</kbd> to queue steering, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Alt+Enter</kbd> to queue follow-up, and <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Shift+Enter</kbd> for new line.';
+            } else if (enabled) {
+                cta.classList.add("hidden");
+                cta.classList.remove("inline-flex");
+                hint.innerHTML = 'GoHarness Sandbox Mode is active. System write-protection active. Press <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Enter</kbd> to execute, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Shift+Enter</kbd> for new line.';
+            } else {
+                if (state.cta_label) {
+                    ctaLabel.textContent = state.cta_label;
+                    cta.classList.remove("hidden");
+                    cta.classList.add("inline-flex");
+                } else {
+                    cta.classList.add("hidden");
+                    cta.classList.remove("inline-flex");
+                }
+                hint.textContent = state.blocked_reason || "GoHarness is not ready yet.";
+            }
+            renderComposerTakeover();
+            renderComposerActionRow();
+            if (!busy) {
+                setTimeout(processQueuedMessages, 0);
+            }
+        }
+
+        function renderEmptyHero() {
+            const chatContainer = document.getElementById("chat-messages");
+            if (!chatContainer) return;
+            const hasOtherContent = Array.from(chatContainer.children).some(el => el.id !== "empty-hero");
+            if (hasOtherContent) {
+                removeEmptyHero();
+                return;
+            }
+            removeEmptyHero();
+            const hero = document.createElement("div");
+            hero.id = "empty-hero";
+            hero.className = "gh-hero max-w-4xl mx-auto";
+            hero.dataset.state = (currentUIState && currentUIState.status) || "ready";
+            const title = escapeHtml((currentUIState && currentUIState.title) || "GoHarness is ready");
+            const summary = escapeHtml((currentUIState && currentUIState.summary) || "");
+            const blocked = currentUIState && currentUIState.status !== "ready";
+            const cta = currentUIState && currentUIState.cta_label
+                ? `<button type="button" onclick="runComposerCta()" class="gh-hero-action mt-5 inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-bold text-white shadow-md"><i class="fa-solid fa-arrow-right"></i><span>${escapeHtml(currentUIState.cta_label)}</span></button>`
+                : "";
+            const examples = blocked ? "" : `
+                <div class="mt-6 grid gap-2 sm:grid-cols-3">
+                    <button type="button" onclick="seedPromptExample('Summarize this repository architecture and call out the risky parts.')" class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Summarize this repository architecture and call out the risky parts.</button>
+                    <button type="button" onclick="seedPromptExample('Run the tests, explain the failures, and propose the minimal fix.')" class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Run the tests, explain the failures, and propose the minimal fix.</button>
+                    <button type="button" onclick="seedPromptExample('Inspect workflows.json and explain how the active DAG executes this task.')" class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Inspect workflows.json and explain how the active DAG executes this task.</button>
+                </div>`;
+            hero.innerHTML = `
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="max-w-2xl">
+                        <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] gh-hero-chip">
+                            <i class="fa-solid ${currentUIState && currentUIState.status === 'busy' ? 'fa-spinner fa-spin' : currentUIState && currentUIState.status === 'blocked' ? 'fa-triangle-exclamation' : 'fa-sparkles'}"></i>
+                            <span>${escapeHtml((currentUIState && currentUIState.status) || 'ready')}</span>
+                        </div>
+                        <h2 class="mt-4 text-2xl font-bold text-slate-100">${title}</h2>
+                        <p class="mt-2 text-sm leading-relaxed text-slate-300">${summary}</p>
+                        ${cta}
+                    </div>
+                    <div class="grid gap-2 text-xs sm:min-w-[220px]">
+                        <div class="gh-hero-chip rounded-lg px-3 py-2"><span class="block text-slate-500 uppercase tracking-wider text-[10px]">Workspace</span><span class="mt-1 block font-mono text-slate-200">${escapeHtml(activeWorkspaceDir || 'unset')}</span></div>
+                        <div class="gh-hero-chip rounded-lg px-3 py-2"><span class="block text-slate-500 uppercase tracking-wider text-[10px]">Connection</span><span class="mt-1 block font-mono text-slate-200">${escapeHtml(document.getElementById('model-name').innerText || 'unset')}</span></div>
+                    </div>
+                </div>
+                ${examples}
+            `;
+            chatContainer.appendChild(hero);
+        }
+
+        function appendGreeting() {
+            renderEmptyHero();
+        }
+
+        function appendTurnToChat(turn) {
+            const chatContainer = document.getElementById("chat-messages");
+            removeEmptyHero();
+            
+            let avatarChar = "U";
+            let avatarBg = "bg-slate-700";
+            let roleName = "You";
+            let cardBg = "bg-[#0b0f19]";
+            let borderStyle = "";
+
+            if (turn.role === "assistant") {
+                avatarChar = "🤖";
+                avatarBg = "bg-yellow-600";
+                roleName = "Assistant";
+                cardBg = "bg-slate-900/30";
+                borderStyle = "border-l-2 border-yellow-500";
+            } else if (turn.role === "tool") {
+                avatarChar = "🛠️";
+                avatarBg = "bg-cyan-700";
+                roleName = `Tool: ${turn.name}`;
+                cardBg = "bg-slate-900/10";
+                borderStyle = "border-l-2 border-cyan-500";
+            }
+
+            const messageId = `turn-${turn.turn_number}`;
+            
+            if (document.getElementById(messageId)) return;
+
+            const msgDiv = document.createElement("div");
+            msgDiv.id = messageId;
+            msgDiv.className = `flex space-x-4 items-start p-4 rounded-lg transition duration-150 group ${cardBg} ${borderStyle}`;
+
+            let rollbackButton = "";
+            if (turn.turn_number > 0) {
+                const canEdit = turn.role === "user" || turn.role === "assistant";
+                rollbackButton = `
+                    <div class="opacity-0 group-hover:opacity-100 transition duration-150 flex items-center space-x-1.5">
+                        ${canEdit ? `
+                        <button onclick="enableCardEdit(event, ${turn.turn_number})" class="text-[10px] bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 font-mono px-2 py-0.5 rounded transition" title="Edit and Fork Conversation">
+                            <i class="fa-solid fa-pen text-[9px] mr-1"></i> Edit &amp; Fork
+                        </button>` : ''}
+                        <button onclick="triggerFork(${turn.turn_number})" class="text-[10px] bg-red-950/40 hover:bg-red-900 border border-red-800 text-red-400 font-mono px-2 py-0.5 rounded transition">
+                            <i class="fa-solid fa-code-fork mr-1"></i> Rollback / Branch
+                        </button>
+                    </div>
+                `;
+            }
+
+            let textHtml = "";
+            if (turn.role === "assistant" && turn.tool_calls) {
+                textHtml += `<div id="turn-text-${turn.turn_number}" class="text-slate-300 text-sm font-sans mb-2">${turn.content || "Calling tools..."}</div>`;
+                turn.tool_calls.forEach((tc, i) => {
+                    // Foldable by default: a one-line title + expandable arguments.
+                    const title = toolCallTitle(tc);
+                    textHtml += `
+                        <details class="tool-call-group mt-2 group/details bg-slate-950 border border-[#334155] rounded-md overflow-hidden">
+                            <summary class="cursor-pointer select-none px-3 py-1.5 text-cyan-400 font-bold font-mono text-[11px] hover:bg-slate-900/60 flex items-center">
+                                <i class="fa-solid fa-chevron-right fa-2xs mr-2 transition-transform details-arrow"></i>
+                                <i class="fa-solid fa-code mr-2"></i>
+                                <span class="truncate">${escapeHtml(title)}</span>
+                            </summary>
+                            <div class="px-3 pb-2 pt-1 border-t border-slate-800/70">
+                                <div class="text-[9px] uppercase tracking-wider text-slate-500 mb-1">Arguments</div>
+                                ${renderToolCallArgumentsBody(tc)}
+                            </div>
+                        </details>
+                    `;
+                });
+            } else if (turn.role === "tool") {
+                const full = turn.content || "";
+                const title = toolResultTitle(turn.name, full);
+                const deliverables = deliverablePathsFromTool(turn);
+                textHtml = `
+                    <details class="tool-result-group bg-slate-950 border border-slate-800 rounded-md overflow-hidden">
+                        <summary class="cursor-pointer select-none px-3 py-1.5 text-emerald-400 font-mono text-[11px] hover:bg-slate-900/60 flex items-center">
+                            <i class="fa-solid fa-chevron-right fa-2xs mr-2 transition-transform details-arrow"></i>
+                            <i class="fa-solid fa-terminal mr-2"></i>
+                            <span class="truncate">${escapeHtml(title)}</span>
+                        </summary>
+                        <div class="typed-tool-body">${renderToolBody(turn.name, full)}${renderDeliverableChips(deliverables)}</div>
+                    </details>
+                `;
+            } else {
+                textHtml = `<div id="turn-text-${turn.turn_number}" class="text-slate-300 text-sm whitespace-pre-wrap font-sans">${turn.content}</div>`;
+            }
+
+            let metricsHtml = "";
+            if (turn.role === "assistant") {
+                metricsHtml = `
+                    <div class="mt-2 text-[10px] text-slate-500 font-mono">
+                        <button onclick="toggleCardMetrics(event, ${turn.turn_number})" class="text-slate-400 hover:text-white bg-slate-800/40 hover:bg-slate-800 border border-[#334155]/60 px-2 py-0.5 rounded transition">
+                            <i class="fa-solid fa-microscope mr-1 text-[9px]"></i> Inspect Execution Metrics
+                        </button>
+                        <div id="card-metrics-${turn.turn_number}" class="hidden mt-1.5 p-2.5 bg-slate-950/40 rounded border border-slate-800/80 space-y-1">
+                            <div class="grid grid-cols-2 gap-2 text-[9px] text-slate-400">
+                                <div><span class="text-slate-500">Node Target:</span> <span class="text-cyan-400 font-bold">agent</span></div>
+                                <div><span class="text-slate-500">Latency:</span> <span class="text-emerald-400 font-bold">Active (Online Streaming)</span></div>
+                                <div><span class="text-slate-500">Tokens In/Out:</span> <span class="text-indigo-400 font-bold" id="metric-tokens-${turn.turn_number}">Calculating...</span></div>
+                                <div><span class="text-slate-500">USD Spent:</span> <span class="text-amber-400 font-bold" id="metric-cost-${turn.turn_number}">Metering...</span></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            msgDiv.innerHTML = `
+                <div class="w-8 h-8 rounded ${avatarBg} text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-md">
+                    ${avatarChar}
+                </div>
+                <div class="space-y-1 flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-bold text-slate-200 text-xs">${roleName}</span>
+                            <span class="text-[10px] text-slate-500 font-mono">#${turn.turn_number}</span>
+                        </div>
+                        ${rollbackButton}
+                    </div>
+                    <div id="turn-body-${turn.turn_number}" class="space-y-2">
+                        ${textHtml}
+                    </div>
+                    ${metricsHtml}
+                </div>
+            `;
+
+            chatContainer.appendChild(msgDiv);
+            if (turn.role === "tool") {
+                const summary = msgDiv.querySelector(".tool-result-group > summary");
+                if (summary) {
+                    summary.addEventListener("click", () => {
+                        currentToolPreview = { role: "tool", name: turn.name || "tool", content: turn.content || "", meta: turn.meta || null };
+                        switchDetailsTab("tool");
+                    });
+                }
+            }
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function appendSystemAlert(title, message, iconClass) {
+            const chatContainer = document.getElementById("chat-messages");
+            removeEmptyHero();
+            const alertDiv = document.createElement("div");
+            alertDiv.className = "flex space-x-3 items-center bg-indigo-950/20 border border-indigo-900/60 rounded-lg p-4 max-w-4xl mx-auto text-xs text-indigo-300 font-mono";
+            alertDiv.innerHTML = `
+                <i class="fa-solid ${iconClass} text-lg shrink-0"></i>
+                <div class="flex-1">
+                    <div class="font-bold uppercase tracking-wider">${title}</div>
+                    <div class="mt-0.5 text-indigo-400/80">${message}</div>
+                </div>
+            `;
+            chatContainer.appendChild(alertDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // ===== v2.0 LIVE WORKFLOW TRACE =====
+        // Maps node type -> {icon, accent} for the trace card rows.
+        const WF_NODE_META = {
+            llm:            { icon: "fa-robot",              accent: "text-purple-400" },
+            llm_query:      { icon: "fa-robot",              accent: "text-purple-400" },
+            llm_synthesis:  { icon: "fa-layer-group",        accent: "text-blue-400" },
+            bm25_search:    { icon: "fa-magnifying-glass",   accent: "text-indigo-400" },
+            tool_execution: { icon: "fa-terminal",           accent: "text-cyan-400" },
+            conditional_router: { icon: "fa-route",          accent: "text-amber-400" },
+        };
+
+        // Renders the live trace card when a workflow run starts, listing each
+        // intermediate node in a pending state. It appears in the chat stream
+        // BEFORE the final assistant reply.
+        function renderWorkflowTrace(data) {
+            const chatContainer = document.getElementById("chat-messages");
+            removeEmptyHero();
+            const cardId = `wf-trace-${data.run_id}`;
+            if (document.getElementById(cardId)) return;
+
+            const nodes = data.nodes || [];
+            let rows = "";
+            nodes.forEach(n => {
+                const meta = WF_NODE_META[n.type] || { icon: "fa-circle-node", accent: "text-slate-400" };
+                const label = n.label ? `<span class="text-slate-500 font-mono ml-1">[${n.label}]</span>` : "";
+                rows += `
+                    <div id="wf-node-${data.run_id}-${n.id}" class="wf-node-row flex items-start space-x-2 py-1.5 border-b border-slate-800/50 last:border-0" data-node="${n.id}">
+                        <span class="wf-node-status mt-0.5 text-slate-600"><i class="fa-regular fa-circle text-[10px]"></i></span>
+                        <span class="${meta.accent} mt-0.5"><i class="fa-solid ${meta.icon} text-[11px]"></i></span>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-[11px] text-slate-300 font-mono truncate">${n.id}${label}</div>
+                            <div class="wf-node-detail text-[10px] text-slate-500 mt-0.5">queued…</div>
+                        </div>
+                    </div>`;
+            });
+
+            const card = document.createElement("div");
+            card.id = cardId;
+            card.className = "max-w-4xl mx-auto rounded-lg border border-purple-500/30 bg-slate-900/40 overflow-hidden";
+            card.innerHTML = `
+                <div class="flex items-center justify-between px-4 py-2 bg-purple-950/30 border-b border-purple-500/20">
+                    <div class="flex items-center space-x-2 text-purple-300">
+                        <i class="fa-solid fa-diagram-project text-sm"></i>
+                        <span class="font-bold text-xs uppercase tracking-wider">Workflow: ${data.name || data.workflow_id}</span>
+                    </div>
+                    <span class="wf-trace-status text-[10px] text-purple-400 font-mono flex items-center">
+                        <i class="fa-solid fa-spinner fa-spin mr-1.5"></i> running
+                    </span>
+                </div>
+                <div class="px-4 py-2">${rows}</div>
+            `;
+            chatContainer.appendChild(card);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Updates a single node row when its status changes (running -> completed/failed).
+        function updateWorkflowNode(data) {
+            const row = document.getElementById(`wf-node-${data.run_id}-${data.node_id}`);
+            if (!row) return;
+            const statusEl = row.querySelector(".wf-node-status");
+            const detailEl = row.querySelector(".wf-node-detail");
+
+            if (data.status === "running") {
+                statusEl.className = "wf-node-status mt-0.5 text-blue-400";
+                statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px]"></i>';
+                detailEl.className = "wf-node-detail text-[10px] text-blue-400/80 mt-0.5";
+                detailEl.textContent = "running…";
+            } else if (data.status === "completed") {
+                statusEl.className = "wf-node-status mt-0.5 text-emerald-400";
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-check text-[10px]"></i>';
+                const dur = data.duration_ms ? ` · ${data.duration_ms} ms` : "";
+                const preview = data.preview ? escapeHtml(data.preview) : "";
+                detailEl.className = "wf-node-detail text-[10px] text-slate-400 mt-0.5";
+                detailEl.innerHTML = `<span class="text-emerald-400">done${dur}</span>` +
+                    (preview ? `<button onclick="toggleWfPreview(this)" class="ml-2 text-purple-400 hover:text-purple-300 underline">show output</button>
+                        <pre class="wf-preview hidden mt-1.5 p-2 bg-slate-950/60 border border-slate-800 rounded text-[10px] text-slate-300 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${preview}</pre>` : "");
+            } else if (data.status === "failed") {
+                statusEl.className = "wf-node-status mt-0.5 text-red-400";
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark text-[10px]"></i>';
+                detailEl.className = "wf-node-detail text-[10px] text-red-400 mt-0.5";
+                detailEl.textContent = "failed: " + (data.error || "unknown error");
+            }
+
+            const chatContainer = document.getElementById("chat-messages");
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Marks the whole trace card completed/failed.
+        function finalizeWorkflowTrace(data) {
+            const card = document.getElementById(`wf-trace-${data.run_id}`);
+            if (!card) return;
+            const statusEl = card.querySelector(".wf-trace-status");
+            if (data.status === "completed") {
+                statusEl.className = "wf-trace-status text-[10px] text-emerald-400 font-mono flex items-center";
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-check mr-1.5"></i> completed';
+            } else {
+                statusEl.className = "wf-trace-status text-[10px] text-red-400 font-mono flex items-center";
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark mr-1.5"></i> failed';
+            }
+        }
+
+        function toggleWfPreview(btn) {
+            const pre = btn.parentElement.querySelector(".wf-preview");
+            if (!pre) return;
+            if (pre.classList.contains("hidden")) {
+                pre.classList.remove("hidden");
+                btn.textContent = "hide output";
+            } else {
+                pre.classList.add("hidden");
+                btn.textContent = "show output";
+            }
+        }
+
+
+        // =============================================================
+        // VISUAL WORKFLOW GRAPH (Phase 1: canvas, nodes, drag, layout)
+        // =============================================================
+        const NODE_W = 200;
+        const NODE_H = 78;
+        const COL_GAP = 70;
+        const ROW_GAP = 28;
+        const PIN_R = 6;
+
+        // Per-type metadata. Ports listed here are the *fixed* ports; llm
+        // nodes also accept dynamic named input ports derived from `inputs`.
+        const NODE_DEFS = {
+            user_input: {
+                title: "Start", icon: "fa-sign-in-alt", color: "amber",
+                inputs: [], outputs: [{ port: "prompt", label: "prompt" }],
+                anchor: true,
+            },
+            assistant_response: {
+                title: "Response", icon: "fa-sign-out-alt", color: "emerald",
+                inputs: [{ port: "final_output", label: "final", required: true }], outputs: [],
+                anchor: true,
+            },
+            llm: {
+                title: "LLM", icon: "fa-robot", color: "purple",
+                inputs: [], outputs: [{ port: "response", label: "response" }],
+                defaults: { temperature: 0.2, system_prompt: "", provider_profile: "", provider: "openai", model: "gpt-4o-mini", tools_enabled: false, mcp_tools: true, max_turns: 15, allowed_tools: [] },
+                fields: ["llm_profile", "temperature", "system_prompt"],
+            },
+            llm_query: { aliasOf: "llm" },
+            llm_synthesis: { aliasOf: "llm" },
+            bm25_search: {
+                title: "BM25 Search", icon: "fa-magnifying-glass", color: "indigo",
+                inputs: [{ port: "query", label: "query", required: true }],
+                outputs: [{ port: "search_results", label: "results" }],
+                defaults: { scope: "workspace", limit: 5 },
+                fields: ["scope", "limit"],
+            },
+            tool_execution: {
+                title: "Tool", icon: "fa-terminal", color: "cyan",
+                inputs: [{ port: "arguments", label: "args" }],
+                outputs: [{ port: "stdout", label: "stdout" }, { port: "exit_code", label: "code" }],
+                defaults: { tool_name: "execute_command" },
+                fields: ["tool_name"],
+            },
+            conditional_router: {
+                title: "Router", icon: "fa-route", color: "amber",
+                inputs: [{ port: "eval_var", label: "eval" }],
+                outputs: [{ port: "route_branch", label: "branch" }],
+                defaults: { condition: "on_error" },
+                fields: ["condition"],
+            },
+        };
+
+        function defFor(type) {
+            const d = NODE_DEFS[type] || {};
+            return d.aliasOf ? NODE_DEFS[d.aliasOf] : d;
+        }
+        function nodeColor(type) { return (defFor(type).color || "slate"); }
+        function nodeIcon(type)  { return (defFor(type).icon  || "fa-circle"); }
+        function isAnchor(type)  { return !!defFor(type).anchor; }
+
+        // Resolve a node's input ports: llm nodes get one port per unique
+        // target_input from their `inputs` list; other types use NODE_DEFS.
+        function inputPortsFor(node) {
+            const d = defFor(node.type);
+            if (node.type === "llm" || d.aliasOf === "llm") {
+                const seen = new Set();
+                const ports = [];
+                // Ports explicitly declared in properties (added in inspector).
+                (node.properties && node.properties.input_ports || []).forEach(name => {
+                    if (name && !seen.has(name)) { seen.add(name); ports.push({ port: name, label: name }); }
+                });
+                // Plus any ports implied by existing incoming edges.
+                (node.inputs || []).forEach(c => {
+                    if (c.target_input && !seen.has(c.target_input)) {
+                        seen.add(c.target_input);
+                        ports.push({ port: c.target_input, label: c.target_input });
+                    }
+                });
+                if (ports.length === 0) ports.push({ port: "prompt", label: "prompt" });
+                return ports;
+            }
+            return d.inputs || [];
+        }
+        function outputPortsFor(node) {
+            if (node.type === "llm" || defFor(node.type).aliasOf === "llm") {
+                return [{ port: "response", label: "response" }];
+            }
+            return defFor(node.type).outputs || [];
+        }
+
+        // In-memory graph model
+        let wfModel = { workflowId: null, workflow: null, nodes: [], selected: null };
+
+        function wfCanvas()  { return document.getElementById("wf-canvas"); }
+        function wfScroll()  { return document.getElementById("wf-canvas-scroll"); }
+        function wfEdgesSvg(){ return document.getElementById("wf-edges"); }
+
+        function nodeById(id) { return wfModel.nodes.find(n => n.id === id); }
+
+        // ---- Load / normalize ----
+        // Loads a specific workflow (or the schema's active_workflow) into the
+        // graph model. Does NOT mutate schema.active_workflow; switching which
+        // workflow you edit in the Lab is separate from activating it.
+        function loadWorkflowIntoModel(schema, workflowId) {
+            const ids = Object.keys(schema.workflows || {});
+            const activeId = workflowId || schema.active_workflow || ids[0];
+            const wf = schema.workflows ? schema.workflows[activeId] : null;
+            const rawNodes = (wf && wf.nodes) ? JSON.parse(JSON.stringify(wf.nodes)) : [];
+
+            // Normalize types (llm_query/llm_synthesis -> llm) and ensure positions.
+            const nodes = rawNodes.map(n => {
+                if (n.type === "llm_query" || n.type === "llm_synthesis") n.type = "llm";
+                n.properties = n.properties || {};
+                n.inputs = n.inputs || [];
+                if (typeof n.properties.x !== "number" || typeof n.properties.y !== "number") {
+                    n._needsLayout = true;
+                } else {
+                    n.x = n.properties.x; n.y = n.properties.y;
+                }
+                return n;
+            });
+
+            wfModel = { workflowId: activeId, workflow: wf, nodes, selected: null };
+            if (nodes.some(n => n._needsLayout)) autoLayout();
+            renderGraph();
+            refreshLabSelector(schema);
+        }
+
+        // Populate the Lab's workflow dropdown and keep it in sync with the
+        // currently-edited workflow.
+        function refreshLabSelector(schema) {
+            const sel = document.getElementById("wf-lab-selector");
+            if (!sel) return;
+            const wfs = (schema && schema.workflows) || {};
+            const current = wfModel.workflowId;
+            let html = "";
+            Object.keys(wfs).forEach(id => {
+                const name = wfs[id].name || id;
+                html += `<option value="${escapeHtml(id)}" ${id === current ? "selected" : ""}>${escapeHtml(name)} (${escapeHtml(id)})</option>`;
+            });
+            sel.innerHTML = html;
+            sel.value = current || "";
+        }
+
+        // ---- Auto-layout: topological depth -> column ----
+        function autoLayout() {
+            const nodes = wfModel.nodes;
+            if (!nodes.length) return;
+            const byId = {};
+            nodes.forEach(n => byId[n.id] = n);
+
+            // Incoming adjacency from inputs edges.
+            const indeg = {}, adj = {};
+            nodes.forEach(n => { indeg[n.id] = 0; adj[n.id] = []; });
+            nodes.forEach(n => (n.inputs || []).forEach(c => {
+                if (byId[c.source_node]) {
+                    adj[c.source_node].push(n.id);
+                    indeg[n.id]++;
+                }
+            }));
+
+            // Longest-path depth from any root (Kahn's).
+            const depth = {}, queue = [];
+            nodes.forEach(n => { depth[n.id] = 0; if (indeg[n.id] === 0) queue.push(n.id); });
+            while (queue.length) {
+                const id = queue.shift();
+                adj[id].forEach(nxt => {
+                    depth[nxt] = Math.max(depth[nxt], depth[id] + 1);
+                    if (--indeg[nxt] === 0) queue.push(nxt);
+                });
+            }
+            // Cycles would leave nodes unvisited; dump them in last column.
+            nodes.forEach(n => { if (depth[n.id] === undefined) depth[n.id] = 0; });
+
+            const cols = {};
+            nodes.forEach(n => {
+                const d = depth[n.id];
+                (cols[d] = cols[d] || []).push(n);
+            });
+            Object.keys(cols).sort((a,b)=>a-b).forEach((d, ci) => {
+                cols[d].forEach((n, ri) => {
+                    n.x = 40 + ci * (NODE_W + COL_GAP);
+                    n.y = 40 + ri * (NODE_H + ROW_GAP);
+                    n._needsLayout = false;
+                });
+            });
+            persistPositions();
+        }
+
+        function persistPositions() {
+            wfModel.nodes.forEach(n => {
+                n.properties = n.properties || {};
+                n.properties.x = Math.round(n.x);
+                n.properties.y = Math.round(n.y);
+            });
+        }
+
+        // ---- Render ----
+        function renderGraph() {
+            const canvas = wfCanvas();
+            // Clear node layer (keep the two SVGs).
+            Array.from(canvas.querySelectorAll(".wf-node")).forEach(el => el.remove());
+
+            const activeNameEl = document.getElementById("workflow-active-name");
+            if (activeNameEl && wfModel.workflow) {
+                activeNameEl.textContent =
+                    `${wfModel.workflowId} — ${wfModel.workflow.name || wfModel.workflowId}`;
+            }
+
+            // Size the virtual canvas to fit all nodes.
+            let maxX = 0, maxY = 0;
+            wfModel.nodes.forEach(n => {
+                n.x = typeof n.x === "number" ? n.x : 40;
+                n.y = typeof n.y === "number" ? n.y : 40;
+                maxX = Math.max(maxX, n.x + NODE_W + 60);
+                maxY = Math.max(maxY, n.y + NODE_H + 60);
+            });
+            const scroll = wfScroll();
+            const minW = scroll.clientWidth - 2, minH = scroll.clientHeight - 2;
+            canvas.style.width  = Math.max(maxX, minW) + "px";
+            canvas.style.height = Math.max(maxY, minH) + "px";
+            wfEdgesSvg().setAttribute("width",  Math.max(maxX, minW));
+            wfEdgesSvg().setAttribute("height", Math.max(maxY, minH));
+
+            wfModel.nodes.forEach(n => canvas.appendChild(renderNodeCard(n)));
+            drawEdges();
+        }
+
+        // Static class map so Tailwind's JIT always sees these class names.
+        const NODE_STYLES = {
+            amber: "border-amber-500/40 text-amber-400",
+            emerald: "border-emerald-500/40 text-emerald-400",
+            purple: "border-purple-500/40 text-purple-400",
+            indigo: "border-indigo-500/40 text-indigo-400",
+            cyan: "border-cyan-500/40 text-cyan-400",
+            slate: "border-slate-500/40 text-slate-300",
+        };
+        function styleFor(type) { return NODE_STYLES[nodeColor(type)] || NODE_STYLES.slate; }
+
+        function renderNodeCard(n) {
+            const sty = styleFor(n.type);
+            const [borderCls, iconCls] = sty.split(" ");
+            const def = defFor(n.type);
+            const card = document.createElement("div");
+            card.className = "wf-node absolute rounded-lg border bg-slate-900/80 shadow-lg " + borderCls;
+            card.style.left = n.x + "px";
+            card.style.top  = n.y + "px";
+            card.style.width = NODE_W + "px";
+            card.style.minHeight = NODE_H + "px";
+            card.dataset.id = n.id;
+            if (wfModel.selected && wfModel.selected.kind === "node" && wfModel.selected.id === n.id) {
+                card.classList.add("ring-2", "ring-blue-400");
+            }
+
+            const inPorts = inputPortsFor(n);
+            const outPorts = outputPortsFor(n);
+            const label = n.properties && n.properties.provider_profile
+                ? "@" + n.properties.provider_profile
+                : (n.properties && n.properties.model ? n.properties.model : (def.title || n.type));
+
+            card.innerHTML = `
+                <div class="flex items-center justify-between px-2 py-1 border-b border-slate-700/60 rounded-t-lg bg-slate-800/60 cursor-move">
+                    <span class="font-bold text-slate-100 text-[11px] truncate flex items-center">
+                        <i class="fa-solid ${nodeIcon(n.type)} mr-1.5 ${iconCls}"></i>${escapeHtml(n.id)}
+                    </span>
+                    <span class="text-[8px] uppercase tracking-wide text-slate-400 bg-slate-900/70 px-1 rounded">${escapeHtml(n.type)}</span>
+                </div>
+                <div class="px-2 py-1 text-[10px] text-slate-400 truncate">${escapeHtml(label)}</div>
+                <div class="relative px-2 pb-1 flex justify-between text-[9px] text-slate-500">
+                    <div class="wf-inputs space-y-0.5">
+                        ${inPorts.map(p => `
+                            <div class="flex items-center">
+                                <span class="wf-pin wf-pin-in -ml-3.5 mr-1 inline-block rounded-full bg-blue-500 border-2 border-slate-900"
+                                      style="width:${PIN_R*2}px;height:${PIN_R*2}px"
+                                      data-node="${escapeHtml(n.id)}" data-port="${escapeHtml(p.port)}" data-kind="in" title="${escapeHtml(p.label)}"></span>
+                                <span class="truncate">${escapeHtml(p.label)}</span>
+                            </div>`).join("")}
+                    </div>
+                    <div class="wf-outputs space-y-0.5 text-right">
+                        ${outPorts.map(p => `
+                            <div class="flex items-center justify-end">
+                                <span class="truncate">${escapeHtml(p.label)}</span>
+                                <span class="wf-pin wf-pin-out -mr-3.5 ml-1 inline-block rounded-full bg-emerald-400 border-2 border-slate-900 cursor-crosshair"
+                                      style="width:${PIN_R*2}px;height:${PIN_R*2}px"
+                                      data-node="${escapeHtml(n.id)}" data-port="${escapeHtml(p.port)}" data-kind="out" title="${escapeHtml(p.label)}"></span>
+                            </div>`).join("")}
+                    </div>
+                </div>`;
+
+            // Select on click; drag from header; start wiring from output pins.
+            card.addEventListener("mousedown", (e) => {
+                if (e.target.classList.contains("wf-pin")) {
+                    if (e.target.classList.contains("wf-pin-out")) startPortDrag(e, e.target);
+                    return;
+                }
+                selectNode(n.id);
+                if (isAnchor(n.type)) return;
+                startNodeDrag(e, n, card);
+            });
+            return card;
+        }
+
+        // ---- Edge drawing ----
+        function pinCenter(pinEl) {
+            const canvas = wfCanvas();
+            const cr = canvas.getBoundingClientRect();
+            const r = pinEl.getBoundingClientRect();
+            return {
+                x: r.left + r.width / 2 - cr.left,
+                y: r.top + r.height / 2 - cr.top,
+            };
+        }
+
+        function bezierPath(x1, y1, x2, y2) {
+            const dx = Math.max(40, Math.abs(x2 - x1) * 0.5);
+            return `M ${x1},${y1} C ${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+        }
+
+        function drawEdges() {
+            const svg = wfEdgesSvg();
+            svg.innerHTML = "";
+            const sel = wfModel.selected;
+            wfModel.nodes.forEach(n => {
+                (n.inputs || []).forEach((c, idx) => {
+                    const src = nodeById(c.source_node);
+                    if (!src) return;
+                    const outPin = svg.parentElement.querySelector(
+                        `.wf-pin-out[data-node="${CSS.escape(c.source_node)}"][data-port="${CSS.escape(c.source_output)}"]`);
+                    const inPin = svg.parentElement.querySelector(
+                        `.wf-pin-in[data-node="${CSS.escape(n.id)}"][data-port="${CSS.escape(c.target_input)}"]`);
+                    if (!outPin || !inPin) return;
+                    const a = pinCenter(outPin), b = pinCenter(inPin);
+                    const isSelected = sel && sel.kind === "edge" &&
+                        sel.from === c.source_node && sel.fromPort === c.source_output &&
+                        sel.to === n.id && sel.toPort === c.target_input;
+                    const d = bezierPath(a.x, a.y, b.x, b.y);
+                    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                    group.setAttribute("data-edge", "1");
+                    group.dataset.from = c.source_node;
+                    group.dataset.fromPort = c.source_output;
+                    group.dataset.to = n.id;
+                    group.dataset.toPort = c.target_input;
+
+                    // Visible curve
+                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path.setAttribute("d", d);
+                    path.setAttribute("fill", "none");
+                    path.setAttribute("stroke", isSelected ? "#f472b6" : "#818cf8");
+                    path.setAttribute("stroke-width", isSelected ? "3" : "2");
+                    path.setAttribute("opacity", isSelected ? "1" : "0.75");
+                    path.style.pointerEvents = "none";
+                    group.appendChild(path);
+
+                    // Wide transparent hit area for clicking
+                    const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    hit.setAttribute("d", d);
+                    hit.setAttribute("fill", "none");
+                    hit.setAttribute("stroke", "transparent");
+                    hit.setAttribute("stroke-width", "14");
+                    hit.style.cursor = "pointer";
+                    group.appendChild(hit);
+
+                    svg.appendChild(group);
+                });
+            });
+        }
+
+        // ---- Edge lookup / mutation ----
+        function findEdgeIndex(fromNode, fromPort, toNode, toPort) {
+            const tgt = nodeById(toNode);
+            if (!tgt || !tgt.inputs) return -1;
+            return tgt.inputs.findIndex(c =>
+                c.source_node === fromNode && c.source_output === fromPort &&
+                c.target_input === toPort);
+        }
+
+        function addEdge(fromNode, fromPort, toNode, toPort) {
+            if (fromNode === toNode) return { ok: false, error: "Cannot connect a node to itself." };
+            const tgt = nodeById(toNode);
+            if (!tgt) return { ok: false, error: "Target node not found." };
+            // One incoming connection per input port.
+            const existing = (tgt.inputs || []).findIndex(c => c.target_input === toPort);
+            if (existing !== -1) {
+                const old = tgt.inputs[existing];
+                if (old.source_node === fromNode && old.source_output === fromPort) {
+                    return { ok: false, error: "That connection already exists." };
+                }
+                tgt.inputs.splice(existing, 1); // replace existing connection
+            }
+            tgt.inputs = tgt.inputs || [];
+            tgt.inputs.push({ source_node: fromNode, source_output: fromPort, target_input: toPort });
+            if (createsCycle(fromNode, toNode)) {
+                // Roll back the edge if it introduces a cycle.
+                const idx = tgt.inputs.findIndex(c => c.source_node === fromNode && c.source_output === fromPort && c.target_input === toPort);
+                if (idx !== -1) tgt.inputs.splice(idx, 1);
+                return { ok: false, error: "Connection would create a cycle." };
+            }
+            return { ok: true };
+        }
+
+        // Returns true if adding an edge from->to would create a cycle
+        // (i.e. 'to' can already reach 'from').
+        function createsCycle(from, to) {
+            const adj = {};
+            wfModel.nodes.forEach(n => adj[n.id] = []);
+            wfModel.nodes.forEach(n => (n.inputs || []).forEach(c => {
+                if (adj[c.source_node]) adj[c.source_node].push(n.id);
+            }));
+            const seen = new Set();
+            const stack = [to];
+            while (stack.length) {
+                const u = stack.pop();
+                if (u === from) return true;
+                if (seen.has(u)) continue;
+                seen.add(u);
+                (adj[u] || []).forEach(v => stack.push(v));
+            }
+            return false;
+        }
+
+        function deleteSelectedEdge() {
+            const sel = wfModel.selected;
+            if (!sel || sel.kind !== "edge") return;
+            const tgt = nodeById(sel.to);
+            if (tgt && tgt.inputs) {
+                const idx = findEdgeIndex(sel.from, sel.fromPort, sel.to, sel.toPort);
+                if (idx !== -1) tgt.inputs.splice(idx, 1);
+            }
+            wfModel.selected = null;
+            renderGraph();
+            syncJsonFromModel();
+        }
+
+        // ---- Port drag-to-connect ----
+        function startPortDrag(e, pinEl) {
+            e.stopPropagation();
+            e.preventDefault();
+            if (pinEl.dataset.kind !== "out") return; // connections start at an output
+            const fromNode = pinEl.dataset.node;
+            const fromPort = pinEl.dataset.port;
+            const tempSvg = document.getElementById("wf-temp-edge");
+            const canvas = wfCanvas();
+
+            const start = pinCenter(pinEl);
+            let tempPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            tempPath.setAttribute("fill", "none");
+            tempPath.setAttribute("stroke", "#38bdf8");
+            tempPath.setAttribute("stroke-width", "2");
+            tempPath.setAttribute("stroke-dasharray", "5,4");
+            tempPath.setAttribute("opacity", "0.9");
+            tempSvg.appendChild(tempPath);
+
+            // Prevent text selection while wiring.
+            document.body.style.userSelect = "none";
+
+            // Highlight valid input pins during the drag.
+            const highlightPins = (on) => {
+                canvas.querySelectorAll(".wf-pin-in").forEach(p => {
+                    p.style.boxShadow = on ? "0 0 0 3px rgba(56,189,248,0.35)" : "";
+                });
+            };
+            highlightPins(true);
+
+            const eventPos = (ev) => {
+                const cr = canvas.getBoundingClientRect();
+                return { x: ev.clientX - cr.left, y: ev.clientY - cr.top };
+            };
+
+            const onMove = (ev) => {
+                const p = eventPos(ev);
+                tempPath.setAttribute("d", bezierPath(start.x, start.y, p.x, p.y));
+            };
+
+            const onUp = (ev) => {
+                document.removeEventListener("mousemove", onMove);
+                document.removeEventListener("mouseup", onUp);
+                document.body.style.userSelect = "";
+                highlightPins(false);
+                if (tempPath.parentNode) tempPath.parentNode.removeChild(tempPath);
+
+                // Find the input pin under the cursor (if any).
+                const el = document.elementFromPoint(ev.clientX, ev.clientY);
+                if (el && el.classList.contains("wf-pin-in")) {
+                    const toNode = el.dataset.node;
+                    const toPort = el.dataset.port;
+                    const res = addEdge(fromNode, fromPort, toNode, toPort);
+                    if (!res.ok) {
+                        setValidation(false, res.error);
+                    } else {
+                        setValidation(true, "Connected.");
+                        syncJsonFromModel();
+                    }
+                }
+                renderGraph();
+            };
+
+            document.addEventListener("mousemove", onMove);
+            document.addEventListener("mouseup", onUp);
+        }
+
+        // ---- Drag nodes ----
+        function startNodeDrag(e, node, cardEl) {
+            e.preventDefault();
+            const startX = e.clientX, startY = e.clientY;
+            const origX = node.x, origY = node.y;
+            const onMove = (ev) => {
+                node.x = Math.max(0, origX + ev.clientX - startX);
+                node.y = Math.max(0, origY + ev.clientY - startY);
+                cardEl.style.left = node.x + "px";
+                cardEl.style.top  = node.y + "px";
+                drawEdges();
+            };
+            const onUp = () => {
+                document.removeEventListener("mousemove", onMove);
+                document.removeEventListener("mouseup", onUp);
+                persistPositions();
+                syncJsonFromModel();
+                // Re-render once to resize canvas if needed.
+                renderGraph();
+                selectNode(node.id);
+            };
+            document.addEventListener("mousemove", onMove);
+            document.addEventListener("mouseup", onUp);
+        }
+
+        function selectNode(id) {
+            wfModel.selected = { kind: "node", id };
+            document.querySelectorAll(".wf-node").forEach(el => {
+                el.classList.toggle("ring-2", el.dataset.id === id);
+                el.classList.toggle("ring-blue-400", el.dataset.id === id);
+            });
+            renderInspector(id);
+        }
+
+        // Cached provider profiles (refreshed when inspector opens).
+        let wfProfiles = null;
+        async function loadProfiles() {
+            if (wfProfiles) return wfProfiles;
+            try {
+                const res = await fetch("/api/providers");
+                const data = await res.json();
+                wfProfiles = data.providers || {};
+            } catch { wfProfiles = {}; }
+            return wfProfiles;
+        }
+
+        // Selecting a connection profile must clear any stale inline
+        // provider/model/temperature on the node; otherwise mergeProfileWithFills
+        // would let the old inline values (e.g. gpt-4o-mini on a Gemini profile)
+        // override the profile. Re-selecting "inline" restores sane defaults.
+        function setNodeProfile(id, profileName) {
+            const n = nodeById(id);
+            if (!n) return;
+            n.properties = n.properties || {};
+            n.properties.provider_profile = profileName;
+            if (profileName) {
+                delete n.properties.provider;
+                delete n.properties.model;
+                delete n.properties.temperature;
+            } else {
+                n.properties.provider = "openai";
+                n.properties.model = "gpt-4o-mini";
+                n.properties.temperature = 0.2;
+            }
+            syncJsonFromModel();
+            renderGraph();
+            selectNode(id);
+            setValidation(true, profileName ? `Using profile '@${profileName}'.` : "Using inline model settings.");
+        }
+
+        // Write a property change back to the model and refresh the node card.
+        // Toggle the ReAct/tool-calling loop on an llm node and refresh the card.
+        function toggleNodeTools(id, enabled) {
+            const n = nodeById(id);
+            if (!n) return;
+            n.properties = n.properties || {};
+            n.properties.tools_enabled = !!enabled;
+            if (enabled) {
+                if (!("mcp_tools" in n.properties)) n.properties.mcp_tools = true;
+                if (!("max_turns" in n.properties)) n.properties.max_turns = 15;
+                if (!Array.isArray(n.properties.allowed_tools)) n.properties.allowed_tools = [];
+            }
+            syncJsonFromModel();
+            renderGraph();
+            selectNode(id);
+        }
+
+        // Add/remove a single built-in tool from an llm node's allow-list.
+        function toggleNodeTool(id, toolName, enabled) {
+            const n = nodeById(id);
+            if (!n) return;
+            n.properties = n.properties || {};
+            let list = Array.isArray(n.properties.allowed_tools) ? n.properties.allowed_tools.slice() : [];
+            if (enabled) {
+                if (!list.includes(toolName)) list.push(toolName);
+            } else {
+                list = list.filter(t => t !== toolName);
+            }
+            n.properties.allowed_tools = list;
+            syncJsonFromModel();
+            // Re-render but keep the inspector open on this node.
+            renderGraph();
+            selectNode(id);
+        }
+
+        function updateNodeProp(id, key, value) {
+            const n = nodeById(id);
+            if (!n) return;
+            n.properties = n.properties || {};
+            n.properties[key] = value;
+            syncJsonFromModel();
+            // Update just the node card's label line + re-render edges if ports changed.
+            const card = wfCanvas() && wfCanvas().querySelector(`.wf-node[data-id="${CSS.escape(id)}"]`);
+            if (card) {
+                // Re-render the whole card to pick up port/label changes.
+                renderGraph();
+                selectNode(id);
+            }
+        }
+
+        function renameNode(id, newId) {
+            newId = newId.trim();
+            const n = nodeById(id);
+            if (!n || !newId || newId === id) return;
+            if (nodeById(newId)) { alert("A node with that ID already exists."); return; }
+            if (isAnchor(n.type)) return;
+            // Rewire references in other nodes' inputs.
+            wfModel.nodes.forEach(other => (other.inputs || []).forEach(c => {
+                if (c.source_node === id) c.source_node = newId;
+            }));
+            n.id = newId;
+            wfModel.selected = { kind: "node", id: newId };
+            renderGraph();
+            syncJsonFromModel();
+            selectNode(newId);
+        }
+
+        function addLlmInput(id) {
+            const n = nodeById(id);
+            if (!n) return;
+            const name = prompt("Input name (used as a labeled section in the prompt):", "context");
+            if (!name) return;
+            const clean = name.trim().replace(/\s+/g, "_");
+            if (!clean) return;
+            const ports = inputPortsFor(n);
+            if (ports.some(p => p.port === clean)) { alert("An input with that name already exists."); return; }
+            // An input port exists once an edge targets it; no placeholder edge needed.
+            // We represent dynamic ports via a `ports` list in properties.
+            n.properties.input_ports = n.properties.input_ports || (ports.length === 1 && ports[0].port === "prompt" ? ["prompt"] : ports.map(p => p.port));
+            if (!n.properties.input_ports.includes(clean)) n.properties.input_ports.push(clean);
+            renderGraph();
+            syncJsonFromModel();
+            selectNode(id);
+        }
+
+        function removeLlmInput(id, portName) {
+            const n = nodeById(id);
+            if (!n) return;
+            if (!confirm(`Remove input '${portName}' and its connection?`)) return;
+            n.inputs = (n.inputs || []).filter(c => c.target_input !== portName);
+            n.properties.input_ports = (n.properties.input_ports || []).filter(p => p !== portName);
+            renderGraph();
+            syncJsonFromModel();
+            selectNode(id);
+        }
+
+        async function renderInspector(id) {
+            const body = document.getElementById("wf-inspector-body");
+            if (!id) {
+                body.innerHTML = `<p class="text-slate-500 italic">Select a node to edit its properties.</p>`;
+                return;
+            }
+            const n = nodeById(id);
+            if (!n) { renderInspector(null); return; }
+            n.properties = n.properties || {};
+            const p = n.properties;
+            const anchor = isAnchor(n.type);
+            const profs = await loadProfiles();
+            const profileOpts = ['<option value="">— inline —</option>']
+                .concat(Object.keys(profs).map(k => `<option value="${escapeHtml(k)}" ${p.provider_profile === k ? "selected" : ""}>${escapeHtml(k)} (${escapeHtml(profs[k].provider)}/${escapeHtml(profs[k].model)})</option>`)).join("");
+
+            let fields = "";
+            if (n.type === "llm") {
+                const ports = inputPortsFor(n);
+                fields = `
+                    <div>
+                        <label class="block text-slate-400 mb-1">Connection Profile</label>
+                        <select onchange="setNodeProfile('${escapeHtml(n.id)}',this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono">${profileOpts}</select>
+                    </div>
+                    <div id="llm-inline-fields" class="space-y-2" style="${p.provider_profile ? "display:none" : ""}">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Model</label>
+                            <input type="text" value="${escapeHtml(p.model || "")}" onchange="updateNodeProp('${escapeHtml(n.id)}','model',this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Temperature</label>
+                            <input type="number" min="0" max="2" step="0.1" value="${p.temperature ?? 0.2}" onchange="updateNodeProp('${escapeHtml(n.id)}','temperature',parseFloat(this.value)||0)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">System Prompt</label>
+                        <textarea rows="4" onchange="updateNodeProp('${escapeHtml(n.id)}','system_prompt',this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono text-[10px] leading-snug">${escapeHtml(p.system_prompt || "")}</textarea>
+                    </div>
+                    <div class="rounded border border-[#334155] p-2 space-y-2">
+                        <label class="flex items-center gap-2 text-slate-300">
+                            <input type="checkbox" ${p.tools_enabled ? "checked" : ""} onchange="toggleNodeTools('${escapeHtml(n.id)}', this.checked)" class="accent-blue-500">
+                            <span class="font-bold">Enable tool calling (ReAct loop)</span>
+                        </label>
+                        ${p.tools_enabled ? `
+                        <div class="pl-4 space-y-2">
+                            <label class="flex items-center gap-2 text-slate-400">
+                                <input type="checkbox" ${p.mcp_tools !== false ? "checked" : ""} onchange="updateNodeProp('${escapeHtml(n.id)}','mcp_tools',this.checked)" class="accent-blue-500">
+                                <span>Include MCP server tools</span>
+                            </label>
+                            <div>
+                                <label class="block text-slate-400 mb-1">Max turns</label>
+                                <input type="number" min="1" max="50" value="${p.max_turns ?? 15}" onchange="updateNodeProp('${escapeHtml(n.id)}','max_turns',parseInt(this.value)||15)" class="w-20 bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono text-[10px]">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-1">Allowed built-in tools (blank = all)</label>
+                                <div class="grid grid-cols-2 gap-1">
+                                    ${["read_file","read_spill","write_file","patch_file","execute_command","spawn_sub_agent","bm25_search"].map(t => {
+                                        const list = Array.isArray(p.allowed_tools) ? p.allowed_tools : [];
+                                        const allowed = list.length===0 || list.includes(t);
+                                        return `<label class="flex items-center gap-1 text-slate-400 text-[10px]"><input type="checkbox" ${allowed ? "checked" : ""} onchange="toggleNodeTool('${escapeHtml(n.id)}','${t}',this.checked)" class="accent-blue-500 scale-90"><span>${t}</span></label>`;
+                                    }).join("")}
+                                </div>
+                            </div>
+                        </div>` : ""}
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="text-slate-400">Inputs</label>
+                            <button type="button" onclick="addLlmInput('${escapeHtml(n.id)}')" class="text-blue-400 hover:text-blue-300 text-[10px]"><i class="fa-solid fa-plus"></i> add</button>
+                        </div>
+                        <div class="space-y-1">
+                            ${ports.map(pt => `
+                                <div class="flex items-center justify-between bg-slate-900/50 rounded px-2 py-1">
+                                    <span class="font-mono text-slate-300 text-[10px]">${escapeHtml(pt.port)}</span>
+                                    ${pt.port === "prompt" && ports.length === 1 ? "" : `<button type="button" onclick="removeLlmInput('${escapeHtml(n.id)}','${escapeHtml(pt.port)}')" class="text-red-400 hover:text-red-300 text-[10px]"><i class="fa-solid fa-xmark"></i></button>`}
+                                </div>`).join("")}
+                        </div>
+                    </div>`;
+            } else if (n.type === "bm25_search") {
+                fields = `
+                    <div>
+                        <label class="block text-slate-400 mb-1">Scope</label>
+                        <select onchange="updateNodeProp('${escapeHtml(n.id)}','scope',this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono">
+                            <option value="workspace" ${p.scope === "session" ? "" : "selected"}>workspace</option>
+                            <option value="session" ${p.scope === "session" ? "selected" : ""}>session</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Result Limit</label>
+                        <input type="number" min="1" max="50" value="${p.limit ?? 5}" onchange="updateNodeProp('${escapeHtml(n.id)}','limit',parseInt(this.value)||5)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono">
+                    </div>`;
+            } else if (n.type === "tool_execution") {
+                const tools = [
+                    ["execute_command", "Run command"],
+                    ["read_file", "Read file"],
+                    ["read_spill", "Read spilled output"],
+                    ["write_file", "Write file"],
+                    ["patch_file", "Patch file"],
+                ];
+                fields = `
+                    <div>
+                        <label class="block text-slate-400 mb-1">Tool</label>
+                        <select onchange="updateNodeProp('${escapeHtml(n.id)}','tool_name',this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono">
+                            ${tools.map(([v,l]) => `<option value="${v}" ${p.tool_name === v ? "selected" : ""}>${l}</option>`).join("")}
+                        </select>
+                    </div>
+                    <p class="text-[10px] text-slate-500 italic">Tool arguments are supplied by an incoming edge to "args", or left to the agent at runtime.</p>`;
+            } else if (n.type === "conditional_router") {
+                fields = `
+                    <div>
+                        <label class="block text-slate-400 mb-1">Condition</label>
+                        <select onchange="updateNodeProp('${escapeHtml(n.id)}','condition',this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono">
+                            <option value="on_error" ${p.condition === "on_error" ? "selected" : ""}>on_error</option>
+                        </select>
+                    </div>`;
+            } else {
+                fields = `<p class="text-slate-500 italic text-[10px]">${anchor ? "System anchor — no editable properties." : "No editable properties."}</p>`;
+            }
+
+            body.innerHTML = `
+                <div>
+                    <label class="block text-slate-400 mb-1">Node ID</label>
+                    <input type="text" value="${escapeHtml(n.id)}" ${anchor ? "disabled" : ""} onchange="renameNode('${escapeHtml(n.id)}',this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-200 font-mono ${anchor ? "opacity-60" : ""}">
+                </div>
+                <div class="text-[10px] text-slate-500 flex justify-between">
+                    <span>type: <span class="text-slate-400">${escapeHtml(n.type)}</span></span>
+                    <span>${Math.round(n.x)}, ${Math.round(n.y)}</span>
+                </div>
+                ${fields}
+                ${anchor ? "" : `<button type="button" onclick="deleteSelectedNode()" class="w-full mt-2 bg-red-950/40 hover:bg-red-900 border border-red-800 text-red-300 rounded px-2 py-1 text-[10px] font-bold"><i class="fa-solid fa-trash mr-1"></i> Delete node</button>`}`;
+        }
+
+        // ---- Model <-> JSON sync ----
+        function buildSchemaFromModel() {
+            // Start from the textarea so unrelated workflows/fields are preserved.
+            let schema;
+            try { schema = JSON.parse(document.getElementById("workflow-json-editor").value || "{}"); }
+            catch { schema = { workflows: {} }; }
+            schema.workflows = schema.workflows || {};
+            if (!wfModel.workflowId) return schema;
+
+            // Strip temporary fields, normalize x/y into properties.
+            const nodes = wfModel.nodes.map(n => {
+                const out = {
+                    id: n.id, type: n.type,
+                    properties: Object.assign({}, n.properties),
+                    inputs: (n.inputs || []).map(c => ({ ...c })),
+                };
+                out.properties.x = Math.round(n.x);
+                out.properties.y = Math.round(n.y);
+                delete out._needsLayout;
+                return out;
+            });
+            schema.workflows[wfModel.workflowId] = Object.assign({}, wfModel.workflow, { nodes });
+            schema.active_workflow = wfModel.workflowId;
+            return schema;
+        }
+
+        function syncJsonFromModel() {
+            const editor = document.getElementById("workflow-json-editor");
+            if (!editor) return;
+            editor.value = JSON.stringify(buildSchemaFromModel(), null, 2);
+        }
+
+        function reloadGraphFromJson() {
+            const editor = document.getElementById("workflow-json-editor");
+            try {
+                const schema = JSON.parse(editor.value);
+                loadWorkflowIntoModel(schema);
+                setValidation(true, "Graph reloaded from JSON.");
+            } catch (err) {
+                setValidation(false, "JSON error: " + err.message);
+            }
+        }
+
+        function toggleWorkflowJson() {
+            const wrap = document.getElementById("workflow-json-wrap");
+            const chev = document.getElementById("workflow-json-chevron");
+            const open = !wrap.classList.contains("hidden");
+            wrap.classList.toggle("hidden");
+            chev.style.transform = open ? "" : "rotate(180deg)";
+        }
+
+        function setValidation(ok, msg) {
+            const el = document.getElementById("workflow-validation-status");
+            el.className = (ok ? "text-emerald-400" : "text-red-400") + " font-mono text-[10px] flex items-center";
+            el.innerHTML = `<i class="fa-solid ${ok ? "fa-circle-check" : "fa-triangle-exclamation"} mr-1.5"></i> ${escapeHtml(msg)}`;
+        }
+
+        // ---- Add / delete nodes ----
+        function toggleAddNodeMenu() {
+            document.getElementById("add-node-menu").classList.toggle("hidden");
+        }
+
+        function autoLayoutNodes() {
+            autoLayout();
+            renderGraph();
+            syncJsonFromModel();
+            setValidation(true, "Auto-arranged nodes.");
+        }
+
+        function uniqueNodeId(type) {
+            if (!nodeById(type)) return type;
+            let n = 1;
+            while (nodeById(`${type}_${n}`)) n++;
+            return `${type}_${n}`;
+        }
+
+        function nextNodePosition() {
+            if (!wfModel.nodes.length) return { x: 40, y: 40 };
+            let maxRight = 0;
+            wfModel.nodes.forEach(n => { maxRight = Math.max(maxRight, (n.x || 0) + NODE_W); });
+            return { x: maxRight + COL_GAP, y: 40 };
+        }
+
+        function addNode(type) {
+            document.getElementById("add-node-menu").classList.add("hidden");
+            const def = NODE_DEFS[type];
+            if (!def || def.anchor) return;
+            const id = uniqueNodeId(type);
+            const pos = nextNodePosition();
+            const node = {
+                id, type,
+                x: pos.x, y: pos.y,
+                properties: Object.assign({}, def.defaults || {}),
+                inputs: [],
+            };
+            wfModel.nodes.push(node);
+            wfModel.selected = { kind: "node", id };
+            persistPositions();
+            renderGraph();
+            syncJsonFromModel();
+            selectNode(id);
+            setValidation(true, `Added ${type} node '${id}'.`);
+        }
+
+        function deleteSelectedNode() {
+            const sel = wfModel.selected;
+            if (!sel || sel.kind !== "node") return;
+            const n = nodeById(sel.id);
+            if (!n || isAnchor(n.type)) return;
+            wfModel.nodes = wfModel.nodes.filter(x => x.id !== sel.id);
+            wfModel.nodes.forEach(other => {
+                other.inputs = (other.inputs || []).filter(c => c.source_node !== sel.id);
+            });
+            wfModel.selected = null;
+            renderGraph();
+            syncJsonFromModel();
+            renderInspector(null);
+            setValidation(true, `Deleted node '${sel.id}'.`);
+        }
+
+        // Redraw edges on scroll/resize.
+        document.addEventListener("scroll", () => { if (wfCanvas()) drawEdges(); }, true);
+        window.addEventListener("resize", () => { if (wfCanvas()) drawEdges(); });
+
+        // Click on an edge (its SVG hit area) selects it; empty canvas deselects.
+        document.addEventListener("click", (e) => {
+            const canvas = wfCanvas();
+            const panel = document.getElementById("workflow-lab-surface");
+            if (!canvas || !panel || panel.classList.contains("hidden")) return;
+            const g = e.target.closest && e.target.closest("g[data-edge='1']");
+            if (g && canvas.contains(g)) {
+                wfModel.selected = {
+                    kind: "edge",
+                    from: g.dataset.from, fromPort: g.dataset.fromPort,
+                    to: g.dataset.to, toPort: g.dataset.toPort,
+                };
+                document.querySelectorAll(".wf-node").forEach(el => {
+                    el.classList.remove("ring-2", "ring-blue-400");
+                });
+                renderInspector(null);
+                drawEdges();
+            } else if (!e.target.closest(".wf-node") &&
+                       !e.target.closest("#wf-inspector") && !e.target.closest("button") &&
+                       !e.target.closest("input") && !e.target.closest("textarea") &&
+                       !e.target.closest("select")) {
+                wfModel.selected = null;
+                document.querySelectorAll(".wf-node").forEach(el => {
+                    el.classList.remove("ring-2", "ring-blue-400");
+                });
+                renderInspector(null);
+                drawEdges();
+            }
+        });
+
+        // Delete/Backspace removes the selected edge.
+        document.addEventListener("keydown", (e) => {
+            const panel = document.getElementById("workflow-lab-surface");
+            if (!panel || panel.classList.contains("hidden")) return;
+            const tag = (e.target.tagName || "").toLowerCase();
+            if (tag === "input" || tag === "textarea" || tag === "select") return;
+            if ((e.key === "Delete" || e.key === "Backspace")) {
+                if (wfModel.selected && wfModel.selected.kind === "edge") {
+                    e.preventDefault();
+                    deleteSelectedEdge();
+                } else if (wfModel.selected && wfModel.selected.kind === "node") {
+                    const n = nodeById(wfModel.selected.id);
+                    if (n && !isAnchor(n.type)) {
+                        e.preventDefault();
+                        deleteSelectedNode();
+                    }
+                }
+            }
+        });
+
+        // Close the Add-node dropdown when clicking outside it.
+        document.addEventListener("click", (e) => {
+            const menu = document.getElementById("add-node-menu");
+            if (menu && !menu.classList.contains("hidden") && !e.target.closest("#add-node-menu") && !e.target.closest("button[onclick='toggleAddNodeMenu()']")) {
+                menu.classList.add("hidden");
+            }
+        });
+
+        function submitPrompt(e, queuedMode) {
+            if (e) e.preventDefault();
+            const input = document.getElementById("prompt-input");
+            const prompt = input.value.trim();
+            if (!prompt) return;
+
+            if (!isSessionBusy() && currentUIState && !currentUIState.composer_enabled) {
+                runComposerCta();
+                return;
+            }
+
+            // Web slash commands: /workflows and /workflow <id> (v2.0)
+            if (prompt === "/workflows" || prompt.startsWith("/workflow")) {
+                const parts = prompt.split(/\s+/);
+                if (parts[0] === "/workflows") {
+                    fetch("/workflows.json")
+                        .then(res => res.json())
+                        .then(data => {
+                            const wfs = data.workflows || {};
+                            const active = data.active_workflow || "";
+                            let body = `Currently active: **${active}**\n\n`;
+                            Object.keys(wfs).forEach(id => {
+                                const marker = id === active ? "▶ " : "  ";
+                                body += `${marker}\`${id}\` — **${wfs[id].name || id}**\n   _${wfs[id].description || ""}_\n`;
+                            });
+                            body += `\n_Switch with_ \`/workflow <id>\` _or use the Workflow dropdown in the status row._`;
+                            appendSystemAlert("Registered Workflows", body, "fa-diagram-project text-purple-400");
+                        })
+                        .catch(err => alert("Failed to list workflows: " + err));
+                    input.value = "";
+                    input.style.height = "auto";
+                    hideTriggerOverlay();
+                    return;
+                }
+                const targetId = (parts[1] || "").trim();
+                if (!targetId) {
+                    appendSystemAlert("Workflow Switch", "Usage: `/workflow <id>` — run `/workflows` to list available pipelines.", "fa-circle-info text-amber-400");
+                    input.value = "";
+                    input.style.height = "auto";
+                    hideTriggerOverlay();
+                    return;
+                }
+                fetch("/api/workflows/activate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: targetId })
+                })
+                .then(async res => {
+                    if (!res.ok) {
+                        const msg = await res.text();
+                        throw new Error(msg || "Activation failed");
+                    }
+                    return res.json();
+                })
+                .then(() => {
+                    loadWorkflowSelector();
+                })
+                .catch(err => appendSystemAlert("Workflow Switch Failed", err.message, "fa-triangle-exclamation text-red-400"));
+                input.value = "";
+                input.style.height = "auto";
+                hideTriggerOverlay();
+                return;
+            }
+
+            if (maybeHandleSlashCommand(prompt)) {
+                input.value = "";
+                input.style.height = "auto";
+                hideTriggerOverlay();
+                return;
+            }
+
+            if (isSessionBusy()) {
+                queuePromptText(prompt, queuedMode === "follow_up" ? "follow_up" : "steering");
+                input.value = "";
+                input.style.height = "auto";
+                hideTriggerOverlay();
+                return;
+            }
+
+            input.value = "";
+            input.style.height = "auto";
+            hideTriggerOverlay();
+            dispatchPromptText(prompt).catch(err => {
+                queueDispatchInFlight = false;
+                fetchConfig();
+                appendSystemAlert("API Execution Error", err.message || "Failed to connect to the GoHarness execution API. Please ensure the backend is running.", "fa-triangle-exclamation text-red-400");
+            });
+        }
+
+        // EXCLUSION & SNAPSHOT STATE VARIABLES AND ROUTINES
+        let currentIgnoredPatterns = [];
+        let currentCollapsedPatterns = [];
+
+        function renderExclusionChips() {
+            const ignoreList = document.getElementById("ignore-chips-list");
+            let ignoreHtml = "";
+            currentIgnoredPatterns.forEach((pat, idx) => {
+                ignoreHtml += `
+                    <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">
+                        <span>${pat}</span>
+                        <button type="button" onclick="removeIgnorePattern(${idx})" class="text-slate-500 hover:text-red-400 font-bold">&times;</button>
+                    </span>
+                `;
+            });
+            ignoreList.innerHTML = ignoreHtml || '<span class="text-slate-500 italic text-[10px]">No patterns ignored.</span>';
+
+            const collapseList = document.getElementById("collapse-chips-list");
+            let collapseHtml = "";
+            currentCollapsedPatterns.forEach((pat, idx) => {
+                collapseHtml += `
+                    <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">
+                        <span>${pat}</span>
+                        <button type="button" onclick="removeCollapsePattern(${idx})" class="text-slate-500 hover:text-red-400 font-bold">&times;</button>
+                    </span>
+                `;
+            });
+            collapseList.innerHTML = collapseHtml || '<span class="text-slate-500 italic text-[10px]">No directories collapsed.</span>';
+        }
+
+        function addIgnorePattern() {
+            const input = document.getElementById("add-ignore-input");
+            const val = input.value.trim();
+            if (val && !currentIgnoredPatterns.includes(val)) {
+                currentIgnoredPatterns.push(val);
+                input.value = "";
+                renderExclusionChips();
+            }
+        }
+
+        function removeIgnorePattern(idx) {
+            currentIgnoredPatterns.splice(idx, 1);
+            renderExclusionChips();
+        }
+
+        function addCollapsePattern() {
+            const input = document.getElementById("add-collapse-input");
+            const val = input.value.trim();
+            if (val && !currentCollapsedPatterns.includes(val)) {
+                currentCollapsedPatterns.push(val);
+                input.value = "";
+                renderExclusionChips();
+            }
+        }
+
+        function removeCollapsePattern(idx) {
+            currentCollapsedPatterns.splice(idx, 1);
+            renderExclusionChips();
+        }
+
+        // SNAPSHOTS MANAGEMENT
+        function fetchSnapshots() {
+            const list = document.getElementById("snapshots-list");
+            list.innerHTML = '<div class="text-slate-500 italic text-xs"><i class="fa-solid fa-spinner animate-spin mr-1"></i>Loading snapshots...</div>';
+            
+            fetch("/api/snapshots")
+                .then(res => res.json())
+                .then(data => {
+                    let html = "";
+                    if (!data.snapshots || data.snapshots.length === 0) {
+                        list.innerHTML = '<div class="text-slate-500 italic text-xs">No snapshots captured yet.</div>';
+                        return;
+                    }
+
+                    data.snapshots.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+                    data.snapshots.forEach(snap => {
+                        const date = new Date(snap.timestamp).toLocaleString();
+                        const sizeKB = (snap.total_size / 1024).toFixed(1);
+                        
+                        html += `
+                            <div class="p-3 bg-slate-900/40 border border-[#334155]/60 rounded-lg space-y-2 relative group hover:border-indigo-500/50 transition">
+                                <div class="pr-12">
+                                    <div class="font-bold text-slate-100 text-xs truncate">${snap.name}</div>
+                                    <div class="text-[9px] text-slate-500 font-mono mt-0.5">${date}</div>
+                                </div>
+                                <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                                    <span>${snap.file_count} file(s)</span>
+                                    <span>${sizeKB} KB</span>
+                                </div>
+                                <div class="flex items-center space-x-2 pt-1 border-t border-[#334155]/30">
+                                    <button onclick="revertToSnapshot('${snap.id}')" class="flex-1 py-1 bg-indigo-950/40 text-indigo-400 hover:bg-indigo-900 hover:text-white border border-indigo-900/60 rounded text-[10px] font-bold transition flex items-center justify-center space-x-1">
+                                        <i class="fa-solid fa-undo"></i> <span>Revert Workspace</span>
+                                    </button>
+                                    <button onclick="deleteSnapshot('${snap.id}')" class="px-2 py-1 bg-red-950/20 text-red-400 hover:bg-red-900 hover:text-white border border-red-900/40 rounded text-[10px] font-bold transition">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    list.innerHTML = html;
+                })
+                .catch(err => console.error("Error loading snapshots:", err));
+        }
+
+        function createSnapshot() {
+            const input = document.getElementById("snapshot-name-input");
+            const name = input.value.trim() || "Snapshot " + new Date().toLocaleTimeString();
+            
+            fetch("/api/snapshots/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: name })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to create snapshot");
+                return res.json();
+            })
+            .then(data => {
+                input.value = "";
+                fetchSnapshots();
+                appendSystemAlert("Workspace Captured", `Successfully created a file snapshot of your active workspace directory: '${name}'. You can revert to this state at any time.`, "fa-camera text-indigo-400");
+            })
+            .catch(err => alert("Failed to create snapshot: " + err));
+        }
+
+        function revertToSnapshot(id) {
+            if (!confirm("Are you sure you want to revert the active workspace to this snapshot? ALL untracked or unsaved file modifications in the workspace will be permanently overwritten!")) return;
+            
+            fetch("/api/snapshots/revert", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ snapshot_id: id })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to revert workspace");
+                return res.json();
+            })
+            .then(data => {
+                refreshWorkspaceTree();
+                fetchSnapshots();
+                appendSystemAlert("Workspace Restored", `Active files reverted completely to match snapshot: '${data.name}'.`, "fa-undo text-emerald-400");
+            })
+            .catch(err => alert("Failed to revert workspace: " + err));
+        }
+
+        function deleteSnapshot(id) {
+            if (!confirm("Are you sure you want to delete this snapshot from disk?")) return;
+            fetch("/api/snapshots/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ snapshot_id: id })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to delete snapshot");
+                return res.json();
+            })
+            .then(data => {
+                fetchSnapshots();
+            })
+            .catch(err => alert("Failed to delete snapshot: " + err));
+        }
+
+        // MCP SERVERS MANAGEMENT
+        function fetchMCPServers() {
+            const list = document.getElementById("mcp-servers-list");
+            list.innerHTML = '<div class="text-slate-500 italic text-[10px]"><i class="fa-solid fa-spinner animate-spin mr-1"></i>Loading MCP servers...</div>';
+
+            fetch("/api/mcp")
+                .then(res => res.json())
+                .then(data => {
+                    let html = "";
+                    const keys = Object.keys(data || {});
+                    if (keys.length === 0) {
+                        list.innerHTML = '<div class="text-slate-500 italic text-[10px]">No MCP servers registered.</div>';
+                        return;
+                    }
+
+                    keys.forEach(key => {
+                        const srv = data[key];
+                        const argsStr = (srv.args || []).join(" ");
+                        const stateBadge = srv.running
+                            ? '<span class="text-[9px] bg-emerald-950/40 text-emerald-300 px-1.5 py-0.5 rounded font-bold">RUNNING</span>'
+                            : '<span class="text-[9px] bg-amber-950/40 text-amber-300 px-1.5 py-0.5 rounded font-bold">STOPPED</span>';
+                        html += `
+                            <div class="p-2 rounded bg-slate-900/30 border border-[#334155]/40 text-[10px] font-mono space-y-2">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="truncate flex-1 pr-2">
+                                        <div class="font-bold text-slate-200 flex items-center gap-2">${key} ${stateBadge}</div>
+                                        <div class="text-slate-400 mt-0.5 truncate">${srv.command} ${argsStr}</div>
+                                    </div>
+                                    <button onclick="deleteMCPServer('${key}')" class="text-slate-500 hover:text-red-400 p-1 rounded hover:bg-slate-800 transition" title="Delete MCP Server">
+                                        <i class="fa-solid fa-trash text-[10px]"></i>
+                                    </button>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-3 text-[10px] text-slate-500">
+                                    <span>Transport: <span class="text-slate-300">${escapeHtml(srv.transport || 'stdio')}</span></span>
+                                    <span>Auth: <span class="text-slate-300">${escapeHtml(srv.auth_state || 'unknown')}</span></span>
+                                    ${srv.last_error ? `<span class="text-red-300">Error: ${escapeHtml(srv.last_error)}</span>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    list.innerHTML = html;
+                })
+                .catch(err => {
+                    list.innerHTML = `<div class="text-red-400 text-[10px]">Failed to load: ${err}</div>`;
+                });
+        }
+
+        function addMCPServer() {
+            const nameInput = document.getElementById("mcp-name-input");
+            const cmdInput = document.getElementById("mcp-cmd-input");
+            const argsInput = document.getElementById("mcp-args-input");
+
+            const name = nameInput.value.trim();
+            const command = cmdInput.value.trim();
+            const argsRaw = argsInput.value.trim();
+
+            if (!name || !command) {
+                alert("Please supply both Server Key/Name and Startup Command.");
+                return;
+            }
+
+            const args = argsRaw ? argsRaw.split(" ").filter(a => a) : [];
+
+            fetch("/api/mcp/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: name, command: command, args: args })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to save MCP server");
+                return res.json();
+            })
+            .then(data => {
+                nameInput.value = "";
+                cmdInput.value = "";
+                argsInput.value = "";
+                fetchMCPServers();
+                appendSystemAlert("MCP Server Added", `Successfully registered and spawned MCP Server '${name}'. Live handshaking initiated.`, "fa-plug text-green-400");
+            })
+            .catch(err => alert("Error saving MCP server: " + err));
+        }
+
+        function deleteMCPServer(name) {
+            if (!confirm(`Are you sure you want to permanently delete and stop MCP server '${name}'?`)) return;
+
+            fetch("/api/mcp/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: name })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to delete MCP server");
+                return res.json();
+            })
+            .then(data => {
+                fetchMCPServers();
+                appendSystemAlert("MCP Server Deleted", `Successfully stopped and removed MCP Server '${name}'.`, "fa-plug text-amber-400");
+            })
+            .catch(err => alert("Error deleting MCP server: " + err));
+        }
+
+        // DYNAMIC CONTEXT PINNING LIFECYCLES
+        let activePinnedFiles = [];
+
+        function fetchPinnedFiles() {
+            const list = document.getElementById("pinned-chips-list");
+            if (!list) return;
+
+            fetch("/api/sessions/pinned")
+                .then(res => res.json())
+                .then(data => {
+                    activePinnedFiles = data.pinned_files || [];
+                    let html = "";
+                    if (activePinnedFiles.length === 0) {
+                        list.innerHTML = '<div class="text-slate-500 italic text-[10px]">No pinned context files.</div>';
+                        return;
+                    }
+
+                    activePinnedFiles.forEach((file, idx) => {
+                        html += `
+                            <span class="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded bg-blue-950/40 text-blue-400 border border-blue-900/60 text-[9px] font-mono leading-none truncate max-w-[120px]">
+                                <span class="truncate" title="${file}">${file}</span>
+                                <button type="button" onclick="removeContextPin(${idx})" class="text-slate-500 hover:text-red-400 font-bold text-[10px]">&times;</button>
+                            </span>
+                        `;
+                    });
+                    list.innerHTML = html;
+                })
+                .catch(err => {
+                    list.innerHTML = `<div class="text-red-400 text-[10px]">Failed to load: ${err}</div>`;
+                });
+        }
+
+        function removeContextPin(idx) {
+            const file = activePinnedFiles[idx];
+            activePinnedFiles.splice(idx, 1);
+
+            fetch("/api/sessions/pinned/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pinned_files: activePinnedFiles })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Unpin failed");
+                return res.json();
+            })
+            .then(data => {
+                fetchPinnedFiles();
+                appendSystemAlert("Context File Unpinned", `Successfully unpinned file \`${file}\` from active session context.`, "fa-eraser text-amber-400");
+            })
+            .catch(err => alert("Failed to unpin file: " + err));
+        }
+
+        // CARD EDITING & REROLLING LIFECYCLES
+        const originalCardHtmls = {};
+
+        function triggerFileUpload() {
+            document.getElementById("hidden-file-input").click();
+        }
+
+        function uploadSelectedFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            appendSystemAlert("Uploading Memory File", `Uploading reference document '${file.name}' to active session...`, "fa-cloud-arrow-up text-indigo-400 animate-pulse");
+
+            fetch("/api/upload", {
+                method: "POST",
+                body: formData
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Upload failed");
+                return res.json();
+            })
+            .then(data => {
+                input.value = ""; // Clear file selector
+            })
+            .catch(err => alert("File upload failed: " + err));
+        }
+
+        function enableCardEdit(e, turnNum) {
+            if (e) e.stopPropagation();
+            
+            const bodyDiv = document.getElementById(`turn-body-${turnNum}`);
+            const textDiv = document.getElementById(`turn-text-${turnNum}`);
+            if (!bodyDiv || !textDiv) return;
+
+            // Store the exact original HTML tree of the body div
+            originalCardHtmls[turnNum] = bodyDiv.innerHTML;
+
+            const originalText = textDiv.innerText;
+
+            // Render inplace editor
+            bodyDiv.innerHTML = `
+                <div class="space-y-2 mt-1">
+                    <textarea id="edit-textarea-${turnNum}" rows="4" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 text-sm outline-none focus:border-blue-500 font-mono leading-normal">${originalText}</textarea>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="saveAndBranchCard(event, ${turnNum})" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded text-[11px] transition">Save &amp; Branch</button>
+                        <button onclick="cancelCardEdit(event, ${turnNum})" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1 px-3 rounded text-[11px] transition">Cancel</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function cancelCardEdit(e, turnNum) {
+            if (e) e.stopPropagation();
+            const bodyDiv = document.getElementById(`turn-body-${turnNum}`);
+            if (!bodyDiv) return;
+
+            // Restore from cached original DOM tree
+            if (originalCardHtmls[turnNum]) {
+                bodyDiv.innerHTML = originalCardHtmls[turnNum];
+                delete originalCardHtmls[turnNum];
+            }
+        }
+
+        function saveAndBranchCard(e, turnNum) {
+            if (e) e.stopPropagation();
+            const textVal = document.getElementById(`edit-textarea-${turnNum}`).value.trim();
+            if (!textVal) return;
+
+            const payload = {
+                parent_session_id: document.getElementById("session-id").innerText.replace("Session: ", "").trim(),
+                turn: turnNum,
+                branch_name: `Branch Edit Turn ${turnNum}`,
+                edit_content: textVal
+            };
+
+            fetch("/api/sessions/branch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                fetchConfig();
+                refreshWorkspaceTree();
+                fetchSessions();
+
+                const chatContainer = document.getElementById("chat-messages");
+                chatContainer.innerHTML = "";
+                appendGreeting();
+                appendSystemAlert("Timeline Edited & Branched", `Spun up parallel timeline branch from edited Turn ${turnNum}. The original timeline is completely preserved.`, "fa-code-fork text-green-400");
+                
+                if (data.history) {
+                    data.history.forEach((turn, index) => {
+                        turn.turn_number = index + 1; // Dynamically restore turn indices
+                        appendTurnToChat(turn);
+                    });
+                }
+                turnCounter = turnNum;
+                switchSidebarTab("sessions");
+            })
+            .catch(err => alert("Failed to branch edit: " + err));
+        }
+
+        function triggerReroll() {
+            if (!confirm("Are you sure you want to delete the last Assistant response and regenerate it? Any changes made in the workspace during the last turn will be safely reverted.")) return;
+            
+            appendSystemAlert("Regenerating Last Response", "Reverting last workspace edits and requesting a new Assistant generation...", "fa-rotate-right text-indigo-400 animate-spin");
+
+            fetch("/api/sessions/reroll", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" }
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Reroll failed");
+                return res.json();
+            })
+            .then(data => {
+                // Reroll is running asynchronously, the SSE connection streams the tokens live!
+            })
+            .catch(err => alert("Reroll failed: " + err));
+        }
+
+        function suggestCompactBaseURL(provider) {
+            const urlInput = document.getElementById("input-compact-base-url");
+            const modelInput = document.getElementById("input-compact-model");
+            const vFields = document.getElementById("compact-vertex-fields");
+            populateKnownModelList("known-models-compact", provider);
+
+            if (provider === "vertex") {
+                vFields.classList.remove("hidden");
+                urlInput.value = ""; // Auto built by backend
+                modelInput.value = "gemini-1.5-flash";
+            } else {
+                vFields.classList.add("hidden");
+                if (provider === "anthropic") {
+                    urlInput.value = "https://api.anthropic.com/v1/messages";
+                    modelInput.value = "claude-3-5-haiku";
+                } else if (provider === "gemini") {
+                    urlInput.value = ""; // Auto built by backend
+                    modelInput.value = "gemini-1.5-flash";
+                } else {
+                    urlInput.value = "https://api.openai.com/v1/chat/completions";
+                    modelInput.value = "gpt-4o-mini";
+                }
+            }
+        }
+
+        // SETTINGS TAB SWAPPING & RENDERING LIFECYCLES
+        function switchSettingsTab(tabName) {
+            const panels = {
+                standard: document.getElementById("settings-panel-standard"),
+                providers: document.getElementById("settings-panel-providers"),
+            };
+            const stdFooter = document.getElementById("settings-standard-footer");
+            if (stdFooter) stdFooter.classList.toggle("hidden", tabName !== "standard");
+            const buttons = {
+                standard: document.getElementById("btn-settings-tab-standard"),
+                providers: document.getElementById("btn-settings-tab-providers"),
+            };
+            Object.keys(panels).forEach(k => panels[k].classList.add("hidden"));
+            Object.keys(buttons).forEach(k => {
+                buttons[k].className = "font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition";
+            });
+            panels[tabName].classList.remove("hidden");
+            buttons[tabName].className = "font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition";
+            if (tabName === "providers") fetchProviders();
+        }
+
+        function loadWorkflowsSchema() {
+            fetch("/workflows.json")
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById("workflow-json-editor").value = JSON.stringify(data, null, 2);
+                    loadWorkflowIntoModel(data);
+                    setValidation(true, "Graph loaded.");
+                })
+                .catch(() => {
+                    const defaultSchema = {
+                      "active_workflow": "linear_chat",
+                      "workflows": {
+                        "linear_chat": {
+                          "name": "Standard Linear Chat",
+                          "description": "Standard conversational agent loop mapping user input to a single, high-fidelity LLM response.",
+                          "nodes": [
+                            { "id": "start", "type": "user_input", "properties": { "x": 40, "y": 40 }, "inputs": [] },
+                            { "id": "query_node", "type": "llm", "properties": { "provider": "openai", "model": "gpt-4o", "temperature": 0.0, "system_prompt": "You are a highly capable agent..." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "terminal", "type": "assistant_response", "properties": {}, "inputs": [{ "source_node": "query_node", "source_output": "response", "target_input": "final_output" }] }
+                          ]
+                        }
+                      }
+                    };
+                    document.getElementById("workflow-json-editor").value = JSON.stringify(defaultSchema, null, 2);
+                    loadWorkflowIntoModel(defaultSchema);
+                });
+        }
+
+        function compileWorkflowWithAI() {
+            const promptInput = document.getElementById("ai-workflow-prompt");
+            const prompt = promptInput.value.trim();
+            if (!prompt) return;
+
+            setValidation(false, "AI Compiler compiling graph...");
+
+            setTimeout(() => {
+                let schema;
+                if (prompt.toLowerCase().includes("parallel") || prompt.toLowerCase().includes("decomposed") || prompt.toLowerCase().includes("axis")) {
+                    schema = {
+                      "active_workflow": "enhanced_cognition",
+                      "workflows": {
+                        "enhanced_cognition": {
+                          "name": "Enhanced Cognition (POADR)",
+                          "description": "Decomposes your query concurrently across 5 parallel cognitive axes to eliminate representational interference in smaller models, merging them in a final synthesis pass.",
+                          "nodes": [
+                            { "id": "start", "type": "user_input", "properties": {}, "inputs": [] },
+                            { "id": "axis_chronological", "type": "llm", "properties": { "provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1, "system_prompt": "You are a chronological state tracking specialist." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "axis_causal_logical", "type": "llm", "properties": { "provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1, "system_prompt": "You are a causal-logical constraint specialist." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "axis_semantic_world", "type": "llm", "properties": { "provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1, "system_prompt": "You are a spatial-ontological world specialist." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "axis_behavioral_psych", "type": "llm", "properties": { "provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1, "system_prompt": "You are a social-behavioral psychology specialist." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "axis_stylistic_prose", "type": "llm", "properties": { "provider": "openai", "model": "gpt-4o-mini", "temperature": 0.1, "system_prompt": "You are a stylistic-prose aesthetics specialist." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "aggregator", "type": "llm", "properties": { "provider": "openai", "model": "gpt-4o", "temperature": 0.2, "input_ports": ["chronological_context","causal_context","semantic_context","behavioral_context","stylistic_context","raw_prompt"], "system_prompt": "Synthesize the five parallel cognitive reports into a single, high-fidelity response." }, "inputs": [
+                                { "source_node": "axis_chronological", "source_output": "response", "target_input": "chronological_context" },
+                                { "source_node": "axis_causal_logical", "source_output": "response", "target_input": "causal_context" },
+                                { "source_node": "axis_semantic_world", "source_output": "response", "target_input": "semantic_context" },
+                                { "source_node": "axis_behavioral_psych", "source_output": "response", "target_input": "behavioral_context" },
+                                { "source_node": "axis_stylistic_prose", "source_output": "response", "target_input": "stylistic_context" },
+                                { "source_node": "start", "source_output": "prompt", "target_input": "raw_prompt" }
+                              ]
+                            },
+                            { "id": "terminal", "type": "assistant_response", "properties": {}, "inputs": [{ "source_node": "aggregator", "source_output": "response", "target_input": "final_output" }] }
+                          ]
+                        }
+                      }
+                    };
+                } else {
+                    schema = {
+                      "active_workflow": "linear_chat",
+                      "workflows": {
+                        "linear_chat": {
+                          "name": "Standard Linear Chat",
+                          "description": "Standard conversational agent loop mapping user input to a single, high-fidelity LLM response.",
+                          "nodes": [
+                            { "id": "start", "type": "user_input", "properties": {}, "inputs": [] },
+                            { "id": "query_node", "type": "llm", "properties": { "provider": "openai", "model": "gpt-4o", "temperature": 0.0, "system_prompt": "You are a highly capable agent with access to a local terminal sandbox." }, "inputs": [{ "source_node": "start", "source_output": "prompt", "target_input": "prompt" }] },
+                            { "id": "terminal", "type": "assistant_response", "properties": {}, "inputs": [{ "source_node": "query_node", "source_output": "response", "target_input": "final_output" }] }
+                          ]
+                        }
+                      }
+                    };
+                }
+
+                // Normalize any legacy types to 'llm'; clear positions so auto-layout runs.
+                Object.values(schema.workflows).forEach(wf => (wf.nodes || []).forEach(n => {
+                    if (n.type === "llm_query" || n.type === "llm_synthesis") n.type = "llm";
+                    n.properties = n.properties || {};
+                    delete n.properties.x; delete n.properties.y;
+                }));
+                document.getElementById("workflow-json-editor").value = JSON.stringify(schema, null, 2);
+                loadWorkflowIntoModel(schema);
+                promptInput.value = "";
+                appendSystemAlert("AI Workflow Staged", "Generated a node-graph draft. Review it and click Compile & Apply to save.", "fa-wand-magic-sparkles text-blue-400");
+            }, 1200);
+        }
+
+        function saveWorkflowConfigurations() {
+            // Build the schema from the live graph model so edits/positions persist.
+            persistPositions();
+            const schema = buildSchemaFromModel();
+            const v = validateGraph(wfModel);
+            if (!v.ok) {
+                setValidation(false, v.errors.join(" "));
+                alert("Cannot apply: " + v.errors.join(" "));
+                return;
+            }
+            if (v.warnings.length) {
+                setValidation(true, v.warnings.join(" "));
+            } else {
+                setValidation(true, "Graph valid.");
+            }
+            fetch("/api/workflows/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(schema)
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Save failed");
+                return res.json();
+            })
+            .then(() => {
+                document.getElementById("workflow-json-editor").value = JSON.stringify(schema, null, 2);
+                loadWorkflowSelector();
+                setValidation(true, "Saved.");
+                appendSystemAlert("Active Pipeline Saved", `workflows.json saved and hot-swapped! Active pipeline: '${schema.active_workflow}'.`, "fa-check-double text-green-400");
+            })
+            .catch(err => alert("Error committing workflow to disk: " + err));
+        }
+
+        // ---- Workflow lifecycle: new / clone / delete / switch ----
+        function readSchemaFromEditor() {
+            try {
+                return JSON.parse(document.getElementById("workflow-json-editor").value || "{}");
+            } catch (err) {
+                alert("The Advanced/JSON panel contains invalid JSON:\n" + err.message);
+                return null;
+            }
+        }
+
+        // Switch which workflow is being edited WITHOUT changing the active
+        // (running) workflow. Pending edits are preserved in the JSON panel.
+        function switchLabWorkflow(id) {
+            if (!id) return;
+            const schema = readSchemaFromEditor();
+            if (!schema) return;
+            if (!schema.workflows || !schema.workflows[id]) {
+                alert("Workflow '" + id + "' not found in the JSON.");
+                return;
+            }
+            loadWorkflowIntoModel(schema, id);
+            setValidation(true, `Editing '${id}'. Click Compile & Apply to save/activate.`);
+        }
+
+        // Create a brand-new blank workflow with start + llm + terminal.
+        function newWorkflow() {
+            const schema = readSchemaFromEditor();
+            if (!schema) return;
+            schema.workflows = schema.workflows || {};
+            const id = uniqueWorkflowId(schema, "new_workflow");
+            const display = prompt("Name for the new workflow (id):", id);
+            if (display === null) return;
+            const clean = (display.trim() || id).replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "");
+            if (!clean) { alert("Invalid workflow id."); return; }
+            if (schema.workflows[clean]) { alert("A workflow with that id already exists."); return; }
+            schema.workflows[clean] = {
+                name: display.trim() || clean,
+                description: "Custom workflow.",
+                nodes: [
+                    { id: "start", type: "user_input", properties: { x: 40, y: 40 }, inputs: [] },
+                    { id: "query_node", type: "llm", properties: { x: 310, y: 40, provider: "openai", model: "gpt-4o-mini", temperature: 0.2, system_prompt: "" }, inputs: [{ source_node: "start", source_output: "prompt", target_input: "prompt" }] },
+                    { id: "terminal", type: "assistant_response", properties: { x: 580, y: 40 }, inputs: [{ source_node: "query_node", source_output: "response", target_input: "final_output" }] },
+                ],
+            };
+            document.getElementById("workflow-json-editor").value = JSON.stringify(schema, null, 2);
+            loadWorkflowIntoModel(schema, clean);
+            setValidation(true, `New workflow '${clean}' staged. Click Compile & Apply to save.`);
+        }
+
+        // Deep-clone the currently edited workflow under a new id.
+        function cloneWorkflow() {
+            const schema = readSchemaFromEditor();
+            if (!schema) return;
+            const srcId = wfModel.workflowId;
+            if (!srcId || !schema.workflows || !schema.workflows[srcId]) {
+                alert("No workflow selected to clone.");
+                return;
+            }
+            const cloneId = uniqueWorkflowId(schema, srcId + "_clone");
+            const display = prompt("Name for the cloned workflow (id):", cloneId);
+            if (display === null) return;
+            const clean = (display.trim() || cloneId).replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "");
+            if (!clean) { alert("Invalid workflow id."); return; }
+            if (schema.workflows[clean]) { alert("A workflow with that id already exists."); return; }
+            // Deep copy via JSON so nodes/edges are independent.
+            schema.workflows[clean] = JSON.parse(JSON.stringify(schema.workflows[srcId]));
+            schema.workflows[clean].name = (schema.workflows[clean].name || srcId) + " (copy)";
+            document.getElementById("workflow-json-editor").value = JSON.stringify(schema, null, 2);
+            loadWorkflowIntoModel(schema, clean);
+            setValidation(true, `Cloned '${srcId}' to '${clean}'. Click Compile & Apply to save.`);
+        }
+
+        // Delete the currently edited workflow (refuses if it is the last one
+        // or one of the built-ins without confirmation).
+        function deleteWorkflow() {
+            const schema = readSchemaFromEditor();
+            if (!schema) return;
+            const id = wfModel.workflowId;
+            if (!id || !schema.workflows || !schema.workflows[id]) {
+                alert("No workflow selected.");
+                return;
+            }
+            const ids = Object.keys(schema.workflows);
+            if (ids.length <= 1) {
+                alert("You cannot delete the last workflow.");
+                return;
+            }
+            if (!confirm(`Delete workflow '${id}'? This cannot be undone after you click Compile & Apply.`)) return;
+            delete schema.workflows[id];
+            if (schema.active_workflow === id) {
+                schema.active_workflow = Object.keys(schema.workflows)[0];
+            }
+            document.getElementById("workflow-json-editor").value = JSON.stringify(schema, null, 2);
+            loadWorkflowIntoModel(schema, schema.active_workflow);
+            setValidation(true, `Deleted '${id}'. Click Compile & Apply to save.`);
+        }
+
+        function uniqueWorkflowId(schema, base) {
+            if (!schema.workflows[base]) return base;
+            let n = 2;
+            while (schema.workflows[`${base}_${n}`]) n++;
+            return `${base}_${n}`;
+        }
+
+        // ---- Structural validation ----
+        function validateGraph(model) {
+            const errors = [];
+            const warnings = [];
+            const nodes = model.nodes || [];
+            const byId = {};
+            nodes.forEach(n => byId[n.id] = n);
+            const ids = new Set(nodes.map(n => n.id));
+            let start = null, end = null;
+
+            nodes.forEach(n => {
+                if (n.type === "user_input") {
+                    if (start) errors.push("More than one Start node.");
+                    start = n;
+                }
+                if (n.type === "assistant_response") {
+                    if (end) errors.push("More than one Response node.");
+                    end = n;
+                }
+                // Dangling edge sources.
+                (n.inputs || []).forEach(c => {
+                    if (!ids.has(c.source_node)) {
+                        errors.push(`Node '${n.id}' references missing source '${c.source_node}'.`);
+                    }
+                });
+                // Required input ports must be wired.
+                inputPortsFor(n).forEach(p => {
+                    const wired = (n.inputs || []).some(c => c.target_input === p.port);
+                    if (p.required && !wired) {
+                        errors.push(`'${n.id}' requires input '${p.port}'.`);
+                    }
+                });
+                // An LLM needs at least one incoming prompt/context edge.
+                if ((n.type === "llm") && (!n.inputs || n.inputs.length === 0)) {
+                    errors.push(`LLM node '${n.id}' needs at least one input.`);
+                }
+            });
+            if (!start) errors.push("Graph must have exactly one Start node.");
+            if (!end) errors.push("Graph must have exactly one Response node.");
+
+            if (hasGraphCycle(nodes)) errors.push("Graph contains a cycle.");
+
+            // Reachability from start and to terminal.
+            if (start && end && errors.length === 0) {
+                const reachable = new Set([start.id]);
+                const queue = [start.id];
+                while (queue.length) {
+                    const u = queue.shift();
+                    nodes.forEach(n => (n.inputs || []).forEach(c => {
+                        if (c.source_node === u && !reachable.has(n.id)) {
+                            reachable.add(n.id);
+                            queue.push(n.id);
+                        }
+                    }));
+                }
+                if (!reachable.has(end.id)) errors.push("Response node is not reachable from Start.");
+                nodes.forEach(n => {
+                    if (!reachable.has(n.id) && !isAnchor(n.type)) {
+                        warnings.push(`Node '${n.id}' is not reachable from Start.`);
+                    }
+                });
+            }
+
+            // Terminal input must be connected.
+            if (end) {
+                const wired = (end.inputs || []).some(c => c.target_input === "final_output");
+                if (!wired) errors.push("Response node's 'final' input must be connected.");
+            }
+
+            return { ok: errors.length === 0, errors, warnings };
+        }
+
+        function hasGraphCycle(nodes) {
+            const adj = {};
+            nodes.forEach(n => adj[n.id] = []);
+            nodes.forEach(n => (n.inputs || []).forEach(c => {
+                if (adj[c.source_node]) adj[c.source_node].push(n.id);
+            }));
+            const WHITE = 0, GRAY = 1, BLACK = 2;
+            const color = {};
+            nodes.forEach(n => color[n.id] = WHITE);
+            function dfs(u) {
+                color[u] = GRAY;
+                for (const v of adj[u]) {
+                    if (color[v] === GRAY) return true;
+                    if (color[v] === WHITE && dfs(v)) return true;
+                }
+                color[u] = BLACK;
+                return false;
+            }
+            return nodes.some(n => color[n.id] === WHITE && dfs(n.id));
+        }
+
+        // WORKFLOW HEADER SELECTOR (v2.0)
+        function loadWorkflowSelector() {
+            const selector = document.getElementById("workflow-selector");
+            if (!selector) return;
+            fetch("/workflows.json")
+                .then(res => res.json())
+                .then(data => {
+                    const workflows = data.workflows || {};
+                    const active = data.active_workflow || "";
+                    let html = "";
+                    Object.keys(workflows).forEach(id => {
+                        const wf = workflows[id];
+                        const selected = id === active ? "selected" : "";
+                        html += `<option value="${id}" ${selected}>${wf.name || id}</option>`;
+                    });
+                    selector.innerHTML = html;
+                    selector.value = active;
+                })
+                .catch(err => console.error("Error loading workflow selector:", err));
+        }
+
+        function switchWorkflow(id) {
+            if (!id) return;
+            fetch("/api/workflows/activate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: id })
+            })
+            .then(async res => {
+                if (!res.ok) {
+                    const msg = await res.text();
+                    throw new Error(msg || "Activation failed");
+                }
+                return res.json();
+            })
+            .then(data => {
+                // SSE already streams the confirmation card; just keep the selector in sync.
+                const selector = document.getElementById("workflow-selector");
+                if (selector) selector.value = id;
+                // Refresh the AI Workflow Lab editor if it happens to be open.
+                const labPanel = document.getElementById("workflow-lab-surface");
+                if (labPanel && !labPanel.classList.contains("hidden")) {
+                    loadWorkflowsSchema();
+                }
+            })
+            .catch(err => {
+                alert("Failed to switch workflow: " + err.message);
+                loadWorkflowSelector(); // revert dropdown to server state
+            });
+        }
+
+        // ===== REUSABLE PROVIDER PROFILES =====
+        let editingProviderName = null;
+
+        function fetchProviders() {
+            wfProfiles = null; // invalidate the workflow editor's profile cache
+            fetch("/api/providers")
+                .then(res => res.json())
+                .then(data => {
+                    currentProvidersRevision = data.providers_revision || 0;
+                    const profiles = data.providers || {};
+                    const names = Object.keys(profiles);
+
+                    // Populate active-profile dropdowns.
+                    const chatSel = document.getElementById("active-chat-profile");
+                    const compSel = document.getElementById("active-compaction-profile");
+                    [chatSel, compSel].forEach(sel => {
+                        if (!sel) return;
+                        const current = sel.value;
+                        sel.innerHTML = '<option value="">— ' + (sel === chatSel ? "inline config.api" : "inline compaction") + " —</option>";
+                        names.forEach(n => {
+                            sel.innerHTML += `<option value="${n}">${n} (${profiles[n].provider}/${profiles[n].model})</option>`;
+                        });
+                    });
+                    if (chatSel) chatSel.value = data.active_profile || "";
+                    if (compSel) compSel.value = data.compaction_profile || "";
+
+                    // Render the profile cards.
+                    const list = document.getElementById("providers-list");
+                    if (names.length === 0) {
+                        list.innerHTML = '<div class="text-slate-500 italic text-xs">No profiles yet. Click "New Profile" to create one.</div>';
+                        return;
+                    }
+                    let html = "";
+                    names.forEach(name => {
+                        const p = profiles[name];
+                        const activeBadge = name === data.active_profile ? '<span class="ml-2 text-[9px] bg-blue-900 text-blue-300 px-1.5 py-0.5 rounded font-bold">CHAT</span>' : '';
+                        const compBadge = name === data.compaction_profile ? '<span class="ml-2 text-[9px] bg-indigo-900 text-indigo-300 px-1.5 py-0.5 rounded font-bold">COMPACTION</span>' : '';
+                        const endpoint = p.base_url ? escapeHtml(p.base_url) : '<span class="text-slate-500">auto endpoint</span>';
+                        html += `
+                            <div class="p-3 bg-slate-900/30 border border-[#334155] rounded-lg space-y-3">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="font-bold text-slate-200 flex items-center">
+                                            <i class="fa-solid fa-bolt text-amber-400 mr-2 text-xs"></i>${name}
+                                            ${activeBadge}${compBadge}
+                                        </div>
+                                        <div class="text-[10px] text-slate-400 mt-1 font-mono">${p.provider} · ${p.model || "unset"}</div>
+                                        <div class="text-[10px] text-slate-500 mt-1 break-all font-mono">${endpoint}</div>
+                                    </div>
+                                    <button onclick="editProvider('${name}')" class="px-2.5 py-1 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white text-[10px] font-bold" title="Edit profile">Edit</button>
+                                </div>
+                                <div class="flex items-center justify-between text-[10px] text-slate-500">
+                                    <span>Max parallel: <span class="font-mono text-slate-300">${p.max_concurrency || 0}</span></span>
+                                    <button onclick="deleteProvider('${name}')" class="text-red-400 hover:text-red-300 font-bold" title="Delete profile">Delete</button>
+                                </div>
+                            </div>`;
+                    });
+                    list.innerHTML = html;
+                })
+                .catch(err => {
+                    document.getElementById("providers-list").innerHTML = `<div class="text-red-400 text-xs">Failed to load profiles: ${err}</div>`;
+                });
+        }
+
+        function newProviderForm() {
+            editingProviderName = null;
+            document.getElementById("provider-editor-title").textContent = "New Profile";
+            document.getElementById("provider-editor").setAttribute("data-mode", "new");
+            document.getElementById("pe-name").value = "";
+            document.getElementById("pe-name").disabled = false;
+            document.getElementById("pe-provider").value = "openai";
+            document.getElementById("pe-model").value = "";
+            document.getElementById("pe-temperature").value = "0.2";
+            document.getElementById("pe-max-concurrency").value = "0";
+            document.getElementById("pe-key").value = "";
+            document.getElementById("pe-base-url").value = "";
+            document.getElementById("pe-project-id").value = "";
+            document.getElementById("pe-region").value = "";
+            document.getElementById("pe-is-active").checked = false;
+            suggestProviderBaseUrl("openai");
+            document.getElementById("provider-editor").classList.remove("hidden");
+        }
+
+        function editProvider(name) {
+            fetch("/api/providers")
+                .then(res => res.json())
+                .then(data => {
+                    currentProvidersRevision = data.providers_revision || currentProvidersRevision;
+                    const p = (data.providers || {})[name];
+                    if (!p) return;
+                    editingProviderName = name;
+                    document.getElementById("provider-editor-title").textContent = "Edit Profile: " + name;
+                    document.getElementById("provider-editor").setAttribute("data-mode", "edit");
+                    document.getElementById("pe-name").value = name;
+                    document.getElementById("pe-name").disabled = true;
+                    document.getElementById("pe-provider").value = p.provider || "openai";
+                    document.getElementById("pe-model").value = p.model || "";
+                    document.getElementById("pe-temperature").value = p.temperature != null ? p.temperature : 0.2;
+                    document.getElementById("pe-max-concurrency").value = p.max_concurrency || 0;
+                    document.getElementById("pe-key").value = "";
+                    document.getElementById("pe-key").placeholder = "••••••" + (p.key ? p.key.slice(-4) : " (set a new key to replace)");
+                    document.getElementById("pe-base-url").value = p.base_url || "";
+                    document.getElementById("pe-project-id").value = p.project_id || "";
+                    document.getElementById("pe-region").value = p.region || "";
+                    document.getElementById("pe-is-active").checked = (name === data.active_profile);
+                    suggestProviderBaseUrl(p.provider || "openai");
+                    document.getElementById("provider-editor").classList.remove("hidden");
+                });
+        }
+
+        function closeProviderForm() {
+            document.getElementById("provider-editor").classList.add("hidden");
+        }
+
+        function suggestProviderBaseUrl(provider) {
+            const urlEl = document.getElementById("pe-base-url");
+            const modelEl = document.getElementById("pe-model");
+            const vFields = document.getElementById("pe-vertex-fields");
+            populateKnownModelList("known-models-provider", provider);
+            if (provider === "vertex") {
+                vFields.classList.remove("hidden");
+                urlEl.value = "";
+                modelEl.placeholder = "gemini-1.5-flash";
+            } else {
+                vFields.classList.add("hidden");
+                if (provider === "anthropic") {
+                    urlEl.placeholder = "https://api.anthropic.com/v1/messages";
+                    modelEl.placeholder = "claude-3-5-sonnet-latest";
+                } else if (provider === "gemini") {
+                    urlEl.placeholder = "(auto-built by backend)";
+                    modelEl.placeholder = "gemini-1.5-flash";
+                } else {
+                    urlEl.placeholder = "https://api.openai.com/v1/chat/completions";
+                    modelEl.placeholder = "gpt-4o-mini";
+                }
+            }
+        }
+
+        function saveProvider() {
+            const name = document.getElementById("pe-name").value.trim();
+            if (!name) { alert("Profile name is required."); return; }
+            const profile = {
+                provider: document.getElementById("pe-provider").value,
+                model: document.getElementById("pe-model").value.trim(),
+                temperature: parseFloat(document.getElementById("pe-temperature").value) || 0,
+                max_concurrency: parseInt(document.getElementById("pe-max-concurrency").value, 10) || 0,
+                key: document.getElementById("pe-key").value,
+                base_url: document.getElementById("pe-base-url").value.trim(),
+                project_id: document.getElementById("pe-project-id").value.trim(),
+                region: document.getElementById("pe-region").value.trim(),
+                max_tokens: 4096,
+            };
+            // When editing and the key field is empty, send the masked value so
+            // the backend preserves the existing key.
+            if (editingProviderName && profile.key === "") {
+                // Send the backend's masked-key sentinel so it preserves the existing key.
+                profile.key = "••••";
+            }
+            fetch("/api/providers/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: editingProviderName || name,
+                    profile: profile,
+                    is_active: document.getElementById("pe-is-active").checked,
+                    expected_revision: currentProvidersRevision,
+                }),
+            })
+            .then(async res => {
+                if (!res.ok) { const t = await res.text(); throw new Error(t); }
+                return res.json();
+            })
+            .then((data) => {
+                currentProvidersRevision = data.providers_revision || currentProvidersRevision;
+                closeProviderForm();
+                fetchProviders();
+                fetchConfig();
+                appendSystemAlert("Profile Saved", `Connection profile '${editingProviderName || name}' saved.`, "fa-plug-circle-check text-green-400");
+            })
+            .catch(err => {
+                if (String(err.message || err).includes("settings-conflict")) {
+                    alert("Provider profiles changed elsewhere. Reloading the latest profiles.");
+                    fetchProviders();
+                    return;
+                }
+                alert("Failed to save profile: " + err.message);
+            });
+        }
+
+        function deleteProvider(name) {
+            if (!confirm(`Delete provider profile '${name}'? Nodes referencing it will fall back to inline settings.`)) return;
+            fetch("/api/providers/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, expected_revision: currentProvidersRevision }),
+            })
+            .then(async res => { if (!res.ok) throw new Error(await res.text() || "delete failed"); return res.json(); })
+            .then((data) => { currentProvidersRevision = data.providers_revision || currentProvidersRevision; fetchProviders(); fetchConfig(); })
+            .catch(err => {
+                if (String(err.message || err).includes("settings-conflict")) {
+                    alert("Provider profiles changed elsewhere. Reloading the latest profiles.");
+                    fetchProviders();
+                    return;
+                }
+                alert("Failed to delete profile: " + err);
+            });
+        }
+
+        function setActiveProfile(name, target) {
+            fetch("/api/providers/activate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, target, expected_revision: currentProvidersRevision }),
+            })
+            .then(async res => { if (!res.ok) throw new Error(await res.text() || "activate failed"); return res.json(); })
+            .then(() => {
+                fetchProviders();
+                fetchConfig();
+                const which = target === "compaction" ? "Compaction" : "Active chat";
+                appendSystemAlert("Profile Activated", `${which} connection ${name ? "set to '" + name + "'" : "reset to inline config"}.`, "fa-bolt text-amber-400");
+            })
+            .catch(err => {
+                if (String(err.message || err).includes("settings-conflict")) {
+                    alert("Provider profiles changed elsewhere. Reloading the latest profiles.");
+                    fetchProviders();
+                    return;
+                }
+                alert("Failed to activate profile: " + err);
+                fetchProviders();
+            });
+        }
+
+        // ===== Settings-tab profile selectors (providers.json) =====
+        function populateProfileSelectors(activeChat, activeCompaction) {
+            fetch("/api/providers")
+                .then(res => res.json())
+                .then(data => {
+                    const profiles = data.providers || {};
+                    const opts = '<option value="">— inline (use fields below) —</option>' +
+                        Object.keys(profiles).map(n => `<option value="${n}">${n} (${profiles[n].provider}/${profiles[n].model})</option>`).join("");
+                    const chat = document.getElementById("input-provider-profile");
+                    const comp = document.getElementById("input-compact-profile");
+                    if (chat) { chat.innerHTML = opts; chat.value = activeChat || ""; onChatProfileChange(chat.value); }
+                    if (comp) { comp.innerHTML = opts; comp.value = activeCompaction || ""; onCompactProfileChange(comp.value); }
+                })
+                .catch(err => console.error("Failed to load profiles for settings:", err));
+        }
+
+        function onChatProfileChange(value) {
+            const inline = document.getElementById("inline-api-fields");
+            if (inline) inline.style.display = value ? "none" : "";
+        }
+
+        function onCompactProfileChange(value) {
+            const inline = document.getElementById("inline-compact-fields");
+            if (inline) inline.style.display = value ? "none" : "";
+        }
+
+        function toggleCardMetrics(e, turnNum) {
+            if (e) e.stopPropagation();
+            const panel = document.getElementById(`card-metrics-${turnNum}`);
+            if (panel) {
+                panel.classList.toggle("hidden");
+            }
+        }
+
+        function triggerCompaction() {
+            fetch("/api/compact", { method: "POST" })
+                .then(res => {
+                    if (res.ok) alert("Compaction requested in background!");
+                });
+        }
+
+        // Auto text expander
+        function handleInputKeydown(e) {
+            const input = document.getElementById("prompt-input");
+            if (e.key === "Escape") {
+                hideTriggerOverlay();
+            }
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (isSessionBusy()) {
+                    submitPrompt(null, e.altKey ? "follow_up" : "steering");
+                } else {
+                    submitPrompt();
+                }
+            } else {
+                setTimeout(() => {
+                    input.style.height = "auto";
+                    input.style.height = input.scrollHeight + "px";
+                    updateTriggerOverlay();
+                }, 0);
+            }
+        }
+function exposeInlineHandlerFunctions() {
+  const names = ["toggleSidebar", "openSettingsModal", "activateRailSection", "switchPrimarySurface", "toggleDetailsPanel", "triggerNewSession", "triggerFileUpload", "uploadSelectedFile", "addNewWorkspace", "createSnapshot", "triggerCompaction", "switchWorkflow", "switchConversationView", "switchDetailsTab", "submitPrompt", "handleComposerShellClick", "handleInputKeydown", "handleComposerInput", "triggerReroll", "runComposerCta", "compileWorkflowWithAI", "toggleAddNodeMenu", "addNode", "autoLayoutNodes", "reloadGraphFromJson", "switchLabWorkflow", "newWorkflow", "cloneWorkflow", "deleteWorkflow", "toggleWorkflowJson", "saveWorkflowConfigurations", "switchSettingsTab", "closeSettingsModal", "saveSettings", "onChatProfileChange", "suggestBaseURL", "onCompactProfileChange", "suggestCompactBaseURL", "addIgnorePattern", "addCollapsePattern", "addMCPServer", "newProviderForm", "setActiveProfile", "closeProviderForm", "suggestProviderBaseUrl", "saveProvider", "closeForkModal", "toggleForkFields", "executeForkAction", "stageWorkspaceFile", "switchSidebarTab", "openWorkspaceFile", "editQueuedMessage", "removeQueuedMessage", "clearStagedContext", "removeStagedContext", "changeWorkspaceFromSelector", "removeWorkspaceFromHistory", "selectSession", "renameSessionPrompt", "deleteSessionConfirm", "seedPromptExample", "enableCardEdit", "triggerFork", "toggleCardMetrics", "toggleWfPreview", "setNodeProfile", "updateNodeProp", "toggleNodeTools", "toggleNodeTool", "addLlmInput", "removeLlmInput", "renameNode", "deleteSelectedNode", "removeIgnorePattern", "removeCollapsePattern", "revertToSnapshot", "deleteSnapshot", "deleteMCPServer", "removeContextPin", "saveAndBranchCard", "cancelCardEdit", "editProvider", "deleteProvider"];
+  for (const name of names) {
+    try {
+      window[name] = eval(name);
+    } catch {}
+  }
+}
+
+exposeInlineHandlerFunctions();

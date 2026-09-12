@@ -62,11 +62,35 @@ const noScripts = noComments
 // The inline <script> bodies are extracted separately for syntax/handler checks.
 const commentsStripped = noComments;
 
-const scripts = []
-for (const m of commentsStripped.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
-  // Skip external scripts (src=...); they have no inline body to check.
-  if (!m[1].trim()) continue;
-  scripts.push(m[1]);
+const scriptBodies = [];
+for (const m of commentsStripped.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+  const attrs = m[1] || "";
+  const body = m[2] || "";
+  const srcMatch = attrs.match(/\bsrc=["']([^"']+)["']/i);
+  const typeMatch = attrs.match(/\btype=["']([^"']+)["']/i);
+  const kind = typeMatch && /module/i.test(typeMatch[1]) ? "module" : "script";
+  if (srcMatch) {
+    scriptBodies.push({ kind, src: srcMatch[1], body: "" });
+    continue;
+  }
+  if (!body.trim()) continue;
+  scriptBodies.push({ kind, src: null, body });
+}
+
+function walkJsFiles(dir, out) {
+  if (!fs.existsSync(dir)) return;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walkJsFiles(full, out);
+    else if (entry.isFile() && entry.name.endsWith(".js")) out.push(full);
+  }
+}
+
+const externalJsFiles = [];
+const jsRoot = path.join(REPO_ROOT, "src", "web", "js");
+walkJsFiles(jsRoot, externalJsFiles);
+for (const file of externalJsFiles) {
+  scriptBodies.push({ kind: "module", src: file, body: fs.readFileSync(file, "utf8") });
 }
 
 // ---------------------------------------------------------------------------
@@ -154,13 +178,14 @@ if (process.exitCode === 0) ok(`unique element IDs (${ids.size})`);
 //    Catches typos like onclick="saveSetings()" or renamed handlers.
 // ---------------------------------------------------------------------------
 const definedFns = new Set();
-for (const body of scripts) {
-  // function foo(  /  async function foo(
-  for (const fm of body.matchAll(/(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g)) {
+for (const script of scriptBodies) {
+  const body = script.body;
+  // function foo(  /  async function foo( / export function foo(
+  for (const fm of body.matchAll(/(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g)) {
     definedFns.add(fm[1]);
   }
-  // const foo = () =>  /  const foo = function
-  for (const fm of body.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function|\()/g)) {
+  // const foo = () =>  /  const foo = function / export const foo =
+  for (const fm of body.matchAll(/(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function|\()/g)) {
     definedFns.add(fm[1]);
   }
 }
@@ -200,16 +225,23 @@ while ((m = hrefRe.exec(noScripts)) !== null) {
 // ---------------------------------------------------------------------------
 // 6. Inline JS syntax check via `new Function` (parses without executing).
 // ---------------------------------------------------------------------------
-scripts.forEach((body, i) => {
+scriptBodies.forEach((script, i) => {
   try {
-    // Wrapping in a function parses the body in non-strict function scope.
-    // It will throw on syntax errors without running any code.
-    new Function(body);
+    let source = script.body;
+    if (script.kind === "module") {
+      source = source
+        .replace(/^\s*import\s+[^;]+;\s*$/gm, "")
+        .replace(/^\s*export\s+/gm, "");
+    }
+    // Wrapping in a function parses the body without running it. For modules
+    // we strip import/export syntax first so this remains dependency-free.
+    new Function(source);
   } catch (err) {
-    fail(`inline <script> #${i + 1} has a syntax error: ${err.message}`);
+    const label = script.src ? path.relative(REPO_ROOT, script.src) : `inline <script> #${i + 1}`;
+    fail(`${label} has a syntax error: ${err.message}`);
   }
 });
-if (process.exitCode === 0) ok(`inline <script> syntax (${scripts.length} block${scripts.length === 1 ? "" : "s"})`);
+if (process.exitCode === 0) ok(`script/module syntax (${scriptBodies.length} block${scriptBodies.length === 1 ? "" : "s"})`);
 
 // ---------------------------------------------------------------------------
 // Done
