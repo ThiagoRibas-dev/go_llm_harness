@@ -161,6 +161,20 @@ func TestWorkflowLiveTraceEvents(t *testing.T) {
 		t.Fatalf("node lifecycle incomplete (running=%v completed=%v): %v", sawRunning, sawCompleted, nodeEvents)
 	}
 
+	// terminal assistant turn: exactly one top-level assistant message should be
+	// emitted. A prior bug pre-broadcast the terminal output and then saved it,
+	// yielding duplicate assistant events for one workflow run.
+	turns := eventsOfType(msgs, "turn_secured")
+	assistantTurns := 0
+	for _, ev := range turns {
+		if ev["role"] == "assistant" {
+			assistantTurns++
+		}
+	}
+	if assistantTurns != 1 {
+		t.Fatalf("expected exactly 1 assistant turn_secured event, got %d: %v", assistantTurns, turns)
+	}
+
 	// workflow_end
 	ends := eventsOfType(msgs, "workflow_end")
 	if len(ends) != 1 {

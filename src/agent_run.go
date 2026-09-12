@@ -18,6 +18,12 @@ import (
 // call concurrently for different Agents (each has its own session, turn
 // counter, and connection).
 func (a *Agent) Run(ctx context.Context, userPrompt string) string {
+	// Persist the user turn first so successful workflow runs and workflow-fail
+	// fallbacks share one consistent session history. Without this, workflow
+	// terminal replies collide with the optimistic frontend user turn numbering
+	// and the user prompt disappears when the session is reloaded from disk.
+	a.saveTurn(Message{Role: "user", Content: userPrompt})
+
 	// Sub-agents don't route through DAG workflows; the root agent does.
 	if a.Depth == 0 {
 		if answer, ok := a.tryWorkflowRoute(userPrompt); ok {
@@ -48,7 +54,6 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) string {
 		"\nIMPORTANT SAFETY RESTRICTION: You cannot write or modify files starting with '.goharness' or any system directories outside the authorized workspace.",
 	}, "\n")
 
-	a.saveTurn(Message{Role: "user", Content: userPrompt})
 
 	// Sub-agents skip auto-compaction (it shuffles session files and isn't
 	// worth the risk for short research tasks). The root agent compacts as

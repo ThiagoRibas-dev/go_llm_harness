@@ -373,7 +373,7 @@ func ExecuteActiveWorkflow(rawUserPrompt string) (string, error) {
 		WorkflowID:   cfg.ActiveWorkflow,
 		WorkflowName: wf.Name,
 		RunID:        fmt.Sprintf("run_%d", time.Now().UnixNano()),
-		TurnNumber:   currentTurnNumber + 1, // Final assistant turn this run produces
+		TurnNumber:   findMaxTurnNumber(activeSessionID) + 1, // Final assistant turn this run produces
 		Nodes:        make(map[string]*RuntimeNode),
 		Timeout:      120 * time.Second, // 2-minute hard timeout boundary
 	}
@@ -814,22 +814,22 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 
 	case "assistant_response":
 		finalOutput, _ := inputs["final_output"].(string)
-		writeDebugLog("[WORKFLOW NODE %s] Rending final terminal assistant response.", n.ID)
+		writeDebugLog("[WORKFLOW NODE %s] Rendering final terminal assistant response.", n.ID)
 
-		// Broadcast final compiled answer over SSE
-		BroadcastSSE("turn_secured", map[string]interface{}{
-			"turn_number": currentTurnNumber + 1, // Visual sequence update
-			"role":        "assistant",
-			"name":        "assistant",
-			"content":     finalOutput,
-		})
-
-		// Write turn file to disk to preserve session liveness
-		finalMsg := Message{
+		// Persist/broadcast the final answer exactly once using the session's next
+		// real turn number. Pre-broadcasting here and then calling saveMessageTurn
+		// caused duplicate assistant events; using the global currentTurnNumber also
+		// collided with the already-rendered frontend user turn when workflows were
+		// reached before the user prompt was saved on the backend.
+		sink := &Agent{
+			SessionID: e.SessionID,
+			Workspace: activeConfig.Agent.WorkspaceDir,
+			turn:      findMaxTurnNumber(e.SessionID),
+		}
+		sink.saveTurn(Message{
 			Role:    "assistant",
 			Content: finalOutput,
-		}
-		saveMessageTurn(finalMsg)
+		})
 
 		return nil
 
@@ -1048,8 +1048,10 @@ func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, input
 			return err
 		}
 
-		// Persist the assistant turn so rollbacks/history see it.
-		nodeAgent.saveTurn(*respMsg)
+		// Workflow-internal LLM/tool chatter is kept inside the node-local ReAct
+		// loop and the live workflow trace; it is intentionally not persisted as
+		// top-level session chat turns, otherwise parallel nodes can interleave and
+		// pollute the root conversation history.
 		messages = append(messages, *respMsg)
 
 		if respMsg.Content != "" {
@@ -1077,7 +1079,6 @@ func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, input
 				Content:    result,
 				Meta:       buildToolMessageMeta(toolCall.Function.Name, result),
 			}
-			nodeAgent.saveTurn(toolMsg)
 			messages = append(messages, toolMsg)
 		}
 	}

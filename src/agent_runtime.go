@@ -80,6 +80,7 @@ func (a *Agent) saveTurn(msg Message) {
 	ts := time.Now().Format("2006_01_02_15-04-05")
 	filename := fmt.Sprintf("%03d-%s-%s.json", turn, msg.Role, ts)
 	path := filepath.Join(a.sessionPath(), filename)
+	_ = os.MkdirAll(a.sessionPath(), 0755)
 
 	if bytes, err := json.MarshalIndent(msg, "", "  "); err == nil {
 		_ = os.WriteFile(path, bytes, 0644)
