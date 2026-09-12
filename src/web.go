@@ -364,14 +364,15 @@ func StartWebGUI(port int) {
 
 	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]interface{}{
-			"session_id":       activeSessionID,
-			"api":              activeConfig.API,
-			"provider_profile": activeConfig.ProviderProfile,
-			"agent":            activeConfig.Agent,
-			"security":         activeConfig.Security,
-			"compaction":       activeConfig.Compaction,
-			"debug":            activeConfig.Debug, // Phase 8.6
-			"ui_state":         buildUIState(activeSessionID),
+			"session_id":        activeSessionID,
+			"api":               activeConfig.API,
+			"provider_profile":  activeConfig.ProviderProfile,
+			"agent":             activeConfig.Agent,
+			"security":          activeConfig.Security,
+			"compaction":        activeConfig.Compaction,
+			"debug":             activeConfig.Debug, // Phase 8.6
+			"ui_state":          buildUIState(activeSessionID),
+			"settings_revision": currentSettingsRevision(),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -413,10 +414,15 @@ func StartWebGUI(port int) {
 			CompactKeepN     int      `json:"compact_keep_n"`
 			CompactPrompt    string   `json:"compact_prompt"`
 			Debug            bool     `json:"debug"` // Phase 8.6
+			ExpectedRevision int64    `json:"expected_revision"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.ExpectedRevision != 0 && req.ExpectedRevision != currentSettingsRevision() {
+			http.Error(w, "settings-conflict: configuration changed since this form was opened; refresh and retry", http.StatusConflict)
 			return
 		}
 
@@ -481,9 +487,10 @@ func StartWebGUI(port int) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		rev := bumpSettingsRevision()
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"success"}`))
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "success", "settings_revision": rev})
 	})
 
 	// POST /api/upload: Receives a file upload and saves it inside .goharness/sessions/<session_id>/uploads/
@@ -891,8 +898,9 @@ func StartWebGUI(port int) {
 
 	mux.HandleFunc("/api/workspace/tree", func(w http.ResponseWriter, r *http.Request) {
 		tree, _ := GenerateWorkspaceTree(activeConfig.Agent.WorkspaceDir, activeConfig.DirectoryScan)
+		entries, _ := GenerateWorkspaceEntries(activeConfig.Agent.WorkspaceDir, activeConfig.DirectoryScan)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"tree": tree})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"tree": tree, "entries": entries})
 	})
 
 	mux.HandleFunc("/api/workspace/file", func(w http.ResponseWriter, r *http.Request) {
@@ -1342,8 +1350,33 @@ func StartWebGUI(port int) {
 
 	// GET /api/mcp
 	mux.HandleFunc("/api/mcp", func(w http.ResponseWriter, r *http.Request) {
+		type mcpStatus struct {
+			Command   string   `json:"command"`
+			Args      []string `json:"args"`
+			Running   bool     `json:"running"`
+			Transport string   `json:"transport"`
+			AuthState string   `json:"auth_state"`
+			LastError string   `json:"last_error,omitempty"`
+		}
+		resp := make(map[string]mcpStatus, len(activeConfig.MCPServers))
+		for name, cfg := range activeConfig.MCPServers {
+			running := false
+			for _, srv := range activeMCPServers {
+				if srv.Name == name {
+					running = true
+					break
+				}
+			}
+			resp[name] = mcpStatus{
+				Command:   cfg.Command,
+				Args:      cfg.Args,
+				Running:   running,
+				Transport: "stdio",
+				AuthState: "n/a (local stdio)",
+			}
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(activeConfig.MCPServers)
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 
 	// POST /api/mcp/save
@@ -1383,6 +1416,7 @@ func StartWebGUI(port int) {
 		cleanupMCPServers()
 		activeMCPServers = nil // Reset active list
 		bootstrapMCPServers()
+		bumpSettingsRevision()
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"success"}`))
@@ -1411,6 +1445,7 @@ func StartWebGUI(port int) {
 		cleanupMCPServers()
 		activeMCPServers = nil // Reset active list
 		bootstrapMCPServers()
+		bumpSettingsRevision()
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"success"}`))
@@ -1532,6 +1567,8 @@ func StartWebGUI(port int) {
 			"providers":          masked,
 			"active_profile":     activeConfig.ProviderProfile,
 			"compaction_profile": activeConfig.Compaction.ProviderProfile,
+			"providers_revision": currentProvidersRevision(),
+			"settings_revision":  currentSettingsRevision(),
 		})
 	})
 
@@ -1542,15 +1579,20 @@ func StartWebGUI(port int) {
 			return
 		}
 		var req struct {
-			Name     string    `json:"name"`
-			Profile  APIConfig `json:"profile"`
-			IsActive bool      `json:"is_active"`
+			Name             string    `json:"name"`
+			Profile          APIConfig `json:"profile"`
+			IsActive         bool      `json:"is_active"`
+			ExpectedRevision int64     `json:"expected_revision"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		req.Name = strings.TrimSpace(req.Name)
+		if req.ExpectedRevision != 0 && req.ExpectedRevision != currentProvidersRevision() {
+			http.Error(w, "settings-conflict: providers changed since this form was opened; refresh and retry", http.StatusConflict)
+			return
+		}
 		if req.Name == "" {
 			http.Error(w, "Profile name is required", http.StatusBadRequest)
 			return
@@ -1572,15 +1614,17 @@ func StartWebGUI(port int) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		provRev := bumpProvidersRevision()
 
 		if req.IsActive {
 			activeConfig.ProviderProfile = req.Name
 			activeConfig.API = activeConfig.ResolveAPIConfig()
 			_ = SaveConfig("config.json", activeConfig)
+			bumpSettingsRevision()
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"success"}`))
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "success", "providers_revision": provRev})
 	})
 
 	// POST /api/providers/delete: remove a named profile.
@@ -1590,10 +1634,15 @@ func StartWebGUI(port int) {
 			return
 		}
 		var req struct {
-			Name string `json:"name"`
+			Name             string `json:"name"`
+			ExpectedRevision int64  `json:"expected_revision"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.ExpectedRevision != 0 && req.ExpectedRevision != currentProvidersRevision() {
+			http.Error(w, "settings-conflict: providers changed since this form was opened; refresh and retry", http.StatusConflict)
 			return
 		}
 		pf, err := LoadProviders()
@@ -1606,16 +1655,19 @@ func StartWebGUI(port int) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		provRev := bumpProvidersRevision()
 		if activeConfig.ProviderProfile == req.Name {
 			activeConfig.ProviderProfile = ""
 			_ = SaveConfig("config.json", activeConfig)
+			bumpSettingsRevision()
 		}
 		if activeConfig.Compaction.ProviderProfile == req.Name {
 			activeConfig.Compaction.ProviderProfile = ""
 			_ = SaveConfig("config.json", activeConfig)
+			bumpSettingsRevision()
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"success"}`))
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "success", "providers_revision": provRev})
 	})
 
 	// POST /api/providers/activate: set the active chat or compaction profile.
@@ -1625,11 +1677,16 @@ func StartWebGUI(port int) {
 			return
 		}
 		var req struct {
-			Name   string `json:"name"`
-			Target string `json:"target"` // "chat" (default) or "compaction"
+			Name             string `json:"name"`
+			Target           string `json:"target"` // "chat" (default) or "compaction"
+			ExpectedRevision int64  `json:"expected_revision"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.ExpectedRevision != 0 && req.ExpectedRevision != currentProvidersRevision() {
+			http.Error(w, "settings-conflict: providers changed since this form was opened; refresh and retry", http.StatusConflict)
 			return
 		}
 		if req.Name != "" {
@@ -1645,6 +1702,7 @@ func StartWebGUI(port int) {
 			activeConfig.API = activeConfig.ResolveAPIConfig()
 		}
 		_ = SaveConfig("config.json", activeConfig)
+		bumpSettingsRevision()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"success"}`))
 	})

@@ -825,6 +825,17 @@
                     Workflow Lab has moved out of Settings and is now a first-class surface in the main shell. Settings now focuses on runtime, provider, compaction, sandbox, and MCP configuration.
                 </div>
 
+                <div class="rounded-lg border border-[#334155] bg-slate-900/25 p-4 space-y-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <div class="font-bold text-slate-200">Current connections</div>
+                            <div class="text-[10px] uppercase tracking-wider text-slate-500">Visible here so provider assignment is not trapped in another tab</div>
+                        </div>
+                        <button type="button" onclick="switchSettingsTab('providers')" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Manage Profiles</button>
+                    </div>
+                    <div id="settings-connections-summary" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs"></div>
+                </div>
+
                 <!-- API Provider Settings -->
                 <div class="space-y-3">
                     <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">API Provider Configurations</div>
@@ -861,7 +872,8 @@
                             <div class="mt-3 space-y-3">
                                 <div>
                                     <label class="block text-slate-300 font-bold mb-1.5">Model Target</label>
-                                    <input type="text" id="input-model" placeholder="gpt-4o" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                                    <input type="text" id="input-model" list="known-models-chat" placeholder="gpt-4o" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                                    <datalist id="known-models-chat"></datalist>
                                 </div>
                                 <div>
                                     <label class="block text-slate-300 font-bold mb-1.5">Base Endpoint URL (Manual Override)</label>
@@ -979,7 +991,8 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-slate-300 font-bold mb-1.5">Compaction Model Target</label>
-                            <input type="text" id="input-compact-model" placeholder="gpt-4o-mini" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                            <input type="text" id="input-compact-model" list="known-models-compact" placeholder="gpt-4o-mini" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                            <datalist id="known-models-compact"></datalist>
                         </div>
                         <div>
                             <label class="block text-slate-300 font-bold mb-1.5">Compaction Temp</label>
@@ -1044,9 +1057,12 @@
                 </div>
 
                 <!-- Directory Scan Exclusions & Collapses Section -->
-                <div class="space-y-3">
-                    <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">Directory Scan Exclusions &amp; Collapsing</div>
-                    <div class="grid grid-cols-2 gap-4">
+                <details class="settings-disclosure space-y-3 bg-slate-900/20 border border-[#334155]/50 rounded-lg px-4 py-3">
+                    <summary class="flex items-center justify-between font-bold text-slate-400 uppercase text-[10px] tracking-wider">
+                        <span>Advanced workspace exclusions</span>
+                        <i class="fa-solid fa-chevron-down text-[10px] text-slate-500 transition-transform settings-chevron"></i>
+                    </summary>
+                    <div class="mt-3 grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-slate-300 font-bold mb-1">Ignored Patterns (e.g. .git, venv)</label>
                             <div class="flex space-x-1.5 mb-1.5">
@@ -1068,45 +1084,50 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </details>
 
                 <!-- Model Context Protocol (MCP) Servers Section -->
-                <div class="space-y-3">
-                    <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">Model Context Protocol (MCP) Servers</div>
-                    
-                    <!-- Quick Add Server Form -->
-                    <div class="bg-slate-900/30 p-3 rounded border border-[#334155]/60 space-y-2">
-                        <div class="text-[10px] font-bold text-slate-400 uppercase">Register New MCP Server</div>
-                        <div class="grid grid-cols-3 gap-2">
-                            <div>
-                                <label class="block text-slate-400 text-[10px] mb-1">Server Key/Identifier</label>
-                                <input type="text" id="mcp-name-input" placeholder="e.g. sqlite-db" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-100 font-mono outline-none focus:border-blue-500">
+                <details class="settings-disclosure space-y-3 bg-slate-900/20 border border-[#334155]/50 rounded-lg px-4 py-3">
+                    <summary class="flex items-center justify-between font-bold text-slate-400 uppercase text-[10px] tracking-wider">
+                        <span>Advanced MCP server management</span>
+                        <i class="fa-solid fa-chevron-down text-[10px] text-slate-500 transition-transform settings-chevron"></i>
+                    </summary>
+                    <div class="mt-3 space-y-3">
+                        <div class="rounded border border-[#334155]/60 bg-slate-950/20 px-3 py-2 text-[10px] text-slate-500 leading-relaxed">
+                            Local MCP servers currently use the <span class="font-mono text-slate-400">stdio</span> transport. Auth state is reported explicitly so unsupported flows do not pretend to be configured.
+                        </div>
+                        <div class="bg-slate-900/30 p-3 rounded border border-[#334155]/60 space-y-2">
+                            <div class="text-[10px] font-bold text-slate-400 uppercase">Register New MCP Server</div>
+                            <div class="grid grid-cols-3 gap-2">
+                                <div>
+                                    <label class="block text-slate-400 text-[10px] mb-1">Server Key/Identifier</label>
+                                    <input type="text" id="mcp-name-input" placeholder="e.g. sqlite-db" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-100 font-mono outline-none focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-slate-400 text-[10px] mb-1">Executable Command</label>
+                                    <input type="text" id="mcp-cmd-input" placeholder="e.g. uvx or npx" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-100 font-mono outline-none focus:border-blue-500">
+                                </div>
+                                <div class="flex items-end">
+                                    <button type="button" onclick="addMCPServer()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded text-xs transition flex items-center justify-center space-x-1">
+                                        <i class="fa-solid fa-plug"></i> <span>Add Server</span>
+                                    </button>
+                                </div>
                             </div>
                             <div>
-                                <label class="block text-slate-400 text-[10px] mb-1">Executable Command</label>
-                                <input type="text" id="mcp-cmd-input" placeholder="e.g. uvx or npx" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-100 font-mono outline-none focus:border-blue-500">
-                            </div>
-                            <div class="flex items-end">
-                                <button type="button" onclick="addMCPServer()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded text-xs transition flex items-center justify-center space-x-1">
-                                    <i class="fa-solid fa-plug"></i> <span>Add Server</span>
-                                </button>
+                                <label class="block text-slate-400 text-[10px] mb-1">Arguments (space separated)</label>
+                                <input type="text" id="mcp-args-input" placeholder="e.g. mcp-server-sqlite --db-path ./dev.db" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-100 font-mono outline-none focus:border-blue-500">
                             </div>
                         </div>
-                        <div>
-                            <label class="block text-slate-400 text-[10px] mb-1">Arguments (space separated)</label>
-                            <input type="text" id="mcp-args-input" placeholder="e.g. mcp-server-sqlite --db-path ./dev.db" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-100 font-mono outline-none focus:border-blue-500">
-                        </div>
-                    </div>
 
-                    <!-- Registered Servers List -->
-                    <div class="space-y-1.5">
-                        <div class="text-[10px] font-bold text-slate-400 uppercase">Registered MCP Servers</div>
-                        <div id="mcp-servers-list" class="space-y-1 max-h-32 overflow-y-auto pr-1 bg-slate-900/10 p-2 rounded border border-[#334155]/30">
-                            <!-- MCP servers will render here dynamically -->
-                            <div class="text-slate-500 italic text-[10px]">No MCP servers registered.</div>
+                        <div class="space-y-1.5">
+                            <div class="text-[10px] font-bold text-slate-400 uppercase">Registered MCP Servers</div>
+                            <div id="mcp-servers-list" class="space-y-1 max-h-40 overflow-y-auto pr-1 bg-slate-900/10 p-2 rounded border border-[#334155]/30">
+                                <!-- MCP servers will render here dynamically -->
+                                <div class="text-slate-500 italic text-[10px]">No MCP servers registered.</div>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </details>
                 </div>
 
                 <!-- Modal Footer Actions (standard settings only) -->
@@ -1172,7 +1193,8 @@
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-slate-400 mb-1">Model</label>
-                            <input type="text" id="pe-model" placeholder="gpt-4o-mini" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                            <input type="text" id="pe-model" list="known-models-provider" placeholder="gpt-4o-mini" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                            <datalist id="known-models-provider"></datalist>
                         </div>
                     <div>
                         <label class="block text-slate-400 mb-1">Temperature</label>
@@ -1188,20 +1210,28 @@
                     <label class="block text-slate-400 mb-1">API Key / Access Token</label>
                     <input type="password" id="pe-key" placeholder="sk-... (leave blank to keep existing when editing)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
                 </div>
-                    <div>
-                        <label class="block text-slate-400 mb-1">Base URL (optional)</label>
-                        <input type="text" id="pe-base-url" placeholder="https://api.openai.com/v1/chat/completions" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
-                    </div>
-                    <div id="pe-vertex-fields" class="hidden grid grid-cols-2 gap-3">
+                <details class="settings-disclosure bg-slate-900/20 border border-[#334155]/50 rounded-lg px-3 py-2">
+                    <summary class="flex items-center justify-between text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                        <span>Advanced endpoint overrides</span>
+                        <i class="fa-solid fa-chevron-down text-[10px] text-slate-500 transition-transform settings-chevron"></i>
+                    </summary>
+                    <div class="mt-3 space-y-3">
                         <div>
-                            <label class="block text-slate-400 mb-1">GCP Project ID</label>
-                            <input type="text" id="pe-project-id" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                            <label class="block text-slate-400 mb-1">Base URL (optional)</label>
+                            <input type="text" id="pe-base-url" placeholder="https://api.openai.com/v1/chat/completions" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
                         </div>
-                        <div>
-                            <label class="block text-slate-400 mb-1">GCP Region</label>
-                            <input type="text" id="pe-region" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                        <div id="pe-vertex-fields" class="hidden grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-slate-400 mb-1">GCP Project ID</label>
+                                <input type="text" id="pe-project-id" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-1">GCP Region</label>
+                                <input type="text" id="pe-region" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500 font-mono">
+                            </div>
                         </div>
                     </div>
+                </details>
                     <div class="flex items-center space-x-2">
                         <input type="checkbox" id="pe-is-active" class="rounded bg-[#0f172a] border-[#334155] text-blue-500 h-4 w-4">
                         <label for="pe-is-active" class="text-slate-300">Set as active chat profile</label>
@@ -1296,6 +1326,8 @@
         let stagedContextBySession = {};
         let queueItemSeq = 1;
         let queueDispatchInFlight = false;
+        let currentSettingsRevision = 0;
+        let currentProvidersRevision = 0;
         const DEFAULT_PROMPT_PLACEHOLDER = "Type a prompt to solve (e.g., 'Write a python calculation script and test it')....";
 
         window.addEventListener("DOMContentLoaded", () => {
@@ -2093,11 +2125,30 @@
             syncRailButtons();
         }
 
+        function knownModelsForProvider(provider) {
+            switch (provider) {
+                case "anthropic":
+                    return ["claude-3-5-sonnet-latest", "claude-3-5-haiku", "claude-3-7-sonnet-latest"];
+                case "gemini":
+                case "vertex":
+                    return ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-3.1-flash-lite"];
+                default:
+                    return ["gpt-4o", "gpt-4o-mini", "o3-mini"];
+            }
+        }
+
+        function populateKnownModelList(listId, provider) {
+            const list = document.getElementById(listId);
+            if (!list) return;
+            list.innerHTML = knownModelsForProvider(provider).map(model => `<option value="${model}"></option>`).join("");
+        }
+
         // Suggest Base URL based on provider selection
         function suggestBaseURL(provider) {
             const urlInput = document.getElementById("input-base-url");
             const modelInput = document.getElementById("input-model");
             const vFields = document.getElementById("vertex-fields");
+            populateKnownModelList("known-models-chat", provider);
 
             if (provider === "vertex") {
                 vFields.classList.remove("hidden");
@@ -2454,10 +2505,29 @@
         }
 
         // Settings Modal controls
+        function renderSettingsConnectionsSummary(cfg) {
+            const host = document.getElementById("settings-connections-summary");
+            if (!host) return;
+            const activeProfile = cfg.provider_profile ? `@${cfg.provider_profile}` : "inline";
+            const compProfile = cfg.compaction && cfg.compaction.provider_profile ? `@${cfg.compaction.provider_profile}` : "inline";
+            host.innerHTML = `
+                <div class="rounded border border-[#334155]/60 bg-slate-950/30 p-3">
+                    <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Active chat</div>
+                    <div class="font-mono text-slate-200 text-xs">${escapeHtml(activeProfile)}</div>
+                    <div class="mt-1 text-[11px] text-slate-400">${escapeHtml((cfg.api.provider || "openai").toUpperCase())} · ${escapeHtml(cfg.api.model || "unset")}</div>
+                </div>
+                <div class="rounded border border-[#334155]/60 bg-slate-950/30 p-3">
+                    <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Compaction</div>
+                    <div class="font-mono text-slate-200 text-xs">${escapeHtml(compProfile)}</div>
+                    <div class="mt-1 text-[11px] text-slate-400">${escapeHtml(((cfg.compaction && cfg.compaction.provider) || "openai").toUpperCase())} · ${escapeHtml((cfg.compaction && cfg.compaction.model) || "unset")}</div>
+                </div>`;
+        }
+
         function openSettingsModal() {
             fetch("/api/config")
                 .then(res => res.json())
                 .then(cfg => {
+                    currentSettingsRevision = cfg.settings_revision || 0;
                     const provider = cfg.api.provider || "openai";
                     document.getElementById("input-provider").value = provider;
                     document.getElementById("input-api-key").value = cfg.api.key || "";
@@ -2509,6 +2579,10 @@
                     } else {
                         vFields.classList.add("hidden");
                     }
+                    populateKnownModelList("known-models-chat", provider);
+                    populateKnownModelList("known-models-compact", (cfg.compaction && cfg.compaction.provider) || "openai");
+
+                    renderSettingsConnectionsSummary(cfg);
 
                     // Fetch exclusions
                     fetch("/api/config/exclusions")
@@ -2569,7 +2643,8 @@
                 thinking_level: document.getElementById("input-thinking").value,
                 project_id: document.getElementById("input-project-id").value.trim(),
                 region: document.getElementById("input-region").value.trim(),
-                debug: document.getElementById("input-debug").checked
+                debug: document.getElementById("input-debug").checked,
+                expected_revision: currentSettingsRevision
             };
 
             // Save exclusions
@@ -2588,11 +2663,15 @@
                     body: JSON.stringify(payload)
                 });
             })
-            .then(res => {
-                if (!res.ok) throw new Error("Failed to save config");
+            .then(async res => {
+                if (!res.ok) {
+                    const msg = await res.text();
+                    throw new Error(msg || "Failed to save config");
+                }
                 return res.json();
             })
             .then(data => {
+                currentSettingsRevision = data.settings_revision || currentSettingsRevision;
                 closeSettingsModal();
                 fetchConfig();
                 appendSystemAlert("System Settings Saved", `Configurations and scan exclusions successfully updated. Now running on provider '${payload.provider.toUpperCase()}' using model '${payload.model}'.`, "fa-check-double text-green-400");
@@ -2600,6 +2679,12 @@
                 fetchWorkspaces();
             })
             .catch(err => {
+                const msg = String(err && err.message ? err.message : err);
+                if (msg.includes("settings-conflict")) {
+                    alert("Settings changed elsewhere. Please reopen Settings, review the latest values, and try again.");
+                    openSettingsModal();
+                    return;
+                }
                 alert("Error saving settings: " + err);
             });
         }
@@ -4710,15 +4795,25 @@
                     keys.forEach(key => {
                         const srv = data[key];
                         const argsStr = (srv.args || []).join(" ");
+                        const stateBadge = srv.running
+                            ? '<span class="text-[9px] bg-emerald-950/40 text-emerald-300 px-1.5 py-0.5 rounded font-bold">RUNNING</span>'
+                            : '<span class="text-[9px] bg-amber-950/40 text-amber-300 px-1.5 py-0.5 rounded font-bold">STOPPED</span>';
                         html += `
-                            <div class="flex items-center justify-between p-2 rounded bg-slate-900/30 border border-[#334155]/40 text-[10px] font-mono">
-                                <div class="truncate flex-1 pr-4">
-                                    <div class="font-bold text-slate-200">${key}</div>
-                                    <div class="text-slate-400 mt-0.5 truncate">${srv.command} ${argsStr}</div>
+                            <div class="p-2 rounded bg-slate-900/30 border border-[#334155]/40 text-[10px] font-mono space-y-2">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="truncate flex-1 pr-2">
+                                        <div class="font-bold text-slate-200 flex items-center gap-2">${key} ${stateBadge}</div>
+                                        <div class="text-slate-400 mt-0.5 truncate">${srv.command} ${argsStr}</div>
+                                    </div>
+                                    <button onclick="deleteMCPServer('${key}')" class="text-slate-500 hover:text-red-400 p-1 rounded hover:bg-slate-800 transition" title="Delete MCP Server">
+                                        <i class="fa-solid fa-trash text-[10px]"></i>
+                                    </button>
                                 </div>
-                                <button onclick="deleteMCPServer('${key}')" class="text-slate-500 hover:text-red-400 p-1 rounded hover:bg-slate-800 transition" title="Delete MCP Server">
-                                    <i class="fa-solid fa-trash text-[10px]"></i>
-                                </button>
+                                <div class="flex flex-wrap items-center gap-3 text-[10px] text-slate-500">
+                                    <span>Transport: <span class="text-slate-300">${escapeHtml(srv.transport || 'stdio')}</span></span>
+                                    <span>Auth: <span class="text-slate-300">${escapeHtml(srv.auth_state || 'unknown')}</span></span>
+                                    ${srv.last_error ? `<span class="text-red-300">Error: ${escapeHtml(srv.last_error)}</span>` : ''}
+                                </div>
                             </div>
                         `;
                     });
@@ -4964,6 +5059,7 @@
             const urlInput = document.getElementById("input-compact-base-url");
             const modelInput = document.getElementById("input-compact-model");
             const vFields = document.getElementById("compact-vertex-fields");
+            populateKnownModelList("known-models-compact", provider);
 
             if (provider === "vertex") {
                 vFields.classList.remove("hidden");
@@ -5389,6 +5485,7 @@
             fetch("/api/providers")
                 .then(res => res.json())
                 .then(data => {
+                    currentProvidersRevision = data.providers_revision || 0;
                     const profiles = data.providers || {};
                     const names = Object.keys(profiles);
 
@@ -5417,19 +5514,24 @@
                         const p = profiles[name];
                         const activeBadge = name === data.active_profile ? '<span class="ml-2 text-[9px] bg-blue-900 text-blue-300 px-1.5 py-0.5 rounded font-bold">CHAT</span>' : '';
                         const compBadge = name === data.compaction_profile ? '<span class="ml-2 text-[9px] bg-indigo-900 text-indigo-300 px-1.5 py-0.5 rounded font-bold">COMPACTION</span>' : '';
+                        const endpoint = p.base_url ? escapeHtml(p.base_url) : '<span class="text-slate-500">auto endpoint</span>';
                         html += `
-                            <div class="p-3 bg-slate-900/30 border border-[#334155] rounded-lg">
-                                <div class="flex items-center justify-between">
-                                    <div class="font-bold text-slate-200 flex items-center">
-                                        <i class="fa-solid fa-bolt text-amber-400 mr-2 text-xs"></i>${name}
-                                        ${activeBadge}${compBadge}
+                            <div class="p-3 bg-slate-900/30 border border-[#334155] rounded-lg space-y-3">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="font-bold text-slate-200 flex items-center">
+                                            <i class="fa-solid fa-bolt text-amber-400 mr-2 text-xs"></i>${name}
+                                            ${activeBadge}${compBadge}
+                                        </div>
+                                        <div class="text-[10px] text-slate-400 mt-1 font-mono">${p.provider} · ${p.model || "unset"}</div>
+                                        <div class="text-[10px] text-slate-500 mt-1 break-all font-mono">${endpoint}</div>
                                     </div>
-                                    <div class="space-x-1">
-                                        <button onclick="editProvider('${name}')" class="text-slate-400 hover:text-white p-1" title="Edit"><i class="fa-solid fa-pen text-[10px]"></i></button>
-                                        <button onclick="deleteProvider('${name}')" class="text-slate-400 hover:text-red-400 p-1" title="Delete"><i class="fa-solid fa-trash text-[10px]"></i></button>
-                                    </div>
+                                    <button onclick="editProvider('${name}')" class="px-2.5 py-1 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white text-[10px] font-bold" title="Edit profile">Edit</button>
                                 </div>
-                                <div class="text-[10px] text-slate-400 mt-1 font-mono">${p.provider} · ${p.model}${p.base_url ? " · " + p.base_url : ""}</div>
+                                <div class="flex items-center justify-between text-[10px] text-slate-500">
+                                    <span>Max parallel: <span class="font-mono text-slate-300">${p.max_concurrency || 0}</span></span>
+                                    <button onclick="deleteProvider('${name}')" class="text-red-400 hover:text-red-300 font-bold" title="Delete profile">Delete</button>
+                                </div>
                             </div>`;
                     });
                     list.innerHTML = html;
@@ -5442,6 +5544,7 @@
         function newProviderForm() {
             editingProviderName = null;
             document.getElementById("provider-editor-title").textContent = "New Profile";
+            document.getElementById("provider-editor").setAttribute("data-mode", "new");
             document.getElementById("pe-name").value = "";
             document.getElementById("pe-name").disabled = false;
             document.getElementById("pe-provider").value = "openai";
@@ -5461,10 +5564,12 @@
             fetch("/api/providers")
                 .then(res => res.json())
                 .then(data => {
+                    currentProvidersRevision = data.providers_revision || currentProvidersRevision;
                     const p = (data.providers || {})[name];
                     if (!p) return;
                     editingProviderName = name;
                     document.getElementById("provider-editor-title").textContent = "Edit Profile: " + name;
+                    document.getElementById("provider-editor").setAttribute("data-mode", "edit");
                     document.getElementById("pe-name").value = name;
                     document.getElementById("pe-name").disabled = true;
                     document.getElementById("pe-provider").value = p.provider || "openai";
@@ -5490,6 +5595,7 @@
             const urlEl = document.getElementById("pe-base-url");
             const modelEl = document.getElementById("pe-model");
             const vFields = document.getElementById("pe-vertex-fields");
+            populateKnownModelList("known-models-provider", provider);
             if (provider === "vertex") {
                 vFields.classList.remove("hidden");
                 urlEl.value = "";
@@ -5536,19 +5642,28 @@
                     name: editingProviderName || name,
                     profile: profile,
                     is_active: document.getElementById("pe-is-active").checked,
+                    expected_revision: currentProvidersRevision,
                 }),
             })
             .then(async res => {
                 if (!res.ok) { const t = await res.text(); throw new Error(t); }
                 return res.json();
             })
-            .then(() => {
+            .then((data) => {
+                currentProvidersRevision = data.providers_revision || currentProvidersRevision;
                 closeProviderForm();
                 fetchProviders();
                 fetchConfig();
                 appendSystemAlert("Profile Saved", `Connection profile '${editingProviderName || name}' saved.`, "fa-plug-circle-check text-green-400");
             })
-            .catch(err => alert("Failed to save profile: " + err.message));
+            .catch(err => {
+                if (String(err.message || err).includes("settings-conflict")) {
+                    alert("Provider profiles changed elsewhere. Reloading the latest profiles.");
+                    fetchProviders();
+                    return;
+                }
+                alert("Failed to save profile: " + err.message);
+            });
         }
 
         function deleteProvider(name) {
@@ -5556,27 +5671,42 @@
             fetch("/api/providers/delete", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name }),
+                body: JSON.stringify({ name, expected_revision: currentProvidersRevision }),
             })
-            .then(res => { if (!res.ok) throw new Error("delete failed"); return res.json(); })
-            .then(() => { fetchProviders(); fetchConfig(); })
-            .catch(err => alert("Failed to delete profile: " + err));
+            .then(async res => { if (!res.ok) throw new Error(await res.text() || "delete failed"); return res.json(); })
+            .then((data) => { currentProvidersRevision = data.providers_revision || currentProvidersRevision; fetchProviders(); fetchConfig(); })
+            .catch(err => {
+                if (String(err.message || err).includes("settings-conflict")) {
+                    alert("Provider profiles changed elsewhere. Reloading the latest profiles.");
+                    fetchProviders();
+                    return;
+                }
+                alert("Failed to delete profile: " + err);
+            });
         }
 
         function setActiveProfile(name, target) {
             fetch("/api/providers/activate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, target }),
+                body: JSON.stringify({ name, target, expected_revision: currentProvidersRevision }),
             })
-            .then(res => { if (!res.ok) throw new Error("activate failed"); return res.json(); })
+            .then(async res => { if (!res.ok) throw new Error(await res.text() || "activate failed"); return res.json(); })
             .then(() => {
                 fetchProviders();
                 fetchConfig();
                 const which = target === "compaction" ? "Compaction" : "Active chat";
                 appendSystemAlert("Profile Activated", `${which} connection ${name ? "set to '" + name + "'" : "reset to inline config"}.`, "fa-bolt text-amber-400");
             })
-            .catch(err => { alert("Failed to activate profile: " + err); fetchProviders(); });
+            .catch(err => {
+                if (String(err.message || err).includes("settings-conflict")) {
+                    alert("Provider profiles changed elsewhere. Reloading the latest profiles.");
+                    fetchProviders();
+                    return;
+                }
+                alert("Failed to activate profile: " + err);
+                fetchProviders();
+            });
         }
 
         // ===== Settings-tab profile selectors (providers.json) =====

@@ -826,12 +826,12 @@ Split it according to the new ownership model:
 - expose advanced config progressively
 
 ### Tasks
-- [ ] Convert providers to clearer card/editor model with one obvious edit path.
-- [ ] Keep active chat / compaction connection assignments visible without forcing users through nested tabs.
-- [ ] Move low-frequency infra fields into Advanced sections, and replace raw text with lists/pickers wherever the valid set is knowable.
-- [ ] Improve settings revision/conflict handling so stale edits are caught explicitly.
-- [ ] Give MCP management explicit connection-state, auth-state, and error-state presentation.
-- [ ] Ensure Settings remains a settings surface, not a dumping ground for workflow, file, or history interactions.
+- [x] Convert providers to clearer card/editor model with one obvious edit path.
+- [x] Keep active chat / compaction connection assignments visible without forcing users through nested tabs.
+- [x] Move low-frequency infra fields into Advanced sections, and replace raw text with lists/pickers wherever the valid set is knowable. *(Implemented with additional disclosures and provider-scoped model suggestion lists/datalists; fully live fetched model catalogs remain future work.)*
+- [x] Improve settings revision/conflict handling so stale edits are caught explicitly.
+- [x] Give MCP management explicit connection-state, auth-state, and error-state presentation.
+- [x] Ensure Settings remains a settings surface, not a dumping ground for workflow, file, or history interactions.
 
 ---
 
