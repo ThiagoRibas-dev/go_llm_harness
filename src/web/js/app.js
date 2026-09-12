@@ -2,11 +2,13 @@ import { appState } from "./state.js";
 import { escapeHtml, toolCallTitle, toolResultTitle, populateKnownModelList } from "./helpers.js";
 import { deliverablePathsFromTool, renderDeliverableChips, renderToolCallArgumentsBody, renderToolBody } from "./renderers.js";
 import { createShellModule } from "./shell.js";
-import { createConversationModule } from "./conversation.js";
+import { createChatModule } from "./chat.js";
+import { createComposerModule } from "./composer.js";
 import { createSessionsModule } from "./sessions.js";
 import { createSettingsModule } from "./settings.js";
+import { createWorkflowGraphModule } from "./workflow_graph.js";
+import { createWorkflowManagerModule } from "./workflow_manager.js";
 import { createEventsModule } from "./events.js";
-import { createWorkflowLabModule } from "./workflow_lab.js";
 
 const actions = {};
 
@@ -19,7 +21,7 @@ Object.assign(actions, createShellModule({
   renderToolBody,
 }));
 
-Object.assign(actions, createConversationModule({
+Object.assign(actions, createChatModule({
   state: appState,
   actions,
   escapeHtml,
@@ -29,6 +31,12 @@ Object.assign(actions, createConversationModule({
   renderDeliverableChips,
   renderToolCallArgumentsBody,
   renderToolBody,
+}));
+
+Object.assign(actions, createComposerModule({
+  state: appState,
+  actions,
+  escapeHtml,
 }));
 
 Object.assign(actions, createSessionsModule({
@@ -44,10 +52,15 @@ Object.assign(actions, createSettingsModule({
   populateKnownModelList,
 }));
 
-Object.assign(actions, createWorkflowLabModule({
+Object.assign(actions, createWorkflowGraphModule({
   state: appState,
   actions,
   escapeHtml,
+}));
+
+Object.assign(actions, createWorkflowManagerModule({
+  state: appState,
+  actions,
 }));
 
 Object.assign(actions, createEventsModule({

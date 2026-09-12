@@ -209,38 +209,67 @@ The most important DSH lesson is not “add more panels.” It is:
 
 ## 4. Current UI architecture snapshot
 
-The current frontend still lives mostly inside one file:
+The frontend no longer lives in a single inline-script page. It is now served as embedded HTML plus browser-native ES modules:
 
 - `src/web/index.html`
+- `src/web/js/app.js`
+- `src/web/js/state.js`
+- `src/web/js/shell.js`
+- `src/web/js/chat.js`
+- `src/web/js/composer.js`
+- `src/web/js/sessions.js`
+- `src/web/js/settings.js`
+- `src/web/js/events.js`
+- `src/web/js/workflow_graph.js`
+- `src/web/js/workflow_manager.js`
+- `src/web/js/helpers.js`
+- `src/web/js/renderers.js`
 
-It currently contains:
+### What the HTML still owns
 
-- top header
-- left sidebar with `Files / Sessions / Snapshots`
-- central transcript + composer
-- giant Settings modal
-- fork/branch modal
-- providers editor nested inside Settings
-- workflow editor nested inside Settings
+- top header and shell chrome
+- rail / sidebar / conversation / details layout markup
+- Settings modal markup
+- fork/branch modal markup
 - inline CSS
-- large inline JS behavior surface
+- transitional inline `onclick` / `onchange` / `onkeydown` handlers
 
-### Major interaction surfaces in the current file
+### What the JS modules now own
+
+- `app.js` — thin composition root and inline-handler bridge
+- `state.js` — shared mutable app/session/workflow state
+- `shell.js` — shell routing, details panel, layout concessions, file/tool/deliverable panels
+- `chat.js` — transcript cards, alerts, empty hero, workflow trace cards, sub-agent cards
+- `composer.js` — queueing, staged context, triggers, slash handling, dispatch, composer state
+- `sessions.js` — workspaces, sessions, branching, uploads, pinned context
+- `settings.js` — runtime settings, profiles UI, snapshots, MCP, exclusions
+- `events.js` — SSE connection and event fan-out
+- `workflow_graph.js` — DAG canvas, edges, node editing, inspector, validation, JSON sync
+- `workflow_manager.js` — workflow loading, runtime selector sync, AI draft generation, save/apply lifecycle
+
+### Major interaction surfaces in the current app
 
 - header settings trigger: `openSettingsModal()`
-- sidebar tabs: `switchSidebarTab('files'|'sessions'|'snapshots')`
-- workspace selector: `workspace-history-select`
-- workspace add: `new-workspace-input` + `addNewWorkspace()`
+- sidebar routing: `switchSidebarTab('files'|'sessions'|'snapshots')`
+- workspace add/switch: `new-workspace-input`, `addNewWorkspace()`, `changeWorkspaceFromSelector(...)`
 - session list: `selectSession(...)`
-- workflow selector in header: `workflow-selector`
-- workflow lab editor selector: `wf-lab-selector`
-- settings modal tabs: `switchSettingsTab('standard'|'workflow'|'providers')`
+- workflow runtime selector in header: `workflow-selector`
+- workflow lab edit-target selector: `wf-lab-selector`
+- settings modal tabs: `switchSettingsTab('standard'|'providers')`
 - composer: `prompt-form`, `submitPrompt(...)`, `handleInputKeydown(...)`
 - timeline fork modal: `triggerFork(...)`, `executeForkAction()`
 
 ---
 
-## 5. Current-state audit: structure, content, and interaction problems
+## 5. Audit baseline that drove phases 0–6
+
+This section is intentionally preserved as the **pre-refactor problem statement** that justified the shell maturity work.
+
+Use:
+- **Section 4** for the current implemented frontend shape
+- **Section 9 / Phase status** for what has already landed
+
+The findings below describe the old shell problems that this refactor series has been addressing.
 
 ## 5.1 Misclassified surfaces
 
@@ -658,67 +687,39 @@ Instead:
 
 The old module split plan is still directionally right, but it was organized around the current monolithic page. We should instead split modules along the **target shell boundaries**.
 
-## 8.1 Target module layout
+## 8.1 Implemented module layout (current actual state)
 
 ```text
 src/web/
 ├── index.html
 └── js/
     ├── app.js
-    ├── state/
-    │   ├── app-state.js
-    │   ├── session-state.js
-    │   ├── ui-state.js
-    │   └── workflow-state.js
-    ├── util/
-    │   ├── dom.js
-    │   ├── fetch.js
-    │   ├── format.js
-    │   └── events.js
-    ├── shell/
-    │   ├── shell.js
-    │   ├── rail.js
-    │   ├── sidebar.js
-    │   ├── details.js
-    │   └── layout.js
-    ├── chat/
-    │   ├── transcript.js
-    │   ├── turn-cards.js
-    │   ├── typed-blocks.js
-    │   ├── approvals.js
-    │   ├── composer.js
-    │   ├── triggers.js
-    │   ├── queue.js
-    │   └── staged-context.js
-    ├── sessions/
-    │   ├── workspaces.js
-    │   ├── sessions.js
-    │   ├── branching.js
-    │   └── snapshots.js
-    ├── files/
-    │   ├── browser.js
-    │   ├── preview.js
-    │   ├── pinned-context.js
-    │   └── uploads.js
-    ├── settings/
-    │   ├── settings-surface.js
-    │   ├── providers.js
-    │   ├── runtime.js
-    │   ├── compaction.js
-    │   └── mcp.js
-    ├── workflow/
-    │   ├── lab.js
-    │   ├── canvas.js
-    │   ├── edges.js
-    │   ├── nodes.js
-    │   ├── inspector.js
-    │   ├── validation.js
-    │   ├── json-sync.js
-    │   └── ai-compiler.js
-    └── sse/
-        ├── stream.js
-        └── event-handlers.js
+    ├── state.js
+    ├── shell.js
+    ├── chat.js
+    ├── composer.js
+    ├── sessions.js
+    ├── settings.js
+    ├── events.js
+    ├── workflow_graph.js
+    ├── workflow_manager.js
+    ├── helpers.js
+    └── renderers.js
 ```
+
+This is intentionally a **flat first-pass ES module tree**.
+
+Why this shape was chosen first:
+- it kills the 4k+ line monolith immediately
+- it preserves the embedded-asset / no-bundler runtime
+- it follows real domain ownership instead of accidental old modal boundaries
+- it avoids a premature directory taxonomy churn while the UI contract is still moving
+
+Longer-term, we can still split into deeper subdirectories (`chat/`, `workflow/`, `settings/`, etc.), but the important step was to establish **real ownership seams** first:
+- `chat.js` vs `composer.js`
+- `workflow_graph.js` vs `workflow_manager.js`
+- `shell.js` vs `settings.js` vs `sessions.js`
+- `events.js` vs stateful UI modules
 
 ## 8.2 Refactor rule
 Do **not** split the code according to the old accidental modal/tab boundaries.
@@ -844,10 +845,21 @@ Split it according to the new ownership model:
 ### Tasks
 - [x] Add `<script type="module" src="/js/app.js">`
 - [x] Scaffold new module tree
-- [ ] Move util/state/sse first *(Partially started: helpers and typed renderers are externalized; state + SSE plumbing still live in `app.js` for now.)*
-- [ ] Move shell modules next
-- [ ] Move sessions/files/chat/settings/workflow modules incrementally
+- [x] Move util/state/sse first *(Implemented as `state.js`, `events.js`, plus previously-extracted `helpers.js` and `renderers.js`.)*
+- [x] Move shell modules next *(Implemented as `shell.js` plus a thin `app.js` composition root.)*
+- [x] Move sessions/files/chat/settings/workflow modules incrementally *(Implemented as `chat.js`, `composer.js`, `sessions.js`, `settings.js`, `workflow_graph.js`, and `workflow_manager.js`.)*
 - [x] Delete inline script only after behavior parity is verified
+
+### Current Phase 6 status note
+
+Phase 6 has crossed the important threshold: the old giant frontend script is gone, and the former `app.js` super-file has been broken into domain modules.
+
+What is still true:
+- the HTML still relies on a temporary inline-handler bridge from `app.js` to `window`
+- `settings.js` is still broad and can be split again later
+- `workflow_graph.js` is still one of the larger modules and can eventually shed inspector/validation/json concerns into smaller files
+
+But the core architectural debt has changed shape from **one unstable super-file** to **several domain-owned modules**, which is the correct intermediate state.
 
 ---
 
@@ -882,11 +894,11 @@ Split it according to the new ownership model:
 
 ## 10.2 Technical acceptance criteria
 
-- [ ] `node scripts/lint-html.js` passes
-- [ ] `go vet ./...` passes
-- [ ] `go test ./...` passes
+- [x] `node scripts/lint-html.js` passes
+- [x] `go vet ./...` passes
+- [x] `go test ./...` passes
 - [ ] No console errors on load
-- [ ] No duplicate IDs / broken handlers introduced by shell restructuring
+- [x] No duplicate IDs / broken handlers introduced by shell restructuring *(backed by the HTML/JS linter's duplicate-ID and inline-handler checks)*
 - [ ] Workflow Lab still supports drag, connect, validate, and save/apply
 - [ ] Session switch preserves shell state more cleanly than the current full rerender behavior
 
@@ -924,6 +936,8 @@ Instead:
 | 2026-09-12 | Promote Workflow Lab out of Settings before heavier UI feature accretion | Workflow editing is a primary product surface |
 | 2026-09-12 | Prefer a DSH-style left / center / right ownership model | Reduces modal overload and duplicated interaction paths |
 | 2026-09-12 | Keep explicitness as a product rule | UI must not present ignored or redundant controls as if they matter |
+| 2026-09-12 | Use a flat domain-first ES module tree as the immediate implementation target | Removes the monolith quickly without bundler/deeper directory churn |
+| 2026-09-12 | Split transcript/composer and workflow graph/manager before further feature accretion | These were the two remaining oversized ownership blobs after the first ESM pass |
 
 ---
 
