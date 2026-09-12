@@ -83,28 +83,127 @@ If we fix the shell now, later features like approvals, `@file`, `/commands`, tr
 
 ## 3. Reference model: what DeepSeek Harness gets right
 
-DeepSeek Harness is the primary reference for **shell ownership and UI surface boundaries**, not because we want to clone its styling, but because it makes object interactions more coherent.
+DeepSeek Harness is the primary reference for **shell ownership, interaction boundaries, and surface maturity**, not because we want to clone its visual styling, but because it makes object interactions more coherent.
 
-### Useful DSH patterns to copy
+The most important DSH lesson is not “add more panels.” It is:
 
-- **Three-column shell**: sidebar / conversation / details
-- **Conversation stays mounted** while views swap
-- **Settings are a surface**, not a mega-modal
-- **Trajectory / inspector** live in a details view, not in transcript clutter
-- **Composer is a stack**, not just one textarea
-- **Approvals/questions take over the composer in place**
-- **Workspace/session browser is a true navigation surface**
-- **Deliverables are first-class**
-- **Typed renderers** for terminal, diff, read, search, web blocks
-- **Visibility rules** are deliberate: what is navigation vs state vs inspection is obvious
+> **Each object has a stable home, and each interaction has a clear owner.**
 
-### Useful `tldw_chatbook` adjacent lessons
+### 3.1 Navigation model: workspace and session browsing
+
+#### DSH reference behavior
+- The sidebar is primarily a **workspace/session browser**, not a miscellaneous tool shelf.
+- Workspaces group sessions.
+- An open workspace shows **5 sessions by default** with a transient **Show more**.
+- Rows surface live status directly:
+  - **pending interaction** = amber dot
+  - **running** = blue activity
+  - descendant sub-agent activity outranks stale completion markers
+- Search expands inside the workspace header and behaves in two layers:
+  - immediate substring filtering for titles/labels
+  - **250 ms debounced content search** with snippets and capped results
+- Sub-agent-origin sessions are **hidden from the ordinary sidebar** and reached through the parent context.
+- Row actions are contextual and compact: rename, fork, archive, delete.
+- DSH is mostly **click / hover / keyboard** oriented here, not swipe-oriented. The useful interaction model is about stable rows, hover actions, focus, and drag order — not touch-first gestures.
+
+#### What to copy
+- Workspace/session selection should be **navigation**, not a general settings field.
+- Search should be in-place and workspace-aware.
+- Session status should be visible where you pick the session, not somewhere else.
+- We should prefer one primary interaction path for selecting a workspace or session.
+
+### 3.2 Shell geometry: stable left / center / right ownership
+
+#### DSH reference behavior
+- The shell is a **three-column frame**: `sidebar`, `conversation`, `details`.
+- When horizontal space shrinks, **only the details panel concedes**. Once too small, it auto-closes.
+- A collapsed sidebar is not gone; it becomes a **56 px icon rail** with **36 px controls** at **10 px inset**.
+- The details panel collapses to **0 px**.
+- The conversation surface remains mounted and does not change identity when switching view tabs.
+- Drag handles control geometry; the model is spatial and explicit, not modal-heavy.
+
+#### What to copy
+- Left = navigate
+- Center = converse / act
+- Right = inspect
+- Collapse and resize should be explicit pointer interactions, not ad hoc hide/show toggles.
+- We should prioritize **drag handles and persistent geometry** over adding more modal layers.
+
+### 3.3 Conversation and composer interaction model
+
+#### DSH reference behavior
+- The conversation header has a **view ring**: Chat / Trajectory / other views.
+- The shell stays mounted while only the **view body** swaps.
+- The composer is a **stack**, not one textarea:
+  1. status/stats dock
+  2. queued message rows
+  3. plan/todo/goal strips
+  4. editor bar
+  5. access row
+  6. trigger overlay
+- Approvals and user questions **replace the composer in place**.
+- Blocked states render the missing reason directly in the composer and keep exactly **one unblock action** live.
+- Pending approval/question states do **not** produce fake placeholder transcript cards.
+
+#### What to copy
+- Keep the user in the conversation surface when approval or clarification is needed.
+- Put state close to the input, not in a giant header or a detached modal.
+- Make `@`, `/`, and `!` part of the interaction contract, not hidden power-user affordances.
+
+### 3.4 Settings and provider management
+
+#### DSH reference behavior
+- Settings are a **surface**, not a mega-modal.
+- Model/provider entries are structured cards.
+- Key entry is validated early (e.g. reject `NAME=value` paste shapes).
+- “Fetch available models” interrogates the **currently typed unsaved** endpoint/key.
+- Settings writes are revisioned and can reject stale edits with `settings-conflict`.
+
+#### What to copy
+- Separate common settings from advanced settings.
+- Use cards and pickers before raw text.
+- Let users validate the draft config before saving.
+- Stop making users understand provider settings via one giant scroll form.
+
+### 3.5 File, deliverable, and inspection behavior
+
+#### DSH reference behavior
+- Files are often reached contextually through:
+  - `@file` mentions
+  - deliverable chips
+  - read/search/web blocks
+  - details-panel previews
+- Deliverables are derived from **successful file mutations**, not parsed from prose.
+- Typed blocks exist for terminal, diff, read, search, and web content.
+- Non-user/system context injections are usually collapsed disclosures, not loud transcript interruptions.
+
+#### What to copy
+- A file tree should either become a real interaction surface or be demoted.
+- Deliverables should be clickable and inspectable.
+- Inspection belongs in a details surface, not buried in settings.
+
+### 3.6 Useful `tldw_chatbook` adjacent lessons
 
 - truthful blocked states with recovery instructions
-- explicit distinction between Search and grounded/RAG answer modes
+- explicit distinction between Search and grounded/RAG Answer modes
 - staged evidence handoff into conversation
 - clear separation between agent tools and any explicitly user-owned persistent terminal
 - artifact / portable-bundle mindset for outputs
+
+### 3.7 Adoption policy for reference behavior
+
+| Reference behavior | GoHarness action | Rationale |
+|---|---|---|
+| Three-column shell | **Adopt** | Best fit for our current complexity |
+| Workspace/session grouped browser | **Adopt** | Cleans up duplicated navigation |
+| Composer takeover for approvals/questions | **Adopt** | Strong locality and honesty |
+| Settings as surface, not mega-modal | **Adopt** | Major usability win |
+| Typed blocks for tool output | **Adopt** | High clarity / low ambiguity |
+| 56px rail + concession chain | **Adapt** | Keep the idea, but we may persist widths where DSH resets them |
+| DSH transient geometry rules | **Adapt** | We likely want stronger persistence than DSH |
+| tldw staged evidence strip | **Adopt** | Great match for grounded workflows |
+| tldw user-owned persistent terminal semantics | **Adopt** | Prevents muddling human shells and model tools |
+| Swipe-heavy mobile behavior | **Reject / not relevant** | This is a desktop/keyboard/pointer-first app |
 
 ---
 
@@ -417,6 +516,29 @@ Owns:
 
 ---
 
+## 6.4 Detailed change definitions against the current DOM
+
+These are the concrete UI reassignments we should make from the current `src/web/index.html`.
+
+| Current element / behavior | Current purpose | Target behavior | Reference basis |
+|---|---|---|---|
+| `#settings-modal` | giant modal for settings + workflow lab + providers | becomes settings-only or is replaced by a dedicated settings surface / slide-over | DSH settings surface |
+| `#settings-panel-workflow` | workflow editor in Settings | removed from Settings and promoted to top-level Workflow Lab surface | DSH shell ownership |
+| `#workflow-selector` | active runtime workflow selector in header | keep, but clearly label as **Active workflow** only; do not use it as edit target | current shell + DSH separation of runtime vs inspection |
+| `#wf-lab-selector` | choose workflow to edit inside modal | keep, but only inside Workflow Lab surface | current workflow tooling |
+| `#tab-files-btn`, `#tab-sessions-btn`, `#tab-snapshots-btn` | mixed sidebar navigation | replace with stable workspace/session navigation; move file preview and snapshots elsewhere | DSH workspace sidebar |
+| `#workspace-history-select` | workspace dropdown in Sessions tab | demote or remove once sidebar browser becomes primary | DSH navigation ownership |
+| `#input-workspace-dir` | workspace path in standard settings | remove from standard settings | DSH + redundancy analysis |
+| `#quick-pin-input` | manual pinned-file text entry | replace with picker or remove until `@file` / file-row staging exists | DSH file references + tldw staged evidence |
+| `#sessions-list` | session selection list | expand into richer grouped workspace/session browser with status/search/actions | DSH workspace browser |
+| `#workspace-tree` | styled tree dump | either become a real interaction surface (open/pin/stage/preview) or move behind details/search | DSH contextual file access |
+| `#chat-messages` | flat transcript stack | evolve into step-grouped transcript with typed blocks and deliverables | DSH message flow |
+| `#prompt-form` / `#prompt-input` | simple composer | become stack owner: status row, queue rows, staged context, plan strip, editor, access row, triggers | DSH composer stack |
+| header metrics cards | top-level cost/token chrome | move closer to composer as status chips or dock | DSH stats dock + tldw status rows |
+| fork/branch modal | mixed safe/destructive history actions | keep temporarily, then split into clearer history model actions | current recovery UX audit |
+
+---
+
 ## 7. Required interaction improvements
 
 ## 7.1 Immediate cleanup pass in the current shell
@@ -424,13 +546,19 @@ Owns:
 These are high-value fixes that do not require the final three-column architecture first.
 
 ### Must fix now
-1. Remove `workspace_dir` editing from standard settings.
-2. Demote Snapshots from the top-level sidebar tab strip.
-3. Replace free-text pinned-file entry with selection-driven interaction.
-4. Promote **New Session** into stable visible chrome.
-5. Clarify active workflow selector vs workflow-to-edit selector.
-6. Reduce top-header overload.
-7. Move raw advanced fields behind disclosure blocks.
+1. Remove `#input-workspace-dir` from standard settings.
+2. Demote `#tab-snapshots-btn` from the top-level sidebar tab strip.
+3. Replace `#quick-pin-input` free-text pinning with a selection-driven flow, or temporarily hide it until `@file` exists.
+4. Promote **New Session** out of the Sessions sub-panel into stable visible chrome.
+5. Clarify `#workflow-selector` vs `#wf-lab-selector` with explicit labels and surface separation.
+6. Reduce top-header overload by moving cost/token/runtime state toward a lower status row.
+7. Move raw advanced fields (base URL overrides, scan-dir comma lists, etc.) behind disclosure blocks.
+
+### Specific current-element changes
+- `#tab-files`, `#tab-sessions`, `#tab-snapshots` should stop pretending to be equal product destinations.
+- `switchSidebarTab(...)` should either become a real three-surface router or be removed in favor of the new shell model.
+- `openSettingsModal()` should stop being the entry point to Workflow Lab.
+- `saveSettings(event)` should no longer serialize workspace navigation state as though it were app config.
 
 ### Expected payoff
 - fewer duplicated paths
@@ -455,6 +583,13 @@ These are high-value fixes that do not require the final three-column architectu
 - queue rows above composer
 - typed details targets (file preview, run ledger, deliverables)
 
+### Detailed shell definitions
+- Sidebar collapse target: **56 px icon rail**
+- Rail controls: **36 px** targets
+- Sidebar details concession: details panel shrinks first, then auto-closes
+- Settings seat: bottom-pinned in sidebar or slide-over, not header-only modal
+- Search interaction: expand in-place, outside click collapses empty state, content search debounced
+
 ### DSH alignment
 This is the point where we move from “many controls exist” to “each control has a stable home.”
 
@@ -477,6 +612,15 @@ The live product should support:
 - `@` files / agents / sessions / deliverables
 - `!` shell shortcuts
 
+### Detailed interaction definitions
+- **Enter** while idle: submit
+- **Enter** while running: queue steering
+- **Alt+Enter** while running: queue follow-up
+- **Shift+Enter**: newline
+- **Escape** with queue focus: cancel queued row or clear draft
+- blocked composer: clicking the card triggers exactly one unblock path if one exists
+- approval/question takeover: no modal jump, no fake placeholder transcript row
+
 ### Questions and approvals
 - takeover in place
 - no placeholder clutter in transcript
@@ -496,10 +640,17 @@ Instead:
 
 ### Minimum viable file interactions
 - click file row → preview in details panel
-- pin/stage from file row
+- click pin/stage action → add to staged context strip
 - `@file` picker as primary reference mechanism
 - deliverable file chips open directly
 - read blocks and search blocks open source files predictably
+- uploaded files surface as explicit staged/attached objects, not silent hidden state
+
+### Workspace interactions
+- workspace selection belongs in the sidebar browser
+- Add Workspace is a secondary explicit action with validation
+- session switching must not fully destroy shell identity
+- snapshots, if retained, should be reachable from details/history utilities rather than top-level navigation
 
 ---
 
@@ -593,13 +744,14 @@ Split it according to the new ownership model:
 - improve UX honesty without requiring the whole new shell first
 
 ### Tasks
-- [ ] Remove `workspace_dir` from standard settings
-- [ ] Demote/remove Snapshots from top-level sidebar tab strip
-- [ ] Replace manual pinned-file entry with selection-driven flow or temporarily hide it until `@file` exists
-- [ ] Promote New Session to stable visible chrome
-- [ ] Collapse raw advanced provider fields behind disclosure UI
-- [ ] Clarify labels between runtime workflow selection and workflow editing
-- [ ] Reduce header metrics clutter where a status row would work better
+- [ ] Remove `#input-workspace-dir` from standard settings and stop persisting workspace navigation through `saveSettings(event)`.
+- [ ] Demote/remove `#tab-snapshots-btn` from the top-level sidebar tab strip; if snapshot actions remain, move them under a history/details utility.
+- [ ] Replace `#quick-pin-input` free-text pinning with a selection-driven flow or temporarily hide it until `@file` exists.
+- [ ] Promote New Session from the Sessions sub-panel into stable visible chrome (rail or sidebar head).
+- [ ] Collapse raw advanced provider fields (`#input-model`, `#input-base-url`, compaction endpoint/model overrides, scan-dir comma lists) behind disclosure UI where a picker/list cannot replace them yet.
+- [ ] Clarify labels between `#workflow-selector` (**active runtime workflow**) and `#wf-lab-selector` (**workflow being edited**).
+- [ ] Reduce header metrics clutter by moving token/cost/runtime state toward a lower status row closer to `#prompt-form`.
+- [ ] Make `switchSidebarTab(...)` either truly support each visible destination or remove the misleading destination if it is not first-class.
 
 ---
 
@@ -610,11 +762,12 @@ Split it according to the new ownership model:
 - give graph editing real space
 
 ### Tasks
-- [ ] Remove Workflow Lab from Settings modal tabs
-- [ ] Create a dedicated app-level Workflow Lab surface
-- [ ] Keep active runtime workflow selector in the main shell
-- [ ] Keep editing-target selector inside Workflow Lab only
-- [ ] Move advanced JSON editor into Workflow Lab-owned disclosure/panel
+- [ ] Remove `#settings-panel-workflow` and `#btn-settings-tab-workflow` from the Settings modal contract.
+- [ ] Create a dedicated app-level Workflow Lab surface with full-height canvas, inspector, and advanced JSON drawer owned by the lab itself.
+- [ ] Keep `#workflow-selector` in the main shell as the runtime selector only.
+- [ ] Keep `#wf-lab-selector` inside Workflow Lab as the editing-target selector only.
+- [ ] Move `#workflow-json-editor` into a Workflow Lab-owned disclosure/panel, not a settings sub-scroll.
+- [ ] Preserve `Compile & Apply` semantics, but stop closing Settings as a side-effect of saving workflow edits because workflow editing should no longer live there.
 
 ---
 
@@ -625,11 +778,12 @@ Split it according to the new ownership model:
 - stop overloading transcript and settings with inspection work
 
 ### Tasks
-- [ ] Add rail + sidebar + conversation + details shell structure
-- [ ] Add optional/resizable details panel
-- [ ] Make workspace/session browser primary left sidebar content
-- [ ] Define details tabs: Trajectory / File / Tool / Deliverable
-- [ ] Add conversation header tab strip for Chat / Trajectory / Sub-agents
+- [ ] Add rail + sidebar + conversation + details shell structure.
+- [ ] Add explicit resize handles and implement the concession rule: details shrinks first, then closes.
+- [ ] Convert the left sidebar into the primary workspace/session browser; remove the current split-brain between dropdowns, history widgets, and settings fields.
+- [ ] Define details tabs: Trajectory / File / Tool / Deliverable / History utilities.
+- [ ] Add conversation header tabs for Chat / Trajectory / Sub-agents while keeping the conversation shell mounted.
+- [ ] Ensure collapsed sidebar behavior converges toward a 56 px rail target and does not merely set width to zero.
 
 ---
 
@@ -639,12 +793,13 @@ Split it according to the new ownership model:
 - make the composer the true interaction hub
 
 ### Tasks
-- [ ] Add status/action row near composer
-- [ ] Add staged evidence strip
-- [ ] Add queued steering/follow-up rows
-- [ ] Add `/`, `@`, and `!` trigger overlay
-- [ ] Add in-place approvals/questions takeover
-- [ ] Add clear blocked-state recovery action patterns
+- [ ] Add status/action row near composer for provider, model, tools, approvals, sources, and scope.
+- [ ] Add staged evidence strip so retrieved files/search hits/web pages are visible before send.
+- [ ] Add queued steering/follow-up rows with clear remove/edit interactions.
+- [ ] Add `/`, `@`, and `!` trigger overlay anchored to the caret or composer seat.
+- [ ] Add in-place approvals/questions takeover instead of routing these through modals.
+- [ ] Add clear blocked-state recovery action patterns with exactly one primary unblock action.
+- [ ] Preserve submit/newline semantics while adding queue semantics: idle Enter submits, running Enter queues steering, Alt+Enter queues follow-up.
 
 ---
 
@@ -655,11 +810,12 @@ Split it according to the new ownership model:
 - make transcript structure more inspectable
 
 ### Tasks
-- [ ] Add file preview in details panel
-- [ ] Add contextual pin/stage/open actions from file/search/deliverable surfaces
-- [ ] Implement typed blocks for Terminal / Diff / Read / Search / Web
-- [ ] Move tool-result inspection out of giant raw `<pre>` dependence
-- [ ] Add deliverable chips that open previews directly
+- [ ] Add file preview in details panel with a stable open target.
+- [ ] Add contextual pin/stage/open actions from file rows, search results, and deliverable chips.
+- [ ] Implement typed blocks for Terminal / Diff / Read / Search / Web.
+- [ ] Move tool-result inspection out of giant raw `<pre>` dependence and into typed block renderers with collapse/expand behavior.
+- [ ] Add deliverable chips that open previews directly and derive from real successful file mutations.
+- [ ] Make file interactions consistent: click row = preview, explicit secondary action = stage/pin, `@file` = mention.
 
 ---
 
@@ -670,11 +826,12 @@ Split it according to the new ownership model:
 - expose advanced config progressively
 
 ### Tasks
-- [ ] Convert providers to clearer card/editor model
-- [ ] Keep active chat / compaction connection assignments visible
-- [ ] Move low-frequency infra fields into Advanced sections
-- [ ] Improve settings revision/conflict handling
-- [ ] Give MCP management a more explicit connection-state presentation
+- [ ] Convert providers to clearer card/editor model with one obvious edit path.
+- [ ] Keep active chat / compaction connection assignments visible without forcing users through nested tabs.
+- [ ] Move low-frequency infra fields into Advanced sections, and replace raw text with lists/pickers wherever the valid set is knowable.
+- [ ] Improve settings revision/conflict handling so stale edits are caught explicitly.
+- [ ] Give MCP management explicit connection-state, auth-state, and error-state presentation.
+- [ ] Ensure Settings remains a settings surface, not a dumping ground for workflow, file, or history interactions.
 
 ---
 
