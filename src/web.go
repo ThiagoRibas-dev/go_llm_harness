@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	pathpkg "path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -34,6 +35,60 @@ var (
 	nextTokenID = 1000
 	tokenMutex  sync.Mutex
 )
+
+func renderEmbeddedHTML(path string) ([]byte, error) {
+	return renderEmbeddedHTMLWithStack(path, 0, map[string]bool{})
+}
+
+func renderEmbeddedHTMLWithStack(path string, depth int, stack map[string]bool) ([]byte, error) {
+	if depth > 32 {
+		return nil, fmt.Errorf("embedded html include depth exceeded while resolving %s", path)
+	}
+	cleanPath := pathpkg.Clean(path)
+	if stack[cleanPath] {
+		return nil, fmt.Errorf("cyclic embedded html include detected at %s", cleanPath)
+	}
+	stack[cleanPath] = true
+	defer delete(stack, cleanPath)
+
+	bytes, err := embeddedWebFS.ReadFile(cleanPath)
+	if err != nil {
+		return nil, err
+	}
+	content := string(bytes)
+	const prefix = `<!--#include file="`
+	const suffix = `" -->`
+	if !strings.Contains(content, prefix) {
+		return bytes, nil
+	}
+
+	var out strings.Builder
+	searchFrom := 0
+	for {
+		start := strings.Index(content[searchFrom:], prefix)
+		if start == -1 {
+			out.WriteString(content[searchFrom:])
+			break
+		}
+		start += searchFrom
+		out.WriteString(content[searchFrom:start])
+		nameStart := start + len(prefix)
+		end := strings.Index(content[nameStart:], suffix)
+		if end == -1 {
+			return nil, fmt.Errorf("unterminated include directive in %s", cleanPath)
+		}
+		end += nameStart
+		includeRef := content[nameStart:end]
+		includePath := pathpkg.Clean(pathpkg.Join(pathpkg.Dir(cleanPath), includeRef))
+		child, err := renderEmbeddedHTMLWithStack(includePath, depth+1, stack)
+		if err != nil {
+			return nil, err
+		}
+		out.Write(child)
+		searchFrom = end + len(suffix)
+	}
+	return []byte(out.String()), nil
+}
 
 // RegisterSSEClient adds a client channel to the active broadcast list
 func RegisterSSEClient() chan string {
@@ -89,7 +144,7 @@ func StartWebGUI(port int) {
 			http.NotFound(w, r)
 			return
 		}
-		htmlBytes, err := embeddedWebFS.ReadFile("web/index.html")
+		htmlBytes, err := renderEmbeddedHTML("web/index.html")
 		if err != nil {
 			http.Error(w, "Embedded GUI index.html missing!", http.StatusInternalServerError)
 			return

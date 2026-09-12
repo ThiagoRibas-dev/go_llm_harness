@@ -1,0 +1,20 @@
+    <!-- ================= HEADER / TOP STATUS BAR ================= -->
+    <header class="app-header bg-[#1e293b] border-b border-[#334155] px-6 py-3 flex items-center justify-between shadow-md shrink-0 z-10">
+        <div class="flex items-center space-x-3 min-w-0">
+            <button id="toggle-sidebar-btn" class="text-slate-400 hover:text-white transition p-1 rounded hover:bg-slate-800" title="Toggle Sidebar">
+                <i class="fa-solid fa-bars text-sm"></i>
+            </button>
+            <div class="bg-blue-600 text-white px-2.5 py-1 rounded text-sm font-bold tracking-wider flex items-center shrink-0">
+                <i class="fa-solid fa-robot mr-1.5"></i> GOHARNESS
+            </div>
+            <span class="text-slate-400 text-xs shrink-0">|</span>
+            <span class="text-xs text-slate-300 font-mono truncate" id="session-id">Session: sess_loading...</span>
+        </div>
+
+        <div class="flex items-center space-x-3 shrink-0">
+            <span class="text-[10px] uppercase tracking-wider text-slate-500 hidden md:inline">Runtime controls moved closer to the composer</span>
+            <button id="header-settings-btn" class="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition px-3 py-1.5 rounded-md border border-[#334155] text-xs font-bold flex items-center space-x-1.5" title="Configure goharness settings">
+                <i class="fa-solid fa-gear"></i> <span>Settings</span>
+            </button>
+        </div>
+    </header>

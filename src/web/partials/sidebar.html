@@ -1,0 +1,109 @@
+        <aside id="sidebar" class="w-80 bg-[#0f172a] border-r border-[#334155] flex flex-col shrink-0 transition-all duration-200 ease-in-out">
+            <div class="px-4 py-3 border-b border-[#334155]/70 bg-slate-900/25 flex items-center gap-2 shrink-0">
+                <div class="min-w-0 flex-1">
+                    <div id="sidebar-surface-title" class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Workspaces & Sessions</div>
+                    <div id="sidebar-surface-subtitle" class="text-[10px] text-slate-500 font-mono truncate">Navigate local workspaces and session threads</div>
+                </div>
+                <button id="sidebar-new-session-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center justify-center gap-1.5" title="Start a new session">
+                    <i class="fa-solid fa-plus"></i><span class="hidden sm:inline">New</span>
+                </button>
+            </div>
+
+            <!-- TAB 1: FILE EXPLORER -->
+            <div id="tab-files" class="flex-1 flex flex-col overflow-hidden">
+                <!-- Pre-defined workspace path banner & upload controller -->
+                <div class="px-4 py-2 bg-slate-900/20 text-[11px] font-mono text-slate-400 border-b border-[#334155]/60 flex items-center justify-between">
+                    <span id="workspace-path" class="truncate pr-2">Path: ./workspace</span>
+                    <button id="file-upload-btn" class="text-slate-400 hover:text-white transition shrink-0" title="Upload Custom Memory Reference File to Active Session">
+                        <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
+                    </button>
+                    <!-- Hidden file input element -->
+                    <input type="file" id="hidden-file-input" class="hidden">
+                </div>
+                <!-- PINNED CONTEXT SECTION -->
+                <div class="px-4 py-2 border-b border-[#334155]/60 bg-slate-900/10 space-y-1.5 shrink-0">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Pinned Prompt Context</label>
+                        <span class="text-[9px] text-slate-400/60 font-mono">Turn 1 Injection</span>
+                    </div>
+                    <div id="pinned-chips-list" class="flex flex-wrap gap-1 max-h-16 overflow-y-auto pr-1">
+                        <!-- Chips of pinned files -->
+                        <div class="text-slate-500 italic text-[10px]">Loading pinned context...</div>
+                    </div>
+                    <div class="rounded border border-[#334155]/60 bg-slate-950/20 px-2.5 py-2 text-[10px] text-slate-500 leading-relaxed">
+                        Manual file-path pinning is hidden for now. Use uploaded files and existing pinned context today; the upcoming <span class="font-mono text-slate-400">@file</span> / picker flow will replace this free-text control.
+                    </div>
+                </div>
+                <!-- Tree View Container -->
+                <div class="flex-1 overflow-y-auto p-4 font-mono text-xs text-slate-300 leading-relaxed" id="workspace-tree">
+                    <div class="text-slate-500 italic">No files detected yet...</div>
+                </div>
+            </div>
+
+            <!-- TAB 2: SESSIONS & WORKSPACES MANAGER -->
+            <div id="tab-sessions" class="hidden flex-1 flex flex-col overflow-hidden p-4 space-y-4">
+                
+                <!-- WORKSPACE MANAGEMENT SECTION -->
+                <div class="space-y-2 shrink-0">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Current Workspace</label>
+                    <div class="rounded border border-[#334155]/60 bg-slate-900/25 px-3 py-2 text-[11px] font-mono text-slate-300 break-all" id="workspace-active-summary">./workspace</div>
+                    <!-- Create New Workspace input -->
+                    <div class="flex space-x-2">
+                        <input type="text" id="new-workspace-input" placeholder="Add workspace path..." class="flex-1 bg-[#1e293b] border border-[#334155] text-xs px-2 py-1 rounded outline-none focus:border-blue-500 font-mono">
+                        <button id="add-workspace-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs transition">
+                            Add
+                        </button>
+                    </div>
+                </div>
+
+                <!-- WORKSPACE HISTORY CHIPS/LIST -->
+                <div class="space-y-1 shrink-0">
+                    <label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Known Workspaces</label>
+                    <div id="workspaces-history-list" class="space-y-1 max-h-24 overflow-y-auto pr-1">
+                        <!-- Dynamic list of workspaces -->
+                    </div>
+                </div>
+
+                <!-- CONVERSATIONS / SESSIONS LOG LIST -->
+                <div class="flex-1 flex flex-col overflow-hidden min-h-0 pt-2 border-t border-[#334155]/60 relative">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Conversation Sessions</label>
+                        <span class="text-[9px] text-slate-500 font-mono">Use New Session above</span>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto space-y-1.5 pr-1 font-mono text-xs" id="sessions-list">
+                        <!-- Active list of session meta cards -->
+                        <div class="text-slate-500 italic">Loading sessions...</div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- TAB 3: SNAPSHOTS MANAGER -->
+            <div id="tab-snapshots" class="hidden flex-1 flex flex-col overflow-hidden p-4 space-y-4">
+                <div class="space-y-2 shrink-0">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Workspace Snapshotting</label>
+                    <div class="flex flex-col space-y-2">
+                        <input type="text" id="snapshot-name-input" placeholder="Snapshot label (e.g. Pre-Refactor)..." class="bg-[#1e293b] border border-[#334155] text-xs px-2.5 py-1.5 rounded outline-none focus:border-blue-500 font-mono text-slate-200">
+                        <button id="create-snapshot-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-3 rounded text-xs transition flex items-center justify-center space-x-1">
+                            <i class="fa-solid fa-camera"></i> <span>Capture Workspace</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 flex flex-col overflow-hidden min-h-0 pt-2 border-t border-[#334155]/60">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Available Snapshots</label>
+                    <div class="flex-1 overflow-y-auto space-y-2 pr-1" id="snapshots-list">
+                        <!-- Snapshots will load here dynamically -->
+                        <div class="text-slate-500 italic text-xs">No snapshots captured yet.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Action controls -->
+            <div class="p-4 border-t border-[#334155] bg-slate-900/30 space-y-2 text-xs shrink-0">
+                <button id="manual-compact-btn" class="w-full py-1.5 px-3 bg-indigo-950/40 text-indigo-400 border border-indigo-900 rounded hover:bg-indigo-900 hover:text-white transition duration-150 flex items-center justify-center">
+                    <i class="fa-solid fa-compress mr-1.5"></i> Manual Context Compact
+                </button>
+            </div>
+        </aside>

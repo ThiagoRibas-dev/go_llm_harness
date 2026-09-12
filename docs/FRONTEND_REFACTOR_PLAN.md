@@ -209,9 +209,10 @@ The most important DSH lesson is not “add more panels.” It is:
 
 ## 4. Current UI architecture snapshot
 
-The frontend no longer lives in a single inline-script page. It is now served as embedded HTML plus browser-native ES modules:
+The frontend no longer lives in a single inline-script page. It is now served as **embedded HTML partials composed server-side** plus browser-native ES modules:
 
 - `src/web/index.html`
+- `src/web/partials/*.html`
 - `src/web/js/app.js`
 - `src/web/js/state.js`
 - `src/web/js/shell.js`
@@ -239,6 +240,7 @@ The frontend no longer lives in a single inline-script page. It is now served as
 - fork/branch modal markup
 - inline CSS
 - static shell/dialog markup with JS-owned IDs and `data-*` hooks
+- server-side composition boundaries via embedded partial includes
 
 The HTML no longer carries inline event handlers. Control wiring now happens through bound listeners and delegated `data-*` actions in the JS modules.
 
@@ -706,6 +708,17 @@ The old module split plan is still directionally right, but it was organized aro
 ```text
 src/web/
 ├── index.html
+├── partials/
+│   ├── head_assets.html
+│   ├── styles.html
+│   ├── header.html
+│   ├── shell_body.html
+│   ├── rail.html
+│   ├── sidebar.html
+│   ├── primary_surface.html
+│   ├── details_panel.html
+│   ├── settings_modal.html
+│   └── fork_modal.html
 └── js/
     ├── app.js
     ├── state.js
@@ -736,6 +749,7 @@ Why this shape was chosen first:
 - it avoids a premature directory taxonomy churn while the UI contract is still moving
 
 Longer-term, we can still split into deeper subdirectories (`chat/`, `workflow/`, `settings/`, etc.), but the important step was to establish **real ownership seams** first:
+- `index.html` as an HTML composition root over embedded partials
 - `chat.js` vs `composer.js`
 - `workflow_graph.js` vs `workflow_manager.js`
 - `settings.js` as a composition root over `settings_runtime.js`, `settings_profiles.js`, and `settings_ops.js`
@@ -879,6 +893,8 @@ Phase 6 has crossed the important threshold: the old giant frontend script is go
 What is true now:
 - the HTML no longer relies on inline event handlers
 - `app.js` is no longer exporting a runtime bridge onto `window`
+- `index.html` is now an HTML composition root instead of a giant static document blob
+- the page is assembled server-side from embedded partials, so HTML can be split without adding a bundler or browser-side fragment fetches
 - static shell, settings, workflow, composer, and fork controls are bound through module-owned listeners
 - dynamic transcript, details, queue, staged-context, workspace, provider, snapshot, MCP, and workflow-inspector actions now use delegated `data-*` hooks instead of inline handler strings
 - `settings.js` and `workflow_graph.js` are now composition roots rather than broad implementation blobs
@@ -886,8 +902,9 @@ What is true now:
 
 Observed evidence after this pass:
 - inline handler resolution checks dropped from **80** to **45**, and then to **0**, in `node scripts/lint-html.js`
+- the HTML linter still validates the full assembled page by resolving embedded partial includes before running its checks
 
-So the debt has moved again in the right direction: from **one unstable super-file** to **domain modules**, and then from **broad domain modules with heavy inline coupling** to **smaller modules with listener/delegation ownership that actually lives in JS**.
+So the debt has moved again in the right direction: from **one unstable super-file** to **domain modules**, then to **listener/delegation ownership that actually lives in JS**, and now to an **HTML composition root plus partials** instead of a single monolithic document.
 
 ---
 

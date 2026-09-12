@@ -1,0 +1,50 @@
+    <!-- ================= 🌿 FORK & TIMELINE BRANCH MODAL ================= -->
+    <div id="fork-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div class="bg-[#1e293b] border border-[#334155] w-full max-w-md rounded-xl shadow-2xl overflow-hidden modal-animate">
+            <div class="px-6 py-4 border-b border-[#334155] flex items-center justify-between bg-slate-900/40">
+                <h3 class="font-bold text-slate-100 flex items-center text-sm uppercase tracking-wider">
+                    <i class="fa-solid fa-code-fork mr-2 text-cyan-400"></i> Rewind or Branch Timeline
+                </h3>
+                <button id="fork-close-btn" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4 text-xs">
+                <p class="text-slate-400">You are rewinding the conversation back to **Turn <span id="fork-turn-display" class="font-bold text-white"></span>**. Select your timeline management strategy below:</p>
+
+                <div class="bg-slate-900/40 border border-[#334155] rounded-lg p-4 space-y-3">
+                    <div class="flex items-start space-x-2">
+                        <input type="radio" id="fork-type-branch" name="fork-type" value="branch" checked class="mt-1 accent-blue-500 h-4 w-4">
+                        <label for="fork-type-branch" class="block cursor-pointer">
+                            <span class="block font-bold text-slate-200">1. Create Parallel Branch (Recommended)</span>
+                            <span class="block text-[11px] text-slate-400 mt-0.5">Clones the timeline up to Turn <span class="fork-turn-sub"></span> into a brand-new, isolated session. The original thread remains completely untouched on disk!</span>
+                        </label>
+                    </div>
+                    <div id="branch-fields" class="pl-6">
+                        <label class="block text-slate-300 font-bold mb-1">New Branch Name</label>
+                        <input type="text" id="input-branch-name" placeholder="Feature Experiment A..." class="w-full bg-[#0f172a] border border-[#334155] rounded px-2.5 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div class="bg-red-950/10 border border-red-900/40 rounded-lg p-4">
+                    <div class="flex items-start space-x-2">
+                        <input type="radio" id="fork-type-truncate" name="fork-type" value="truncate" class="mt-1 accent-red-500 h-4 w-4">
+                        <label for="fork-type-truncate" class="block cursor-pointer">
+                            <span class="block font-bold text-red-400"><i class="fa-solid fa-triangle-exclamation mr-1"></i> 2. Truncate &amp; Overwrite (Destructive)</span>
+                            <span class="block text-[11px] text-slate-400 mt-0.5">Permanently deletes all future turns greater than <span class="fork-turn-sub"></span> and overwrites files on disk. There is no way to undo this action.</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/20 -mx-6 -mb-6 p-4">
+                    <button id="fork-cancel-btn" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
+                        Cancel
+                    </button>
+                    <button id="fork-execute-btn" class="px-5 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-white transition font-bold shadow-md">
+                        Execute Rollback
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>

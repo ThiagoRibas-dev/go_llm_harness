@@ -42,6 +42,24 @@ if (!fs.existsSync(HTML_PATH)) {
   process.exit(1);
 }
 
+function resolveHtmlIncludes(filePath, depth = 0, stack = new Set()) {
+  if (depth > 32) {
+    throw new Error("HTML include depth exceeded while resolving " + filePath);
+  }
+  const clean = path.resolve(filePath);
+  if (stack.has(clean)) {
+    throw new Error("Cyclic HTML include detected at " + clean);
+  }
+  stack.add(clean);
+  let source = fs.readFileSync(clean, "utf8");
+  source = source.replace(/<!--#include\s+file="([^"]+)"\s*-->/g, (_, includeRef) => {
+    const includePath = path.resolve(path.dirname(clean), includeRef);
+    return resolveHtmlIncludes(includePath, depth + 1, stack);
+  });
+  stack.delete(clean);
+  return source;
+}
+
 function fail(msg) {
   console.error("✖ " + msg);
   process.exitCode = 1;
@@ -50,7 +68,13 @@ function ok(msg) {
   console.log("✓ " + msg);
 }
 
-const html = fs.readFileSync(HTML_PATH, "utf8");
+let html = "";
+try {
+  html = resolveHtmlIncludes(HTML_PATH);
+} catch (err) {
+  console.error("✖ Failed to resolve HTML includes: " + err.message);
+  process.exit(1);
+}
 
 // Strip comments and <script>/<style> contents so we don't false-positive on
 // IDs/HTML that live inside JS template literals.

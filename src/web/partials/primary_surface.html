@@ -1,0 +1,219 @@
+        <main id="primary-surface" class="app-conversation flex-1 flex flex-col min-w-0 bg-[#0b0f19]">
+            <div id="chat-status-row" class="px-6 pt-4 pb-0 border-t border-[#334155]/70 bg-[#0f172a]/35 shrink-0">
+                <div class="max-w-6xl mx-auto flex flex-wrap items-center gap-2 text-xs">
+                    <div class="flex items-center gap-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155]">
+                        <span class="text-slate-400">View:</span>
+                        <button id="view-console-btn" type="button" class="px-2 py-1 rounded bg-slate-800 text-slate-100 font-bold">Console</button>
+                        <button id="view-workflow-btn" type="button" class="px-2 py-1 rounded text-slate-400 hover:text-slate-200">Workflow Lab</button>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155]">
+                        <i class="fa-solid fa-diagram-project text-purple-400"></i>
+                        <span class="text-slate-400">Active Workflow:</span>
+                        <select id="workflow-selector"  class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono font-bold text-xs rounded px-1.5 py-0.5 outline-none focus:border-purple-500 cursor-pointer">
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155]">
+                        <span class="text-slate-400">Connection:</span>
+                        <span class="text-cyan-400 font-mono font-bold" id="model-name">gpt-4o</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-cyan-950/40 text-cyan-400 border border-cyan-800 px-3 py-1.5 rounded-md shadow-inner">
+                        <i class="fa-solid fa-calculator"></i>
+                        <span class="font-bold">Tokens:</span>
+                        <span class="font-mono font-bold text-sm" id="session-tokens">0</span>
+                        <span class="text-slate-400 font-mono text-[10px]" id="session-chars">(0 chars)</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-emerald-950/40 text-emerald-400 border border-emerald-800 px-3 py-1.5 rounded-md shadow-inner">
+                        <i class="fa-solid fa-dollar-sign"></i>
+                        <span class="font-bold">Spent:</span>
+                        <span class="font-mono font-bold text-sm" id="session-cost">$0.0000</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155] ml-auto">
+                        <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" id="status-dot"></div>
+                        <span class="text-slate-300" id="status-text">Connected</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="console-surface" class="flex flex-1 flex-col min-h-0">
+                <div class="px-6 pt-4 pb-0 shrink-0">
+                    <div id="console-header-tabs" class="max-w-4xl mx-auto flex items-center gap-2 text-xs">
+                        <button id="conversation-tab-chat" type="button" class="active px-3 py-1.5 rounded border border-[#334155] text-slate-300 transition">Chat</button>
+                        <button id="conversation-tab-trajectory" type="button" class="px-3 py-1.5 rounded border border-transparent text-slate-400 hover:text-slate-200 transition">Trajectory</button>
+                        <button id="conversation-tab-subagents" type="button" class="px-3 py-1.5 rounded border border-transparent text-slate-400 hover:text-slate-200 transition">Sub-agents</button>
+                    </div>
+                </div>
+                <div class="flex-1 min-h-0 relative">
+                    <div id="chat-view" class="h-full">
+                        <div id="chat-messages" class="h-full overflow-y-auto px-8 py-6 space-y-6">
+                            <!-- Greeting will be appended on boot -->
+                        </div>
+                    </div>
+                    <div id="trajectory-view" class="hidden h-full overflow-y-auto px-8 py-6">
+                        <div id="trajectory-view-body" class="max-w-4xl mx-auto space-y-3"></div>
+                    </div>
+                    <div id="subagents-view" class="hidden h-full overflow-y-auto px-8 py-6">
+                        <div id="subagents-view-body" class="max-w-4xl mx-auto space-y-3"></div>
+                    </div>
+                </div>
+
+                <!-- ⌨️ INPUT CONTROL PANEL -->
+                <div class="p-6 bg-[#0f172a]/50 shrink-0">
+                    <div class="max-w-4xl mx-auto space-y-2">
+                        <div id="composer-action-row" class="flex flex-wrap items-center gap-2 text-[11px]">
+                            <button id="composer-provider-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Provider · loading</button>
+                            <button id="composer-model-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Model · loading</button>
+                            <button id="composer-tools-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Tools · inspect</button>
+                            <button id="composer-approvals-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Approvals · none</button>
+                            <button id="composer-sources-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Sources · 0 staged</button>
+                            <button id="composer-scope-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Scope · workspace-wide</button>
+                            <span id="composer-queue-chip" class="ml-auto text-slate-500 font-mono">Queue · 0</span>
+                        </div>
+                        <div id="composer-takeover" class="hidden rounded-lg border border-amber-500/40 bg-amber-950/10 px-3 py-2 text-sm text-slate-200"></div>
+                        <div id="staged-context-strip" class="hidden rounded-lg border border-cyan-900/40 bg-slate-900/30 p-2"></div>
+                        <div id="queued-messages-strip" class="hidden rounded-lg border border-purple-900/40 bg-slate-900/30 p-2"></div>
+                        <div class="relative">
+                            <form id="prompt-form" class="relative flex items-center bg-[#1e293b] rounded-lg border border-[#334155] shadow-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition duration-150">
+                                <div id="composer-shell" class="w-full flex items-center">
+                                    <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')...." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36"></textarea>
+                                    <div class="flex items-center space-x-2 pr-3 shrink-0">
+                                        <button id="reroll-btn" type="button" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition p-2.5 rounded-md border border-[#334155] text-xs font-bold flex items-center justify-center h-9 w-9" title="Reroll Last Response (Regenerate)">
+                                            <i class="fa-solid fa-rotate-right text-xs"></i>
+                                        </button>
+                                        <button id="composer-cta" type="button" class="hidden bg-amber-600 text-white hover:bg-amber-500 transition duration-150 px-3 py-2 rounded text-xs font-bold h-9 shadow-md">
+                                            <span id="composer-cta-label">Open</span>
+                                        </button>
+                                        <button id="prompt-submit" type="submit" class="bg-blue-600 text-white hover:bg-blue-500 transition duration-150 px-4 py-2 rounded text-xs font-bold h-9 shadow-md flex items-center space-x-1.5">
+                                            <span id="prompt-submit-label">Execute</span> <i class="fa-solid fa-play"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                            <div id="trigger-overlay" class="hidden absolute left-0 right-0 bottom-full mb-2 rounded-lg border border-[#334155] bg-slate-950/95 shadow-2xl overflow-hidden z-20"></div>
+                        </div>
+                        <div id="composer-state-hint" class="text-[10px] text-slate-500 text-center mt-2 font-mono">
+                            GoHarness Sandbox Mode is active. System write-protection active. Press <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Enter</kbd> to execute, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Shift+Enter</kbd> for new line.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <section id="workflow-lab-surface" class="hidden flex-1 min-h-0 flex flex-col overflow-hidden p-6 text-xs">
+                <div class="max-w-7xl mx-auto w-full flex-1 min-h-0 flex flex-col">
+                    <div class="mb-4 flex items-start justify-between gap-4 rounded-xl border border-[#334155] bg-slate-900/25 px-4 py-3">
+                        <div>
+                            <div class="text-[10px] font-bold text-purple-400 uppercase tracking-wider flex items-center"><i class="fa-solid fa-diagram-project mr-1.5"></i>Workflow Lab</div>
+                            <h2 class="mt-1 text-lg font-bold text-slate-100">Edit workflow definitions as a first-class surface</h2>
+                            <p class="mt-1 text-xs text-slate-400 max-w-3xl">Use the selector in the status row to choose the active runtime workflow. This surface is only for editing workflow definitions and applying them.</p>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button type="button" id="workflow-console-back-btn-top" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Back to Console</button>
+                            <button type="button" id="workflow-settings-btn" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition font-bold text-xs flex items-center gap-1.5"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
+                        </div>
+                    </div>
+                <!-- AI Compiler prompt box -->
+                <div class="bg-slate-900/30 p-3 rounded-xl border border-blue-500/30 space-y-2 mb-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1.5 animate-pulse"></i> Natural Language AI Compiler
+                        </span>
+                        <span class="text-[9px] text-slate-500 font-mono">v2.0 Beta</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <textarea id="ai-workflow-prompt" rows="1" class="flex-1 bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-sans leading-relaxed" placeholder="Describe your pipeline (e.g. 'BM25 search, then 3 parallel LLMs, then aggregate')..."></textarea>
+                        <button type="button" id="workflow-ai-compile-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-4 rounded text-xs transition flex items-center space-x-1.5 whitespace-nowrap">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Compile</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="flex items-center justify-between mb-2 gap-2">
+                    <div class="flex items-center space-x-2">
+                        <div class="relative">
+                            <button type="button" id="workflow-add-node-toggle" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 font-bold py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                                <i class="fa-solid fa-plus text-[10px]"></i><span>Add node</span><i class="fa-solid fa-chevron-down text-[8px] ml-1"></i>
+                            </button>
+                            <div id="add-node-menu" class="hidden absolute z-20 mt-1 w-52 bg-[#0f172a] border border-[#334155] rounded-md shadow-xl overflow-hidden">
+                                <button type="button" data-add-node-kind="llm" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-robot w-5 text-purple-400"></i> LLM</button>
+                                <button type="button" data-add-node-kind="bm25_search" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-magnifying-glass w-5 text-indigo-400"></i> BM25 Search</button>
+                                <button type="button" data-add-node-kind="tool_execution" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-terminal w-5 text-cyan-400"></i> Tool Execution</button>
+                                <button type="button" data-add-node-kind="conditional_router" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-route w-5 text-amber-400"></i> Conditional Router</button>
+                            </div>
+                        </div>
+                        <button type="button" id="workflow-auto-layout-btn" title="Auto-arrange nodes" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                            <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i><span>Auto-layout</span>
+                        </button>
+                        <button type="button" id="workflow-reload-json-btn" title="Reload graph from JSON" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                            <i class="fa-solid fa-arrows-rotate text-[10px]"></i><span>Reload JSON</span>
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 rounded border border-[#334155]/60 bg-slate-900/25 px-2 py-1">
+                            <span class="text-[10px] uppercase tracking-wider text-slate-500">Editing workflow</span>
+                            <select id="wf-lab-selector"  class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono text-xs rounded px-2 py-1.5 outline-none focus:border-purple-500 cursor-pointer" title="Switch workflow to edit"></select>
+                        </div>
+                        <button type="button" id="workflow-new-btn" title="Create a new blank workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-file-circle-plus text-[10px] text-emerald-400"></i><span class="hidden sm:inline">New</span>
+                        </button>
+                        <button type="button" id="workflow-clone-btn" title="Clone the current workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-copy text-[10px] text-blue-400"></i><span class="hidden sm:inline">Clone</span>
+                        </button>
+                        <button type="button" id="workflow-delete-btn" title="Delete the current workflow" class="bg-slate-800 hover:bg-red-900 border border-[#334155] hover:border-red-700 text-slate-400 hover:text-red-300 py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-trash text-[10px]"></i><span class="hidden sm:inline">Delete</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Canvas + Inspector -->
+                <div class="flex flex-1 min-h-0 gap-3">
+                    <div class="flex-1 min-w-0 flex flex-col border border-[#334155] rounded-xl overflow-hidden bg-slate-950/40">
+                        <div class="bg-slate-900/40 px-3 py-1.5 border-b border-[#334155] flex items-center justify-between">
+                            <span class="font-bold text-slate-300 flex items-center text-[11px]"><i class="fa-solid fa-diagram-project mr-1.5 text-blue-500"></i> Node Graph</span>
+                            <span class="text-[9px] text-slate-500">drag nodes · drag ports to connect</span>
+                        </div>
+                        <div id="wf-canvas-scroll" class="relative flex-1 overflow-auto bg-[radial-gradient(circle_at_1px_1px,rgba(148,163,184,0.08)_1px,transparent_0)] [background-size:18px_18px]">
+                            <div id="wf-canvas" class="relative" style="min-width:100%;min-height:100%;">
+                                <svg id="wf-edges" class="absolute top-0 left-0 pointer-events-none overflow-visible"></svg>
+                                <svg id="wf-temp-edge" class="absolute top-0 left-0 pointer-events-none overflow-visible"></svg>
+                                <!-- nodes injected here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Inspector -->
+                    <div id="wf-inspector" class="w-72 shrink-0 border border-[#334155] rounded-xl bg-slate-950/40 flex flex-col overflow-hidden">
+                        <div class="bg-slate-900/40 px-3 py-1.5 border-b border-[#334155]">
+                            <span class="font-bold text-slate-300 text-[11px]"><i class="fa-solid fa-sliders mr-1.5 text-amber-400"></i> Inspector</span>
+                        </div>
+                        <div id="wf-inspector-body" class="flex-1 overflow-y-auto p-3 space-y-3 text-[11px]">
+                            <p class="text-slate-500 italic">Select a node to edit its properties.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced JSON (collapsible) -->
+                <div class="mt-3 border border-[#334155] rounded-xl overflow-hidden bg-slate-950/30">
+                    <button type="button" id="workflow-json-toggle" class="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-800/40">
+                        <span class="font-bold text-slate-300 text-[11px] flex items-center"><i class="fa-solid fa-code mr-1.5 text-indigo-400"></i> Advanced / workflows.json</span>
+                        <i id="workflow-json-chevron" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform"></i>
+                    </button>
+                    <div id="workflow-json-wrap" class="hidden">
+                        <textarea id="workflow-json-editor" class="w-full h-48 bg-[#0f172a] p-3 text-slate-300 font-mono text-[10px] leading-normal outline-none resize-y border-t border-[#334155]" placeholder="Paste or edit workflows.json schema here..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Footer Operations -->
+                <div class="pt-3 mt-3 border-t border-[#334155] flex items-center justify-between">
+                    <span id="workflow-validation-status" class="text-emerald-400 font-mono text-[10px] flex items-center">
+                        <i class="fa-solid fa-circle-check mr-1.5"></i> Ready.
+                    </span>
+                    <div class="flex space-x-2">
+                        <button type="button" id="workflow-console-back-btn-bottom" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Back to Console</button>
+                        <button type="button" id="workflow-apply-btn" class="px-5 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white transition font-bold text-xs shadow-md">Compile &amp; Apply</button>
+                    </div>
+                </div>
+
+                </div>
+            </section>
+
+        </main>
