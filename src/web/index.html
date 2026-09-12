@@ -563,7 +563,7 @@
                     <div class="flex items-center space-x-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155]">
                         <i class="fa-solid fa-diagram-project text-purple-400"></i>
                         <span class="text-slate-400">Active Workflow:</span>
-                        <select id="workflow-selector" onchange="switchWorkflow(this.value)" class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono font-bold text-xs rounded px-1.5 py-0.5 outline-none focus:border-purple-500 cursor-pointer">
+                        <select id="workflow-selector"  class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono font-bold text-xs rounded px-1.5 py-0.5 outline-none focus:border-purple-500 cursor-pointer">
                             <option value="">Loading...</option>
                         </select>
                     </div>
@@ -674,7 +674,7 @@
                     </div>
                     <div class="flex space-x-2">
                         <textarea id="ai-workflow-prompt" rows="1" class="flex-1 bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-sans leading-relaxed" placeholder="Describe your pipeline (e.g. 'BM25 search, then 3 parallel LLMs, then aggregate')..."></textarea>
-                        <button type="button" onclick="compileWorkflowWithAI()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-4 rounded text-xs transition flex items-center space-x-1.5 whitespace-nowrap">
+                        <button type="button" id="workflow-ai-compile-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-4 rounded text-xs transition flex items-center space-x-1.5 whitespace-nowrap">
                             <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Compile</span>
                         </button>
                     </div>
@@ -684,35 +684,35 @@
                 <div class="flex items-center justify-between mb-2 gap-2">
                     <div class="flex items-center space-x-2">
                         <div class="relative">
-                            <button type="button" onclick="toggleAddNodeMenu()" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 font-bold py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                            <button type="button" id="workflow-add-node-toggle" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 font-bold py-1.5 px-3 rounded text-xs flex items-center space-x-1">
                                 <i class="fa-solid fa-plus text-[10px]"></i><span>Add node</span><i class="fa-solid fa-chevron-down text-[8px] ml-1"></i>
                             </button>
                             <div id="add-node-menu" class="hidden absolute z-20 mt-1 w-52 bg-[#0f172a] border border-[#334155] rounded-md shadow-xl overflow-hidden">
-                                <button type="button" onclick="addNode('llm')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-robot w-5 text-purple-400"></i> LLM</button>
-                                <button type="button" onclick="addNode('bm25_search')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-magnifying-glass w-5 text-indigo-400"></i> BM25 Search</button>
-                                <button type="button" onclick="addNode('tool_execution')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-terminal w-5 text-cyan-400"></i> Tool Execution</button>
-                                <button type="button" onclick="addNode('conditional_router')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-route w-5 text-amber-400"></i> Conditional Router</button>
+                                <button type="button" data-add-node-kind="llm" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-robot w-5 text-purple-400"></i> LLM</button>
+                                <button type="button" data-add-node-kind="bm25_search" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-magnifying-glass w-5 text-indigo-400"></i> BM25 Search</button>
+                                <button type="button" data-add-node-kind="tool_execution" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-terminal w-5 text-cyan-400"></i> Tool Execution</button>
+                                <button type="button" data-add-node-kind="conditional_router" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-route w-5 text-amber-400"></i> Conditional Router</button>
                             </div>
                         </div>
-                        <button type="button" onclick="autoLayoutNodes()" title="Auto-arrange nodes" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                        <button type="button" id="workflow-auto-layout-btn" title="Auto-arrange nodes" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
                             <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i><span>Auto-layout</span>
                         </button>
-                        <button type="button" onclick="reloadGraphFromJson()" title="Reload graph from JSON" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                        <button type="button" id="workflow-reload-json-btn" title="Reload graph from JSON" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
                             <i class="fa-solid fa-arrows-rotate text-[10px]"></i><span>Reload JSON</span>
                         </button>
                     </div>
                     <div class="flex items-center gap-2">
                         <div class="flex items-center gap-2 rounded border border-[#334155]/60 bg-slate-900/25 px-2 py-1">
                             <span class="text-[10px] uppercase tracking-wider text-slate-500">Editing workflow</span>
-                            <select id="wf-lab-selector" onchange="switchLabWorkflow(this.value)" class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono text-xs rounded px-2 py-1.5 outline-none focus:border-purple-500 cursor-pointer" title="Switch workflow to edit"></select>
+                            <select id="wf-lab-selector"  class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono text-xs rounded px-2 py-1.5 outline-none focus:border-purple-500 cursor-pointer" title="Switch workflow to edit"></select>
                         </div>
-                        <button type="button" onclick="newWorkflow()" title="Create a new blank workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                        <button type="button" id="workflow-new-btn" title="Create a new blank workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
                             <i class="fa-solid fa-file-circle-plus text-[10px] text-emerald-400"></i><span class="hidden sm:inline">New</span>
                         </button>
-                        <button type="button" onclick="cloneWorkflow()" title="Clone the current workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                        <button type="button" id="workflow-clone-btn" title="Clone the current workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
                             <i class="fa-solid fa-copy text-[10px] text-blue-400"></i><span class="hidden sm:inline">Clone</span>
                         </button>
-                        <button type="button" onclick="deleteWorkflow()" title="Delete the current workflow" class="bg-slate-800 hover:bg-red-900 border border-[#334155] hover:border-red-700 text-slate-400 hover:text-red-300 py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                        <button type="button" id="workflow-delete-btn" title="Delete the current workflow" class="bg-slate-800 hover:bg-red-900 border border-[#334155] hover:border-red-700 text-slate-400 hover:text-red-300 py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
                             <i class="fa-solid fa-trash text-[10px]"></i><span class="hidden sm:inline">Delete</span>
                         </button>
                     </div>
@@ -747,7 +747,7 @@
 
                 <!-- Advanced JSON (collapsible) -->
                 <div class="mt-3 border border-[#334155] rounded-xl overflow-hidden bg-slate-950/30">
-                    <button type="button" onclick="toggleWorkflowJson()" class="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-800/40">
+                    <button type="button" id="workflow-json-toggle" class="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-800/40">
                         <span class="font-bold text-slate-300 text-[11px] flex items-center"><i class="fa-solid fa-code mr-1.5 text-indigo-400"></i> Advanced / workflows.json</span>
                         <i id="workflow-json-chevron" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform"></i>
                     </button>
@@ -763,7 +763,7 @@
                     </span>
                     <div class="flex space-x-2">
                         <button type="button" onclick="switchPrimarySurface('console')" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Back to Console</button>
-                        <button type="button" onclick="saveWorkflowConfigurations()" class="px-5 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white transition font-bold text-xs shadow-md">Compile &amp; Apply</button>
+                        <button type="button" id="workflow-apply-btn" class="px-5 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white transition font-bold text-xs shadow-md">Compile &amp; Apply</button>
                     </div>
                 </div>
 
@@ -805,19 +805,19 @@
         <div id="settings-dialog" class="bg-[#1e293b] border border-[#334155] w-full max-w-6xl rounded-xl shadow-2xl overflow-hidden modal-animate my-8 flex flex-col" style="max-height:88vh;">
             <div class="px-6 py-4 border-b border-[#334155] flex items-center justify-between bg-slate-900/40 select-none shrink-0">
                 <div class="flex items-center space-x-4">
-                    <button type="button" onclick="switchSettingsTab('standard')" id="btn-settings-tab-standard" class="font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition">
+                    <button type="button" id="btn-settings-tab-standard" class="font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition">
                         <i class="fa-solid fa-sliders mr-2"></i> Settings
                     </button>
-                    <button type="button" onclick="switchSettingsTab('providers')" id="btn-settings-tab-providers" class="font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition">
+                    <button type="button" id="btn-settings-tab-providers" class="font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition">
                         <i class="fa-solid fa-plug-circle-bolt mr-2"></i> Providers
                     </button>
                 </div>
-                <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-white transition">
+                <button id="settings-close-btn" class="text-slate-400 hover:text-white transition">
                     <i class="fa-solid fa-xmark text-sm"></i>
                 </button>
             </div>
 
-            <form id="settings-form" onsubmit="saveSettings(event)" class="flex-1 min-h-0 flex flex-col text-xs">
+            <form id="settings-form"  class="flex-1 min-h-0 flex flex-col text-xs">
                 <div id="settings-panel-standard" class="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
                 
                 <div class="rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-[11px] text-slate-300 leading-relaxed">
@@ -831,7 +831,7 @@
                             <div class="font-bold text-slate-200">Current connections</div>
                             <div class="text-[10px] uppercase tracking-wider text-slate-500">Visible here so provider assignment is not trapped in another tab</div>
                         </div>
-                        <button type="button" onclick="switchSettingsTab('providers')" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Manage Profiles</button>
+                        <button type="button" id="settings-manage-profiles-btn" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Manage Profiles</button>
                     </div>
                     <div id="settings-connections-summary" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs"></div>
                 </div>
@@ -846,14 +846,14 @@
                             <i class="fa-solid fa-plug-circle-bolt text-amber-400 mr-1.5"></i> Connection Profile
                             <span class="ml-2 text-[9px] font-normal text-slate-500">— choose a saved profile from providers.json, or “inline” to edit fields below</span>
                         </label>
-                        <select id="input-provider-profile" onchange="onChatProfileChange(this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
+                        <select id="input-provider-profile"  class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
                             <option value="">— inline (use fields below) —</option>
                         </select>
                     </div>
                     <div id="inline-api-fields" class="space-y-3">
                         <div>
                             <label class="block text-slate-300 font-bold mb-1.5">API Provider</label>
-                            <select id="input-provider" onchange="suggestBaseURL(this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500">
+                            <select id="input-provider"  class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500">
                                 <option value="openai">OpenAI (OpenAI, DeepSeek, Groq, Ollama)</option>
                                 <option value="anthropic">Anthropic (Claude API)</option>
                                 <option value="gemini">Google Gemini (AI Studio)</option>
@@ -945,7 +945,7 @@
                         <label class="block text-slate-300 font-bold mb-1.5 flex items-center text-[11px]">
                             <i class="fa-solid fa-plug-circle-bolt text-amber-400 mr-1.5"></i> Compaction Profile
                         </label>
-                        <select id="input-compact-profile" onchange="onCompactProfileChange(this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
+                        <select id="input-compact-profile"  class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
                             <option value="">— inline (use fields below) —</option>
                         </select>
                     </div>
@@ -960,7 +960,7 @@
                         <div class="col-span-2 text-[10px] font-bold text-slate-400 uppercase">Compaction API Provider Configurations</div>
                         <div>
                             <label class="block text-slate-300 font-bold mb-1.5">Compaction Provider</label>
-                            <select id="input-compact-provider" onchange="suggestCompactBaseURL(this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500">
+                            <select id="input-compact-provider"  class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 outline-none focus:border-blue-500">
                                 <option value="openai">OpenAI (OpenAI, DeepSeek, Groq, Ollama)</option>
                                 <option value="anthropic">Anthropic (Claude API)</option>
                                 <option value="gemini">Google Gemini (AI Studio)</option>
@@ -1067,7 +1067,7 @@
                             <label class="block text-slate-300 font-bold mb-1">Ignored Patterns (e.g. .git, venv)</label>
                             <div class="flex space-x-1.5 mb-1.5">
                                 <input type="text" id="add-ignore-input" placeholder="e.g. *.tmp" class="flex-1 bg-[#0f172a] border border-[#334155] rounded px-2.5 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
-                                <button type="button" onclick="addIgnorePattern()" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 hover:text-white px-3 rounded font-bold text-xs">Add</button>
+                                <button type="button" id="settings-add-ignore-btn" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 hover:text-white px-3 rounded font-bold text-xs">Add</button>
                             </div>
                             <div id="ignore-chips-list" class="flex flex-wrap gap-1 max-h-24 overflow-y-auto bg-slate-900/30 p-2 rounded border border-[#334155]/60">
                                 <!-- Chips will render here -->
@@ -1077,7 +1077,7 @@
                             <label class="block text-slate-300 font-bold mb-1">Collapsed Directories (e.g. node_modules)</label>
                             <div class="flex space-x-1.5 mb-1.5">
                                 <input type="text" id="add-collapse-input" placeholder="e.g. target" class="flex-1 bg-[#0f172a] border border-[#334155] rounded px-2.5 py-1.5 text-slate-100 font-mono outline-none focus:border-blue-500">
-                                <button type="button" onclick="addCollapsePattern()" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 hover:text-white px-3 rounded font-bold text-xs">Add</button>
+                                <button type="button" id="settings-add-collapse-btn" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 hover:text-white px-3 rounded font-bold text-xs">Add</button>
                             </div>
                             <div id="collapse-chips-list" class="flex flex-wrap gap-1 max-h-24 overflow-y-auto bg-slate-900/30 p-2 rounded border border-[#334155]/60">
                                 <!-- Chips will render here -->
@@ -1108,7 +1108,7 @@
                                     <input type="text" id="mcp-cmd-input" placeholder="e.g. uvx or npx" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1 text-slate-100 font-mono outline-none focus:border-blue-500">
                                 </div>
                                 <div class="flex items-end">
-                                    <button type="button" onclick="addMCPServer()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded text-xs transition flex items-center justify-center space-x-1">
+                                    <button type="button" id="settings-add-mcp-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded text-xs transition flex items-center justify-center space-x-1">
                                         <i class="fa-solid fa-plug"></i> <span>Add Server</span>
                                     </button>
                                 </div>
@@ -1132,7 +1132,7 @@
 
                 <!-- Modal Footer Actions (standard settings only) -->
                 <div id="settings-standard-footer" class="pt-4 mt-2 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/40 -mx-6 px-6 py-3 shrink-0">
-                    <button type="button" onclick="closeSettingsModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
+                    <button type="button" id="settings-cancel-btn" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
                         Cancel
                     </button>
                     <button type="submit" class="px-5 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white transition font-bold shadow-md">
@@ -1148,7 +1148,7 @@
                         <div class="font-bold text-slate-200 flex items-center"><i class="fa-solid fa-plug-circle-bolt mr-2 text-amber-400"></i> Connection Profiles</div>
                         <p class="text-slate-500 mt-1">Named API connections reusable across the active chat, the compaction engine, and every workflow node. Stored in <code class="text-slate-400">providers.json</code> (git-ignored).</p>
                     </div>
-                    <button type="button" onclick="newProviderForm()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-3 rounded text-xs transition flex items-center space-x-1">
+                    <button type="button" id="settings-new-provider-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-3 rounded text-xs transition flex items-center space-x-1">
                         <i class="fa-solid fa-plus"></i><span>New Profile</span>
                     </button>
                 </div>
@@ -1157,13 +1157,13 @@
                 <div class="grid grid-cols-2 gap-3 bg-slate-900/30 p-3 rounded border border-[#334155]/50">
                     <div>
                         <label class="block text-slate-400 font-bold mb-1">Active Chat Profile</label>
-                        <select id="active-chat-profile" onchange="setActiveProfile(this.value, 'chat')" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
+                        <select id="active-chat-profile"  class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
                             <option value="">— inline config.api —</option>
                         </select>
                     </div>
                     <div>
                         <label class="block text-slate-400 font-bold mb-1">Compaction Profile</label>
-                        <select id="active-compaction-profile" onchange="setActiveProfile(this.value, 'compaction')" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
+                        <select id="active-compaction-profile"  class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-200 outline-none focus:border-blue-500 font-mono">
                             <option value="">— inline compaction —</option>
                         </select>
                     </div>
@@ -1173,7 +1173,7 @@
                 <div id="provider-editor" class="hidden bg-slate-900/40 border border-[#334155] rounded-lg p-4 space-y-3">
                     <div class="flex items-center justify-between">
                         <span id="provider-editor-title" class="font-bold text-slate-200">New Profile</span>
-                        <button type="button" onclick="closeProviderForm()" class="text-slate-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                        <button type="button" id="provider-close-btn" class="text-slate-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
@@ -1182,7 +1182,7 @@
                         </div>
                         <div>
                             <label class="block text-slate-400 mb-1">Provider</label>
-                            <select id="pe-provider" onchange="suggestProviderBaseUrl(this.value)" class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500">
+                            <select id="pe-provider"  class="w-full bg-[#0f172a] border border-[#334155] rounded px-2 py-1.5 text-slate-100 outline-none focus:border-blue-500">
                                 <option value="openai">OpenAI (DeepSeek/Groq/Ollama)</option>
                                 <option value="anthropic">Anthropic (Claude)</option>
                                 <option value="gemini">Google Gemini (AI Studio)</option>
@@ -1237,8 +1237,8 @@
                         <label for="pe-is-active" class="text-slate-300">Set as active chat profile</label>
                     </div>
                     <div class="flex justify-end space-x-2 pt-2 border-t border-[#334155]">
-                        <button type="button" onclick="closeProviderForm()" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 font-bold text-xs">Cancel</button>
-                        <button type="button" onclick="saveProvider()" class="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs">Save Profile</button>
+                        <button type="button" id="provider-cancel-btn" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 font-bold text-xs">Cancel</button>
+                        <button type="button" id="settings-save-provider-btn" class="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs">Save Profile</button>
                     </div>
                 </div>
 

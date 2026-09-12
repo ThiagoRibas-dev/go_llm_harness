@@ -83,13 +83,15 @@ window.addEventListener("DOMContentLoaded", () => {
   actions.switchConversationView("chat");
   actions.switchDetailsTab("trajectory");
   actions.initShellResizers();
+  actions.initSettingsBindings();
+  actions.initWorkflowBindings();
   actions.initWorkflowLabEvents();
   actions.syncRailButtons();
 });
 
 function exposeInlineHandlerFunctions() {
   const names = [
-    "toggleSidebar", "openSettingsModal", "activateRailSection", "switchPrimarySurface", "toggleDetailsPanel", "triggerNewSession", "triggerFileUpload", "uploadSelectedFile", "addNewWorkspace", "createSnapshot", "triggerCompaction", "switchWorkflow", "switchConversationView", "switchDetailsTab", "submitPrompt", "handleComposerShellClick", "handleInputKeydown", "handleComposerInput", "triggerReroll", "runComposerCta", "compileWorkflowWithAI", "toggleAddNodeMenu", "addNode", "autoLayoutNodes", "reloadGraphFromJson", "switchLabWorkflow", "newWorkflow", "cloneWorkflow", "deleteWorkflow", "toggleWorkflowJson", "saveWorkflowConfigurations", "switchSettingsTab", "closeSettingsModal", "saveSettings", "onChatProfileChange", "suggestBaseURL", "onCompactProfileChange", "suggestCompactBaseURL", "addIgnorePattern", "addCollapsePattern", "addMCPServer", "newProviderForm", "setActiveProfile", "closeProviderForm", "suggestProviderBaseUrl", "saveProvider", "closeForkModal", "toggleForkFields", "executeForkAction", "stageWorkspaceFile", "switchSidebarTab", "openWorkspaceFile", "editQueuedMessage", "removeQueuedMessage", "clearStagedContext", "removeStagedContext", "changeWorkspaceFromSelector", "removeWorkspaceFromHistory", "selectSession", "renameSessionPrompt", "deleteSessionConfirm", "seedPromptExample", "enableCardEdit", "triggerFork", "toggleCardMetrics", "toggleWfPreview", "setNodeProfile", "updateNodeProp", "toggleNodeTools", "toggleNodeTool", "addLlmInput", "removeLlmInput", "renameNode", "deleteSelectedNode", "removeIgnorePattern", "removeCollapsePattern", "revertToSnapshot", "deleteSnapshot", "deleteMCPServer", "removeContextPin", "saveAndBranchCard", "cancelCardEdit", "editProvider", "deleteProvider"
+    "toggleSidebar", "openSettingsModal", "activateRailSection", "switchPrimarySurface", "toggleDetailsPanel", "triggerNewSession", "triggerFileUpload", "uploadSelectedFile", "addNewWorkspace", "createSnapshot", "triggerCompaction", "switchConversationView", "switchDetailsTab", "submitPrompt", "handleComposerShellClick", "handleInputKeydown", "handleComposerInput", "triggerReroll", "runComposerCta", "closeForkModal", "toggleForkFields", "executeForkAction", "stageWorkspaceFile", "switchSidebarTab", "openWorkspaceFile", "editQueuedMessage", "removeQueuedMessage", "clearStagedContext", "removeStagedContext", "changeWorkspaceFromSelector", "removeWorkspaceFromHistory", "selectSession", "renameSessionPrompt", "deleteSessionConfirm", "seedPromptExample", "enableCardEdit", "triggerFork", "toggleCardMetrics", "toggleWfPreview", "removeContextPin", "saveAndBranchCard", "cancelCardEdit"
   ];
   for (const name of names) {
     if (typeof actions[name] === "function") window[name] = actions[name];

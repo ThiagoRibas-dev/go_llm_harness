@@ -219,8 +219,14 @@ The frontend no longer lives in a single inline-script page. It is now served as
 - `src/web/js/composer.js`
 - `src/web/js/sessions.js`
 - `src/web/js/settings.js`
+- `src/web/js/settings_runtime.js`
+- `src/web/js/settings_profiles.js`
+- `src/web/js/settings_ops.js`
 - `src/web/js/events.js`
 - `src/web/js/workflow_graph.js`
+- `src/web/js/workflow_canvas.js`
+- `src/web/js/workflow_inspector.js`
+- `src/web/js/workflow_validation.js`
 - `src/web/js/workflow_manager.js`
 - `src/web/js/helpers.js`
 - `src/web/js/renderers.js`
@@ -232,19 +238,27 @@ The frontend no longer lives in a single inline-script page. It is now served as
 - Settings modal markup
 - fork/branch modal markup
 - inline CSS
-- transitional inline `onclick` / `onchange` / `onkeydown` handlers
+- a shrinking set of transitional inline handlers
+
+At the moment, the static Settings and Workflow Lab controls have been moved off inline HTML handlers and onto bound listeners / delegated actions. The remaining inline handlers are concentrated in the older shell/conversation/session surfaces and a few runtime-generated actions.
 
 ### What the JS modules now own
 
-- `app.js` — thin composition root and inline-handler bridge
+- `app.js` — thin composition root and temporary inline-handler bridge
 - `state.js` — shared mutable app/session/workflow state
 - `shell.js` — shell routing, details panel, layout concessions, file/tool/deliverable panels
 - `chat.js` — transcript cards, alerts, empty hero, workflow trace cards, sub-agent cards
 - `composer.js` — queueing, staged context, triggers, slash handling, dispatch, composer state
 - `sessions.js` — workspaces, sessions, branching, uploads, pinned context
-- `settings.js` — runtime settings, profiles UI, snapshots, MCP, exclusions
+- `settings.js` — settings composition root and DOM bindings
+- `settings_runtime.js` — runtime config form population, save flow, modal tabs, config fetch
+- `settings_profiles.js` — provider profile cards/editor, active profile assignment, profile selectors
+- `settings_ops.js` — exclusions, snapshots, MCP, compaction utility actions
 - `events.js` — SSE connection and event fan-out
-- `workflow_graph.js` — DAG canvas, edges, node editing, inspector, validation, JSON sync
+- `workflow_graph.js` — workflow graph composition root and DOM bindings
+- `workflow_canvas.js` — DAG canvas, nodes, edges, drag/connect, selection, add/delete node operations
+- `workflow_inspector.js` — workflow node inspector rendering and node property mutation flows
+- `workflow_validation.js` — validation, JSON sync, JSON reload, advanced JSON drawer state
 - `workflow_manager.js` — workflow loading, runtime selector sync, AI draft generation, save/apply lifecycle
 
 ### Major interaction surfaces in the current app
@@ -700,8 +714,14 @@ src/web/
     ├── composer.js
     ├── sessions.js
     ├── settings.js
+    ├── settings_runtime.js
+    ├── settings_profiles.js
+    ├── settings_ops.js
     ├── events.js
     ├── workflow_graph.js
+    ├── workflow_canvas.js
+    ├── workflow_inspector.js
+    ├── workflow_validation.js
     ├── workflow_manager.js
     ├── helpers.js
     └── renderers.js
@@ -718,6 +738,8 @@ Why this shape was chosen first:
 Longer-term, we can still split into deeper subdirectories (`chat/`, `workflow/`, `settings/`, etc.), but the important step was to establish **real ownership seams** first:
 - `chat.js` vs `composer.js`
 - `workflow_graph.js` vs `workflow_manager.js`
+- `settings.js` as a composition root over `settings_runtime.js`, `settings_profiles.js`, and `settings_ops.js`
+- `workflow_graph.js` as a composition root over `workflow_canvas.js`, `workflow_inspector.js`, and `workflow_validation.js`
 - `shell.js` vs `settings.js` vs `sessions.js`
 - `events.js` vs stateful UI modules
 
@@ -854,12 +876,17 @@ Split it according to the new ownership model:
 
 Phase 6 has crossed the important threshold: the old giant frontend script is gone, and the former `app.js` super-file has been broken into domain modules.
 
-What is still true:
-- the HTML still relies on a temporary inline-handler bridge from `app.js` to `window`
-- `settings.js` is still broad and can be split again later
-- `workflow_graph.js` is still one of the larger modules and can eventually shed inspector/validation/json concerns into smaller files
+What is true now:
+- the HTML still relies on a temporary inline-handler bridge from `app.js` to `window`, but that surface is smaller than before
+- static Settings and Workflow Lab controls now use bound listeners instead of inline HTML handlers
+- the workflow inspector now uses delegated `data-action` handling instead of generating inline handler strings
+- `settings.js` and `workflow_graph.js` are now composition roots rather than broad implementation blobs
+- the remaining bigger modules are now narrower, especially `workflow_canvas.js` and `composer.js`
 
-But the core architectural debt has changed shape from **one unstable super-file** to **several domain-owned modules**, which is the correct intermediate state.
+Observed evidence after this pass:
+- inline handler resolution checks dropped from **80** to **45** in `node scripts/lint-html.js`
+
+So the debt has moved again in the right direction: from **one unstable super-file** to **domain modules**, and then from **broad domain modules with heavy inline coupling** to **smaller modules with more local listener ownership**.
 
 ---
 
@@ -938,6 +965,8 @@ Instead:
 | 2026-09-12 | Keep explicitness as a product rule | UI must not present ignored or redundant controls as if they matter |
 | 2026-09-12 | Use a flat domain-first ES module tree as the immediate implementation target | Removes the monolith quickly without bundler/deeper directory churn |
 | 2026-09-12 | Split transcript/composer and workflow graph/manager before further feature accretion | These were the two remaining oversized ownership blobs after the first ESM pass |
+| 2026-09-12 | Split settings and workflow graph internals again before chasing more UI features | Keeps ownership local and prevents second-generation module blobs |
+| 2026-09-12 | Start replacing inline HTML handlers with bound listeners and delegated `data-action` flows | Reduces global `window` exports and makes module ownership real, not cosmetic |
 
 ---
 
