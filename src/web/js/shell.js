@@ -202,7 +202,7 @@ export function createShellModule({ state, actions, escapeHtml, deliverablePaths
       <div class="rounded-lg border border-[#334155] bg-slate-900/25 p-4 space-y-3">
         <div>
           <div class="font-bold text-slate-200">History utilities</div>
-          <div class="mt-1 text-[11px] leading-relaxed text-slate-400">Snapshots and compaction are currently utility actions. This panel is their long-term home once the dedicated details surface matures.</div>
+          <div class="mt-1 text-[11px] leading-relaxed text-slate-400">Open snapshots or run a manual compaction.</div>
         </div>
         <div class="flex flex-wrap gap-2">
           <button type="button" data-activate-rail-section="snapshots" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 text-xs font-bold">Open Snapshots</button>

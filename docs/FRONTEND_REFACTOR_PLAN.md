@@ -916,6 +916,7 @@ What is true now:
 - the page is assembled server-side from embedded partials, so HTML can be split without adding a bundler or browser-side fragment fetches
 - static shell, settings, workflow, composer, and fork controls are bound through module-owned listeners
 - dynamic transcript, details, queue, staged-context, workspace, provider, snapshot, MCP, and workflow-inspector actions now use delegated `data-*` hooks instead of inline handler strings
+- migration-era UI narration was stripped back so implementation history lives in docs/comments instead of persistent user-facing labels
 - `settings.js` and `workflow_graph.js` are now composition roots rather than broad implementation blobs
 - the remaining bigger modules are now narrower, especially `workflow_canvas.js`, `sessions.js`, and `composer.js`
 
@@ -1006,6 +1007,7 @@ Instead:
 | 2026-09-12 | Start replacing inline HTML handlers with bound listeners and delegated `data-action` flows | Reduces global `window` exports and makes module ownership real, not cosmetic |
 | 2026-09-12 | Finish removing inline HTML event handlers from the current shell | Makes the ES module split operationally real instead of relying on `window` bridges |
 | 2026-09-12 | Let large HTML partials become composition roots too | Keeps source manageable without abandoning embedded-asset server-side assembly |
+| 2026-09-12 | Strip migration/architecture narration from persistent UI copy | Keep truthful state text in-product; keep refactor commentary in docs/comments |
 
 ---
 
