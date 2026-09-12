@@ -793,13 +793,13 @@ Split it according to the new ownership model:
 - make the composer the true interaction hub
 
 ### Tasks
-- [ ] Add status/action row near composer for provider, model, tools, approvals, sources, and scope.
-- [ ] Add staged evidence strip so retrieved files/search hits/web pages are visible before send.
-- [ ] Add queued steering/follow-up rows with clear remove/edit interactions.
-- [ ] Add `/`, `@`, and `!` trigger overlay anchored to the caret or composer seat.
-- [ ] Add in-place approvals/questions takeover instead of routing these through modals.
-- [ ] Add clear blocked-state recovery action patterns with exactly one primary unblock action.
-- [ ] Preserve submit/newline semantics while adding queue semantics: idle Enter submits, running Enter queues steering, Alt+Enter queues follow-up.
+- [x] Add status/action row near composer for provider, model, tools, approvals, sources, and scope.
+- [x] Add staged evidence strip so retrieved files/search hits/web pages are visible before send. *(Current first pass stages files and deliverables; search/web sources can plug into the same strip later.)*
+- [x] Add queued steering/follow-up rows with clear remove/edit interactions.
+- [x] Add `/`, `@`, and `!` trigger overlay anchored to the caret or composer seat.
+- [ ] Add in-place approvals/questions takeover instead of routing these through modals. *(Blocked on the backend approval/question event path; the takeover surface now exists for blocked-state recovery and future wiring.)*
+- [x] Add clear blocked-state recovery action patterns with exactly one primary unblock action.
+- [x] Preserve submit/newline semantics while adding queue semantics: idle Enter submits, running Enter queues steering, Alt+Enter queues follow-up.
 
 ---
 

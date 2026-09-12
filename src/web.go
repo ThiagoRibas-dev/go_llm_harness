@@ -909,6 +909,26 @@ func StartWebGUI(port int) {
 		})
 	})
 
+	mux.HandleFunc("/api/command", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Command string `json:"command"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		result := executeTerminalCommand(nil, req.Command)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"command": req.Command,
+			"result":  result,
+		})
+	})
+
 	mux.HandleFunc("/api/prompt", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)
