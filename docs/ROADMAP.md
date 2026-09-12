@@ -2,6 +2,8 @@
 
 This document outlines the strategic engineering roadmap for evolving **GoHarness** from a lightweight, single-file prototype into a **production-grade, local-first, modular, and sandboxed AI Agent Runner**.
 
+> For the **execution-grade, dependency-aware implementation view**, see [`docs/ROADMAP_EXECUTION.md`](./ROADMAP_EXECUTION.md). This file remains the historical + comparative research ledger.
+
 While GoHarness is structurally and functionally built as an elite coding companion, its underlying systems (plain-text turn serialization, sliding-window compaction, and API gateways) are fully agnostic. It is designed as a **generalized, high-performance cognitive shell** optimized for:
 1. **💻 Bare-Metal Systems Engineering & Coding:** Running sandbox terminals, patching code, and writing projects.
 2. **✍️ Long-Form Creative Writing:** Organizing research files, compiling structures, and managing outlines.
