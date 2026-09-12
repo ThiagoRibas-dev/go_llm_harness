@@ -37,7 +37,7 @@ Supporting documents remain useful, but they are **reference material**, not par
 ## Supporting documents (reference material, not roadmap files)
 
 - `docs/mockups/ui-mockup.html` — post-roadmap UI direction mockup
-- `docs/FRONTEND_REFACTOR_PLAN.md` — ES Modules frontend split plan
+- `docs/FRONTEND_REFACTOR_PLAN.md` — web UI maturation + ES Modules frontend split plan
 - `docs/RESEARCH.md` — bibliography / inspiration ledger
 - `docs/COMPARISON_MATRIX.md` — older broad comparative notes
 - `docs/GIT_HISTORY.md` — implementation and documentation chronology
@@ -136,6 +136,19 @@ These chains explain why some items are ready and some are not.
 4. **12.20** code mode / model-written programs
 5. **14.6** worktree-aware isolation
 6. **13.4 / 11.13 / 12.24** full plugin packaging/distribution model
+
+### Immediate UI next step
+
+Before landing more **UI-facing** capability work, execute the shell-maturity pass in [`docs/FRONTEND_REFACTOR_PLAN.md`](./FRONTEND_REFACTOR_PLAN.md).
+
+That document is now the operational plan for:
+- consolidating redundant interactions,
+- promoting Workflow Lab out of Settings,
+- restructuring the app around a DSH-style left/center/right ownership model,
+- maturing the composer into the main interaction hub,
+- and only then splitting the frontend into ES modules along the new boundaries.
+
+The intent is to stop accreting visible features onto a modal-heavy, duplicated interaction model.
 
 ---
 

@@ -1,355 +1,779 @@
-# Frontend Refactor & CI Plan
+# Frontend Refactor & UI Maturation Plan
 
-> **Status:** In progress
+> **Status:** Active
 > **Owner:** Arena.ai Agent Mode
-> **Last updated:** 2026-08-16
+> **Last updated:** 2026-09-12
 
-This document is the single source of truth for two related efforts:
+This document is the working plan for maturing the GoHarness web UI **before** we pile on more user-facing features.
 
-1. **Continuous Integration** — automated HTML/JS linting, Go tests, and
-   cross-platform binary builds on GitHub Actions.
-2. **The Great `index.html` Decomposition** — refactoring the 3,700-line
-   monolithic single-file SPA into ES modules, without introducing a Node
-   bundler/toolchain to the runtime.
+It consolidates three things into one source of truth:
 
-It is a **living document**: as work lands, check boxes, update statuses, and
-record decisions so anyone (human or agent) can pick up where the last session
-left off.
+1. **Current-state audit** of the shipped embedded web UI.
+2. **Target interaction model** informed primarily by **DeepSeek Harness** UI patterns, plus the useful adjacent lessons from `tldw_chatbook`.
+3. **Implementation plan** for restructuring the shell and then decomposing the monolithic frontend into ES modules.
+
+This is not just a code-organization plan anymore. It is a **UI architecture plan**.
 
 ---
 
-## 1. Goals & Non-Goals
+## 1. Why this should happen now
+
+GoHarness already has a surprising amount of capability in the browser:
+
+- workspace switching
+- session management
+- snapshots
+- provider profiles
+- MCP management
+- workflow editing
+- tool-call rendering
+- sub-agent progress
+- rollback / branching
+- cost/token displays
+
+But the UI still behaves like a collection of powerful internal controls rather than a coherent shell.
+
+The biggest risk is not that the UI is broken. The biggest risk is that we keep shipping more visible features into a shell that still has poor surface boundaries:
+
+- too many things live inside the Settings modal
+- too many concepts can be changed from multiple places
+- too many fields are raw text instead of constrained pickers
+- some tabs/panels are visually first-class but not interactionally first-class
+- file and workspace interaction feel more like diagnostics than navigation
+
+If we fix the shell now, later features like approvals, `@file`, `/commands`, trajectory, deliverables, plan mode, and background jobs will slot into stable places instead of forcing another full UI rethink.
+
+---
+
+## 2. Constraints and product rules
+
+### Hard constraints
+
+- Keep GoHarness **single-binary** and **embedded-asset** based.
+- No runtime Node/Vite/webpack/esbuild dependency.
+- The frontend remains browser-delivered from Go `//go:embed` assets.
+- Use **ES modules** for the refactor.
+- Preserve current product capabilities while reshaping their surfaces.
+
+### Product rules
+
+1. **One important object should have one obvious home.**
+   - Workspace selection is navigation, not general settings.
+   - Workflow editing is a product surface, not a settings subsection.
+
+2. **Do not fake affordances.**
+   - If something is blocked, inert, unavailable, or ignored by runtime, the UI must say so directly.
+
+3. **Prefer constrained controls over raw text when the valid set is knowable.**
+   - Pickers before free-text.
+   - Disclosures before giant always-visible advanced forms.
+
+4. **Inline takeover beats modal explosion.**
+   - Approvals, questions, staged context, queue rows, and plan strips belong in or near the composer.
+
+5. **Inspection should live in an inspection surface.**
+   - Trajectory, file preview, sub-agent details, run ledgers, and deliverables belong in a details panel or equivalent, not buried in settings.
+
+6. **The shell should be spatially stable.**
+   - Left = navigate
+   - Center = converse / act
+   - Right = inspect
+
+---
+
+## 3. Reference model: what DeepSeek Harness gets right
+
+DeepSeek Harness is the primary reference for **shell ownership and UI surface boundaries**, not because we want to clone its styling, but because it makes object interactions more coherent.
+
+### Useful DSH patterns to copy
+
+- **Three-column shell**: sidebar / conversation / details
+- **Conversation stays mounted** while views swap
+- **Settings are a surface**, not a mega-modal
+- **Trajectory / inspector** live in a details view, not in transcript clutter
+- **Composer is a stack**, not just one textarea
+- **Approvals/questions take over the composer in place**
+- **Workspace/session browser is a true navigation surface**
+- **Deliverables are first-class**
+- **Typed renderers** for terminal, diff, read, search, web blocks
+- **Visibility rules** are deliberate: what is navigation vs state vs inspection is obvious
+
+### Useful `tldw_chatbook` adjacent lessons
+
+- truthful blocked states with recovery instructions
+- explicit distinction between Search and grounded/RAG answer modes
+- staged evidence handoff into conversation
+- clear separation between agent tools and any explicitly user-owned persistent terminal
+- artifact / portable-bundle mindset for outputs
+
+---
+
+## 4. Current UI architecture snapshot
+
+The current frontend still lives mostly inside one file:
+
+- `src/web/index.html`
+
+It currently contains:
+
+- top header
+- left sidebar with `Files / Sessions / Snapshots`
+- central transcript + composer
+- giant Settings modal
+- fork/branch modal
+- providers editor nested inside Settings
+- workflow editor nested inside Settings
+- inline CSS
+- large inline JS behavior surface
+
+### Major interaction surfaces in the current file
+
+- header settings trigger: `openSettingsModal()`
+- sidebar tabs: `switchSidebarTab('files'|'sessions'|'snapshots')`
+- workspace selector: `workspace-history-select`
+- workspace add: `new-workspace-input` + `addNewWorkspace()`
+- session list: `selectSession(...)`
+- workflow selector in header: `workflow-selector`
+- workflow lab editor selector: `wf-lab-selector`
+- settings modal tabs: `switchSettingsTab('standard'|'workflow'|'providers')`
+- composer: `prompt-form`, `submitPrompt(...)`, `handleInputKeydown(...)`
+- timeline fork modal: `triggerFork(...)`, `executeForkAction()`
+
+---
+
+## 5. Current-state audit: structure, content, and interaction problems
+
+## 5.1 Misclassified surfaces
+
+### A. Workflow Lab is incorrectly housed inside Settings
+**Current:** `settings-panel-workflow`
+
+This is one of GoHarness's strongest product surfaces and one of its largest UI systems, yet it is treated as a tab inside the Settings modal.
+
+#### Why this is a problem
+- It is cramped by modal height/width constraints.
+- It is visually categorized as configuration instead of work.
+- It creates too much nesting: Settings → Workflow → Graph → Inspector → JSON.
+- It discourages a future where the active workflow, live trace, and workflow editing all relate coherently.
+
+#### DSH comparison
+DSH gives major surfaces real seats in the shell. It does not hide a product-defining interaction model inside a general settings container.
+
+#### Decision
+**Workflow Lab should become a first-class app surface.**
+
+---
+
+### B. Snapshots are over-promoted
+**Current:** top-level sidebar tab peer to Files and Sessions.
+
+#### Why this is a problem
+Snapshots are useful, but they are not an equal-frequency navigation object compared to:
+- workspace/session selection
+- active conversation
+- file/context inspection
+
+Treating them as a primary sidebar tab increases shell complexity for little gain.
+
+#### Decision
+**Demote Snapshots** into a secondary surface:
+- details panel section,
+- session/history utility,
+- or a smaller history tools view.
+
+---
+
+### C. Settings own too many unrelated concepts
+The current Standard Settings tab mixes:
+- active provider/model settings
+- compaction settings
+- workspace path
+- sandbox settings
+- scan dirs
+- ignore/collapse patterns
+- MCP server management
+
+#### Why this is a problem
+The user has to mentally parse whether they are:
+- changing current chat behavior
+- changing app-wide runtime config
+- choosing a connection profile
+- editing advanced infrastructure
+- editing the workspace itself
+
+#### Decision
+Settings need **progressive disclosure** and **stronger grouping**, with several major surfaces moved out.
+
+---
+
+## 5.2 Redundant interactions
+
+### A. Workspace switching happens in too many places
+Current workspace-touching interactions:
+1. workspace dropdown in Sessions tab
+2. clickable workspace history rows
+3. add workspace via free-text input
+4. `workspace_dir` free-text field in Settings
+5. implicit workspace changes via session selection
+
+#### Problem
+One concept has too many homes. Navigation and configuration are mixed.
+
+#### DSH comparison
+DSH treats workspace/session selection as navigation, not as a general settings field.
+
+#### Decision
+Keep:
+- one primary workspace/session browser
+- one secondary add/validate flow
+
+Remove:
+- workspace path editing from standard settings
+
+---
+
+### B. Workflow selection is split across runtime and editing with weak separation
+Current workflow interactions:
+1. header `workflow-selector` switches active runtime workflow
+2. `/workflow` slash behavior also switches active workflow
+3. `wf-lab-selector` chooses which workflow to edit
+4. JSON editor directly edits workflow schema
+5. AI compiler stages another draft
+
+#### Problem
+There are really three distinct actions here:
+- choose active runtime workflow
+- choose workflow to edit
+- edit workflow definition
+
+The UI exposes those capabilities, but does not make the distinctions obvious enough.
+
+#### Decision
+Keep these as separate concepts, but **separate them by surface**:
+- runtime selection in main shell
+- editing target in Workflow Lab
+- advanced JSON only inside Workflow Lab
+
+---
+
+### C. File pinning is manual despite the app already knowing the filesystem
+Current interaction:
+- user types into `quick-pin-input`
+- tree is visible elsewhere
+
+#### Problem
+Typing file paths manually is redundant and fragile when the app already has a workspace tree.
+
+#### Decision
+Pinning should come from:
+- `@file` picker,
+- file browser clicks,
+- or search results,
+not free-text typing.
+
+---
+
+### D. Recovery actions are fragmented
+Current actions include:
+- reroll
+- edit & fork
+- rollback / branch
+- destructive truncate inside fork modal
+
+#### Problem
+All of these are legitimate, but they do not present one clear mental model for recovery/history.
+
+#### Decision
+Future organization should distinguish:
+- retry last assistant result
+- branch from here
+- rewind to here
+- inspect turn details
+
+These should be grouped under a coherent history model, not scattered as ad hoc buttons.
+
+---
+
+## 5.3 Fake or weakly-realized interactions
+
+### A. Snapshots tab is not treated as a truly first-class tab
+The UI visually presents three peer tabs, but the switching logic is still largely "files vs not-files" in spirit.
+
+### B. Files pane behaves more like a styled report than a browser
+The workspace tree is visible, but it is not yet a strong interaction surface for:
+- open
+- preview
+- pin
+- mention
+- inspect
+
+### C. Settings looks like configuration, but contains major product workspaces
+Workflow Lab is the clearest example.
+
+### D. Composer looks like the main control hub, but lacks the real command vocabulary
+Missing first-class live interactions include:
+- `@file`
+- `/commands`
+- `!command`
+- queue rows
+- staged evidence strip
+- plan/todo strip
+- approvals takeover
+- details-linked inspection
+
+---
+
+## 5.4 Interaction model gaps versus DSH
+
+### DSH is stronger because it has better object ownership
+
+| Concept | DSH tendency | Current GoHarness tendency |
+|---|---|---|
+| Workspace/session | navigation | split across tabs, settings, history widgets |
+| Settings | settings surface | mega-modal containing multiple product worlds |
+| Workflow editing | dedicated surface | nested settings tab |
+| File interaction | contextual references + details | static tree + manual typing |
+| Approvals/questions | composer takeover | mostly future work / modal-ish mental model |
+| Inspection | details panel | mixed between transcript and settings |
+| Transcript structure | step-aware | mostly stacked cards |
+
+---
+
+## 6. Target interaction architecture
+
+## 6.1 Shell model
+
+### Left rail / sidebar
+Owns:
+- workspaces
+- sessions
+- New Session
+- search sessions/workspaces
+- Settings entry
+- secondary utilities
+
+### Center conversation column
+Owns:
+- active session header
+- conversation view tabs
+- transcript
+- composer stack
+
+### Right details panel
+Owns:
+- trajectory / event ledger
+- file preview
+- selected deliverable details
+- active tool / approval / sub-agent details
+- snapshot/history utilities where appropriate
+
+---
+
+## 6.2 Surface reassignment matrix
+
+| Current thing | Current container | Better container | Why |
+|---|---|---|---|
+| Workflow Lab | Settings modal tab | top-level surface / main shell view | It is core product work, not settings |
+| Providers | Settings modal tab | settings surface with cards, maybe side panel | Still configuration, but needs less nesting |
+| Snapshots | sidebar top tab | details/history utility surface | not frequent enough to deserve equal primary-nav weight |
+| File preview | none / indirect | details panel | inspection belongs in inspection surface |
+| Approvals | future modal tendency | composer takeover | lower context switching, stronger locality |
+| Search result staging | mostly absent | composer-adjacent strip | user should see what will enter context |
+| Trajectory | future hidden surface | details tab / conversation tab | inspection should not compete with settings |
+
+---
+
+## 6.3 Primary object interaction rules
+
+### Workspace
+- primary interaction: select in sidebar workspace browser
+- secondary interaction: add/import workspace via explicit action
+- not editable as a generic settings field
+
+### Session
+- primary interaction: select row in sidebar
+- row should expose status, rename, delete, maybe branch/fork affordances
+- current session state should be visible without switching surfaces
+
+### File
+- primary interactions:
+  - mention via `@file`
+  - open from details/deliverables/search result
+  - pin/stage from picker or browser
+- not primarily manual path entry
+
+### Workflow
+- runtime selection lives in main shell
+- editing lives in Workflow Lab
+- JSON/schema editing lives inside Workflow Lab only
+
+### Approval / question
+- appears inline in composer takeover
+- should not force leaving the conversation surface
+
+### Deliverable
+- clickable chip opens details preview
+- can be exported or staged into follow-up work
+
+---
+
+## 7. Required interaction improvements
+
+## 7.1 Immediate cleanup pass in the current shell
+
+These are high-value fixes that do not require the final three-column architecture first.
+
+### Must fix now
+1. Remove `workspace_dir` editing from standard settings.
+2. Demote Snapshots from the top-level sidebar tab strip.
+3. Replace free-text pinned-file entry with selection-driven interaction.
+4. Promote **New Session** into stable visible chrome.
+5. Clarify active workflow selector vs workflow-to-edit selector.
+6. Reduce top-header overload.
+7. Move raw advanced fields behind disclosure blocks.
+
+### Expected payoff
+- fewer duplicated paths
+- fewer accidental invalid states
+- lower cognitive load
+- better match between what surfaces look like and what they actually are
+
+---
+
+## 7.2 Mature shell pass
+
+### New shell structure to implement
+- rail: global nav / stable actions
+- sidebar: workspaces + sessions
+- center: conversation
+- details: trajectory / preview / inspection
+
+### Key interactions to add
+- resizable sidebar/details handles
+- conversation tabs: Chat / Trajectory / Sub-agents
+- staged evidence strip above composer
+- queue rows above composer
+- typed details targets (file preview, run ledger, deliverables)
+
+### DSH alignment
+This is the point where we move from “many controls exist” to “each control has a stable home.”
+
+---
+
+## 7.3 Composer maturity pass
+
+### Composer should become a stack
+1. status/stats row
+2. queue rows
+3. staged context strip
+4. plan/todo strip
+5. textarea
+6. access row
+7. trigger overlay
+
+### Trigger system
+The live product should support:
+- `/` commands
+- `@` files / agents / sessions / deliverables
+- `!` shell shortcuts
+
+### Questions and approvals
+- takeover in place
+- no placeholder clutter in transcript
+- exactly one visible unblock action when blocked
+
+---
+
+## 7.4 File and workspace interaction maturity pass
+
+### File system navigation
+We should not try to become a full IDE tree first.
+
+Instead:
+- keep a lightweight file browser/search surface
+- make file interactions contextual and deliberate
+- use details preview instead of permanent giant explorer behavior
+
+### Minimum viable file interactions
+- click file row → preview in details panel
+- pin/stage from file row
+- `@file` picker as primary reference mechanism
+- deliverable file chips open directly
+- read blocks and search blocks open source files predictably
+
+---
+
+## 8. ES module refactor, reshaped around the new shell
+
+The old module split plan is still directionally right, but it was organized around the current monolithic page. We should instead split modules along the **target shell boundaries**.
+
+## 8.1 Target module layout
+
+```text
+src/web/
+├── index.html
+└── js/
+    ├── app.js
+    ├── state/
+    │   ├── app-state.js
+    │   ├── session-state.js
+    │   ├── ui-state.js
+    │   └── workflow-state.js
+    ├── util/
+    │   ├── dom.js
+    │   ├── fetch.js
+    │   ├── format.js
+    │   └── events.js
+    ├── shell/
+    │   ├── shell.js
+    │   ├── rail.js
+    │   ├── sidebar.js
+    │   ├── details.js
+    │   └── layout.js
+    ├── chat/
+    │   ├── transcript.js
+    │   ├── turn-cards.js
+    │   ├── typed-blocks.js
+    │   ├── approvals.js
+    │   ├── composer.js
+    │   ├── triggers.js
+    │   ├── queue.js
+    │   └── staged-context.js
+    ├── sessions/
+    │   ├── workspaces.js
+    │   ├── sessions.js
+    │   ├── branching.js
+    │   └── snapshots.js
+    ├── files/
+    │   ├── browser.js
+    │   ├── preview.js
+    │   ├── pinned-context.js
+    │   └── uploads.js
+    ├── settings/
+    │   ├── settings-surface.js
+    │   ├── providers.js
+    │   ├── runtime.js
+    │   ├── compaction.js
+    │   └── mcp.js
+    ├── workflow/
+    │   ├── lab.js
+    │   ├── canvas.js
+    │   ├── edges.js
+    │   ├── nodes.js
+    │   ├── inspector.js
+    │   ├── validation.js
+    │   ├── json-sync.js
+    │   └── ai-compiler.js
+    └── sse/
+        ├── stream.js
+        └── event-handlers.js
+```
+
+## 8.2 Refactor rule
+Do **not** split the code according to the old accidental modal/tab boundaries.
+
+Split it according to the new ownership model:
+- shell
+- chat
+- sessions/workspaces
+- files
+- workflow lab
+- settings
+- SSE/event plumbing
+
+---
+
+## 9. Phased implementation plan
+
+## Phase 0 — audit-driven cleanup in current `index.html`
 
 ### Goals
+- reduce duplicated interactions
+- remove obviously misclassified controls
+- improve UX honesty without requiring the whole new shell first
 
-- **Catch layout regressions in CI** — specifically the class of bug that
-  repeatedly broke the Settings modal (mismatched/unbalanced HTML tags,
-  handlers referencing undefined functions, duplicate IDs).
-- **Build all four release binaries automatically** on every push to `main`
-  and attach them as workflow artifacts.
-- **Make the frontend maintainable** by splitting the inline `<script>` into
-  focused ES modules that can be read, tested, and reasoned about
-  independently.
-- **Preserve the project's "zero runtime dependencies" ethos.** The compiled
-  binary stays a single self-contained executable with no external assets.
-
-### Non-Goals
-
-- No npm/Yarn bundler (Vite/esbuild/webpack) in the runtime/build path.
-  GoHarness is served by Go's `net/http` + `//go:embed`, and that stays.
-- No TypeScript in the first pass (JS modules are already a huge win; TS can
-  be revisited once modules are stable and a check step exists).
-- No redesign of UI/UX — structure only, behavior preserved.
-- No splitting of the *HTML* into multiple pages (it remains a single shell;
-  only the JS is modularized).
+### Tasks
+- [ ] Remove `workspace_dir` from standard settings
+- [ ] Demote/remove Snapshots from top-level sidebar tab strip
+- [ ] Replace manual pinned-file entry with selection-driven flow or temporarily hide it until `@file` exists
+- [ ] Promote New Session to stable visible chrome
+- [ ] Collapse raw advanced provider fields behind disclosure UI
+- [ ] Clarify labels between runtime workflow selection and workflow editing
+- [ ] Reduce header metrics clutter where a status row would work better
 
 ---
 
-## 2. Current State (pre-refactor baseline)
+## Phase 1 — promote Workflow Lab to a first-class surface
 
-### Architecture
+### Goals
+- stop treating workflow editing as settings
+- give graph editing real space
 
-```
-src/web/index.html   (~215 KB, ~3,700 lines)
-  ├── <style>        all CSS inline
-  ├── <body>         header, sidebar, chat, settings modal, fork modal
-  └── <script>       ~150 KB of vanilla JS:
-                       - SSE / chat rendering
-                       - settings (config, compaction, sandbox, MCP)
-                       - providers (CRUD + activate)
-                       - workflow graph engine (canvas, nodes, edges,
-                         inspector, validation, JSON sync, AI compiler)
-                       - sidebar (files, sessions, snapshots)
-                       - helpers (fetch wrappers, DOM, formatting)
-```
-
-Go embeds everything:
-
-```go
-// src/web.go
-//go:embed web/*
-```
-
-### Pain points that motivated this
-
-- **Fragile layout.** A single misplaced `</div>` (e.g. an inline API field
-  sitting outside the `#inline-api-fields` toggle) silently collapsed an
-  entire settings panel. Hard to spot in a 900-line form.
-- **No automated checks on the HTML/JS.** A typo in an `onclick` handler
-  (`toggleAddNodeMenu` / `autoLayoutNodes` were called but never defined)
-  shipped to runtime.
-- **Everything shares one global scope.** Functions reference each other
-  across 150 KB with no explicit dependency graph, making safe edits hard.
-- **The workflow editor alone is ~1,200 lines** of intertwined rendering,
-  drag handling, validation, and state — a natural module boundary.
+### Tasks
+- [ ] Remove Workflow Lab from Settings modal tabs
+- [ ] Create a dedicated app-level Workflow Lab surface
+- [ ] Keep active runtime workflow selector in the main shell
+- [ ] Keep editing-target selector inside Workflow Lab only
+- [ ] Move advanced JSON editor into Workflow Lab-owned disclosure/panel
 
 ---
 
-## 3. CI Specification
+## Phase 2 — establish the shell skeleton
 
-### Triggers
+### Goals
+- create stable left/center/right ownership
+- stop overloading transcript and settings with inspection work
 
-| Event    | Behavior                                        |
-| -------- | ----------------------------------------------- |
-| push to `main` | Run lint + test, then build 4 binaries, upload artifacts |
-| push tag `v*`  | Run lint + test, build 4 binaries, publish a GitHub Release |
-| PR to `main`  | Run lint + test (no artifact upload)            |
-
-### Pipeline: `lint-test` job
-
-1. Check out repo.
-2. Install Go 1.24 (with module cache).
-3. Install Node 20 (only for the HTML linter; no `npm install`).
-4. `go vet ./...`
-5. `go test ./...`
-6. `node scripts/lint-html.js`
-
-### Pipeline: `build` job (matrix)
-
-- Depends on `lint-test` passing.
-- Runs only on pushes to `main` (not PRs).
-- Matrix: `linux/amd64`, `windows/amd64`, `darwin/amd64`, `darwin/arm64`.
-- `CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/<artifact> ./src`
-- Upload each binary as a workflow artifact (30-day retention).
-
-### Pipeline: `release` job (tagged)
-
-- Triggers on tags matching `v*` (e.g. `v1.0.0`).
-- Depends on `lint-test` passing.
-- Runs a single job that cross-compiles all four targets into `release/`.
-- Uses `softprops/action-gh-release` to create a GitHub Release and attach all
-  four binaries, with auto-generated release notes from merged PRs/commits.
-- Requires the `contents: write` permission (declared on the job).
-
-**Cutting a release:**
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-If the tag is annotated (`git tag -a v1.0.0 -m "Release notes"`) its message
-becomes the release body; otherwise the action generates notes from commits.
-
-### The HTML linter (`scripts/lint-html.js`)
-
-A dependency-free Node script (no `npm install`) that validates
-`src/web/index.html`:
-
-| Check | Catches |
-| ----- | ------- |
-| **Tag balance** | Mismatched/unclosed `<div>` etc. (the Settings-modal class of bug) |
-| **Duplicate IDs** | Two elements with the same `id` |
-| **Inline handler resolution** | `onclick="undefinedFn()"` referencing a JS function that doesn't exist |
-| **Anchor targets** | `href="#missing-id"` pointing at a non-existent element |
-| **Inline JS syntax** | `new Function(body)` parses every inline `<script>` without running it |
-
-It strips comments and `<script>`/`<style>` contents before structural checks
-so template-literal HTML in JS doesn't cause false positives, and locates the
-repo by walking up from `cwd` looking for `go.mod` (so it works from any
-directory or CI).
-
-### Local commands
-
-```bash
-make lint          # go vet + HTML lint
-make test          # go test ./...
-make build         # cross-compile all 4 release binaries
-make all           # lint + test + build
-```
+### Tasks
+- [ ] Add rail + sidebar + conversation + details shell structure
+- [ ] Add optional/resizable details panel
+- [ ] Make workspace/session browser primary left sidebar content
+- [ ] Define details tabs: Trajectory / File / Tool / Deliverable
+- [ ] Add conversation header tab strip for Chat / Trajectory / Sub-agents
 
 ---
 
-## 4. ES Module Refactor Plan
+## Phase 3 — composer maturity
 
-### Approach
+### Goals
+- make the composer the true interaction hub
 
-- Load the main module with `<script type="module" src="/js/app.js">`.
-- Serve JS files from `src/web/js/` — Go already embeds and serves
-  everything under `web/`, so **no backend changes are needed**.
-- ES modules run in strict mode, support `import`/`export`, and work in all
-  evergreen browsers over HTTP (GoHarness is always served over HTTP).
-- Keep the HTML shell static; modules attach behavior by element ID, exactly
-  as today. Incremental migration: move one logical chunk at a time, verify
-  after each.
-
-### Target module layout
-
-```
-src/web/
-├── index.html                 (thin shell: markup + one <script type=module>)
-└── js/
-    ├── app.js                 # bootstrap: init DOM, wire top-level events
-    ├── config.js              # constants, API paths, shared state
-    ├── util/
-    │   ├── dom.js             # $, $$, escapeHtml, debounce
-    │   ├── fetch.js           # get/post JSON helpers with error handling
-    │   └── format.js          # token/cost/time formatting
-    ├── sse.js                 # EventSource connection, event dispatch
-    ├── chat/
-    │   ├── chat.js            # message rendering, greeting, submit
-    │   ├── turn-cards.js      # assistant/tool/user card markup
-    │   ├── metrics.js         # inspect-execution-metrics panel
-    │   └── edits.js           # edit-and-fork / reroll
-    ├── sidebar/
-    │   ├── sidebar.js         # tab switching, init
-    │   ├── files.js           # workspace tree, uploads, pinned files
-    │   ├── sessions.js        # history list, select, rename, delete
-    │   └── snapshots.js       # create/revert/delete snapshots
-    ├── settings/
-    │   ├── settings.js        # modal open/close, tab routing, save/cancel
-    │   ├── api-config.js      # API provider, profile selector, vertex fields
-    │   ├── compaction.js      # compaction form
-    │   ├── sandbox.js         # runtime/safety form
-    │   └── mcp.js             # MCP server CRUD
-    ├── providers/
-    │   └── providers.js       # providers.json CRUD, activate, editor form
-    └── workflow/
-        ├── workflow.js        # graph state, load/save, public API
-        ├── nodes.js           # NODE_DEFS, node factory, port resolution
-        ├── canvas.js          # render cards, drag-to-move, auto-layout
-        ├── edges.js           # SVG bezier rendering, edge selection
-        ├── wiring.js          # port drag-to-connect, addEdge/cycle checks
-        ├── inspector.js       # right-panel typed forms per node type
-        ├── validation.js      # anchors, cycles, required inputs, reachability
-        ├── json-sync.js       # buildSchemaFromModel / loadWorkflowIntoModel
-        ├── toolbar.js         # add-node menu, auto-layout, reload
-        ├── ai-compiler.js     # natural-language -> schema stub
-        └── live-trace.js      # workflow_start/node/end SSE card
-```
-
-### Module interaction rules
-
-- **No circular imports.** If A and B need each other, extract shared
-  state/functions to a third module or use an event.
-- **State lives in one place per domain** (`workflow.js` owns the wfModel;
-  `config.js` owns global UI state). Other modules import getters/actions,
-  not mutate state directly.
-- **DOM lookup happens once at init** and elements are passed in, not
-  re-queried on every event.
-- **Each module exports an `init(root)` function** where it queries its
-  container and attaches listeners. `app.js` calls them in dependency order.
-- Keep the same CSS class names and element IDs during the move so styling
-  is unaffected.
-
-### Migration order (incremental, each step shippable)
-
-1. **Scaffold** — create `js/app.js`, add `<script type="module">`, move a
-   trivial helper (e.g. `escapeHtml`) to prove the loading works.
-2. **Util layer** — `dom.js`, `fetch.js`, `format.js`, `sse.js`.
-3. **Providers + settings panels** — self-contained forms, low coupling.
-4. **Sidebar** — files, sessions, snapshots.
-5. **Chat** — rendering and turn cards.
-6. **Workflow editor (last, biggest)** — split into the 9 sub-modules above,
-   porting the existing validated logic (nodes, edges, validation,
-   json-sync) without changing behavior.
-7. **Final cleanup** — delete the inline `<script>`, run the linter, verify
-   every settings tab and workflow interaction end-to-end.
-
-### Validation gates for each migration step
-
-- [ ] `node scripts/lint-html.js` passes (IDs, handlers, syntax).
-- [ ] `go vet ./...` + `go test ./...` pass.
-- [ ] Manual click-through: open Settings, each tab saves; open Workflow Lab,
-      drag a node, wire two ports, add/delete a node, Compile & Apply; send a
-      chat message and confirm streaming + tool cards render.
-- [ ] No console errors on load.
+### Tasks
+- [ ] Add status/action row near composer
+- [ ] Add staged evidence strip
+- [ ] Add queued steering/follow-up rows
+- [ ] Add `/`, `@`, and `!` trigger overlay
+- [ ] Add in-place approvals/questions takeover
+- [ ] Add clear blocked-state recovery action patterns
 
 ---
 
-## 5. Progress Checklist
+## Phase 4 — file and transcript interaction maturity
 
-### Phase A — CI (done)
+### Goals
+- make files and results actionable, not just visible
+- make transcript structure more inspectable
 
-- [x] `scripts/lint-html.js` (tag balance, duplicate IDs, handler
-      resolution, href targets, inline JS syntax).
-- [x] Fixed two real bugs the linter immediately found
-      (`toggleAddNodeMenu`, `autoLayoutNodes` were called but undefined).
-- [x] Fixed `process.exitCode` initialization bug in the linter.
-- [x] Robust repo-root resolution (works from any cwd).
-- [x] Verified linter **fails** on broken HTML and **passes** on clean.
-- [x] `Makefile` with `lint` / `test` / `build` / `all` targets.
-- [x] `.github/workflows/ci.yml` with `lint-test` + matrix `build` jobs.
-- [ ] First green CI run on GitHub after push (verify in Actions tab).
-
-### Phase B — ES module scaffold
-
-- [ ] Create `src/web/js/` directory.
-- [ ] Add `<script type="module" src="/js/app.js"></script>` to `index.html`.
-- [ ] Move `escapeHtml` (and prove module loading works end-to-end).
-- [ ] Confirm Go `//go:embed web/*` picks up the new `js/` folder.
-
-### Phase C — Utility modules
-
-- [ ] `js/util/dom.js`
-- [ ] `js/util/fetch.js`
-- [ ] `js/util/format.js`
-- [ ] `js/sse.js`
-
-### Phase D — Settings & providers
-
-- [ ] `js/providers/providers.js`
-- [ ] `js/settings/settings.js` (modal + tabs)
-- [ ] `js/settings/api-config.js`
-- [ ] `js/settings/compaction.js`
-- [ ] `js/settings/sandbox.js`
-- [ ] `js/settings/mcp.js`
-
-### Phase E — Sidebar
-
-- [ ] `js/sidebar/sidebar.js`
-- [ ] `js/sidebar/files.js`
-- [ ] `js/sidebar/sessions.js`
-- [ ] `js/sidebar/snapshots.js`
-
-### Phase F — Chat
-
-- [ ] `js/chat/chat.js`
-- [ ] `js/chat/turn-cards.js`
-- [ ] `js/chat/metrics.js`
-- [ ] `js/chat/edits.js`
-
-### Phase G — Workflow editor
-
-- [ ] `js/workflow/nodes.js`
-- [ ] `js/workflow/validation.js`
-- [ ] `js/workflow/json-sync.js`
-- [ ] `js/workflow/canvas.js`
-- [ ] `js/workflow/edges.js`
-- [ ] `js/workflow/wiring.js`
-- [ ] `js/workflow/inspector.js`
-- [ ] `js/workflow/toolbar.js`
-- [ ] `js/workflow/ai-compiler.js`
-- [ ] `js/workflow/live-trace.js`
-- [ ] `js/workflow/workflow.js` (orchestrator + public API)
-
-### Phase H — Wrap-up
-
-- [ ] Delete the inline `<script>` block from `index.html`.
-- [ ] Run all validation gates (lint, vet, test, manual click-through).
-- [ ] Update `docs/V2_VISUAL_EDITOR.md` if module names/locations changed.
-- [ ] Tag/push and confirm CI is green.
+### Tasks
+- [ ] Add file preview in details panel
+- [ ] Add contextual pin/stage/open actions from file/search/deliverable surfaces
+- [ ] Implement typed blocks for Terminal / Diff / Read / Search / Web
+- [ ] Move tool-result inspection out of giant raw `<pre>` dependence
+- [ ] Add deliverable chips that open previews directly
 
 ---
 
-## 6. Decisions Log
+## Phase 5 — settings and providers polish
+
+### Goals
+- reduce nested editor feeling
+- expose advanced config progressively
+
+### Tasks
+- [ ] Convert providers to clearer card/editor model
+- [ ] Keep active chat / compaction connection assignments visible
+- [ ] Move low-frequency infra fields into Advanced sections
+- [ ] Improve settings revision/conflict handling
+- [ ] Give MCP management a more explicit connection-state presentation
+
+---
+
+## Phase 6 — ES module decomposition
+
+### Goals
+- make the new shell maintainable
+- stop growing the monolith
+
+### Tasks
+- [ ] Add `<script type="module" src="/js/app.js">`
+- [ ] Scaffold new module tree
+- [ ] Move util/state/sse first
+- [ ] Move shell modules next
+- [ ] Move sessions/files/chat/settings/workflow modules incrementally
+- [ ] Delete inline script only after behavior parity is verified
+
+---
+
+## 10. Validation and acceptance criteria
+
+## 10.1 Interaction acceptance criteria
+
+### Navigation
+- [ ] Workspace switching happens in one obvious primary surface
+- [ ] New Session is always easy to find
+- [ ] No top-level tab is visually first-class while behaviorally second-class
+
+### Workflow
+- [ ] Active workflow selection is clearly distinct from workflow editing
+- [ ] Workflow Lab no longer lives in Settings
+
+### Files
+- [ ] Files can be previewed, staged, or referenced without manual path typing
+- [ ] The file surface behaves like an interaction surface, not a decorative tree dump
+
+### Composer
+- [ ] Block reasons are explicit and actionable
+- [ ] `/`, `@`, and `!` are discoverable
+- [ ] Staged context is visible before send
+- [ ] Approvals/questions can happen without leaving the conversation surface
+
+### Settings
+- [ ] Common settings are easy; advanced settings are available but not noisy
+- [ ] Raw endpoint/path text entry is no longer the default first-line interaction where a picker/list is possible
+
+---
+
+## 10.2 Technical acceptance criteria
+
+- [ ] `node scripts/lint-html.js` passes
+- [ ] `go vet ./...` passes
+- [ ] `go test ./...` passes
+- [ ] No console errors on load
+- [ ] No duplicate IDs / broken handlers introduced by shell restructuring
+- [ ] Workflow Lab still supports drag, connect, validate, and save/apply
+- [ ] Session switch preserves shell state more cleanly than the current full rerender behavior
+
+---
+
+## 11. Recommended immediate implementation order
+
+If we want the highest return without boiling the ocean:
+
+1. **Phase 0** cleanup in current shell
+2. **Phase 1** promote Workflow Lab out of Settings
+3. **Phase 2** establish shell skeleton with details panel
+4. **Phase 3** composer maturity (`@`, `/`, queue, staged context)
+5. **Phase 4** typed blocks + file preview interactions
+6. **Phase 5** settings/provider polish
+7. **Phase 6** ES module extraction along the new boundaries
+
+That order is deliberate.
+
+Do **not** fully decompose the old monolith first and then redesign the shell around the decomposed pieces. That risks hardening the wrong boundaries.
+
+Instead:
+- clean the interaction model,
+- establish the right surface ownership,
+- then split the frontend along those new seams.
+
+---
+
+## 12. Decisions log
 
 | Date | Decision | Rationale |
-| ---- | -------- | --------- |
-| 2026-08-16 | Use ES modules, no bundler | Zero-dependency ethos; Go already embeds/serves `web/`; ES modules work over HTTP in all target browsers. |
-| 2026-08-16 | External npm dep allowed in **CI only** | A real HTML parser can be added later if the custom linter outgrows itself; the runtime stays pure. |
-| 2026-08-16 | Custom dependency-free HTML linter first | Catches the specific bugs we've hit with zero install and trivial CI. |
-| 2026-08-16 | Build artifacts on every push (not just tags) | Fast feedback, free on GitHub runners, 30-day retention; binaries are small (~7 MB). |
-| 2026-08-16 | Migrate workflow editor last | It's the largest/most coupled area; doing smaller modules first de-risks the mechanics of the split. |
+|---|---|---|
+| 2026-08-16 | Use ES modules, no bundler | Preserves embedded-asset / zero-runtime-dependency ethos |
+| 2026-09-12 | Treat this document as UI architecture + refactor plan, not just code decomposition | The real frontend problem is shell maturity, not only file size |
+| 2026-09-12 | Promote Workflow Lab out of Settings before heavier UI feature accretion | Workflow editing is a primary product surface |
+| 2026-09-12 | Prefer a DSH-style left / center / right ownership model | Reduces modal overload and duplicated interaction paths |
+| 2026-09-12 | Keep explicitness as a product rule | UI must not present ignored or redundant controls as if they matter |
 
 ---
 
-## 7. Open Questions
+## 13. Open questions
 
-- Should HTML linting eventually use a real parser (e.g. `parse5` /
-  `htmlhint`) as an npm dev dependency? The custom checker covers our known
-  failure modes but isn't a full validator.
-- Do we want a `jsconfig.json` for editor IntelliSense on the modules, even
-  without a build step?
-- Should the AI Workflow compiler (currently a canned two-template stub) be
-  replaced with a real LLM call as part of this work, or left for later?
+- Should file browsing stay a lightweight tree plus search, or should we add a richer browser only after details-panel preview exists?
+- Should Settings become a sidebar surface, a slide-over, or a dedicated top-level surface after Workflow Lab leaves it?
+- Should Snapshots become a details-panel tool, a history surface, or remain accessible only from a utility menu?
+- What is the minimum acceptable first pass for shell persistence across session switches before the ESM refactor?
+- Should provider model lists be fetched lazily only when a provider/profile is selected, or preloaded for better picker UX?
