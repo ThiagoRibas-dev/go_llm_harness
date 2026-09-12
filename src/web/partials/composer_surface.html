@@ -1,0 +1,40 @@
+<!-- ⌨️ INPUT CONTROL PANEL -->
+                <div class="p-6 bg-[#0f172a]/50 shrink-0">
+                    <div class="max-w-4xl mx-auto space-y-2">
+                        <div id="composer-action-row" class="flex flex-wrap items-center gap-2 text-[11px]">
+                            <button id="composer-provider-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Provider · loading</button>
+                            <button id="composer-model-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Model · loading</button>
+                            <button id="composer-tools-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Tools · inspect</button>
+                            <button id="composer-approvals-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Approvals · none</button>
+                            <button id="composer-sources-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Sources · 0 staged</button>
+                            <button id="composer-scope-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Scope · workspace-wide</button>
+                            <span id="composer-queue-chip" class="ml-auto text-slate-500 font-mono">Queue · 0</span>
+                        </div>
+                        <div id="composer-takeover" class="hidden rounded-lg border border-amber-500/40 bg-amber-950/10 px-3 py-2 text-sm text-slate-200"></div>
+                        <div id="staged-context-strip" class="hidden rounded-lg border border-cyan-900/40 bg-slate-900/30 p-2"></div>
+                        <div id="queued-messages-strip" class="hidden rounded-lg border border-purple-900/40 bg-slate-900/30 p-2"></div>
+                        <div class="relative">
+                            <form id="prompt-form" class="relative flex items-center bg-[#1e293b] rounded-lg border border-[#334155] shadow-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition duration-150">
+                                <div id="composer-shell" class="w-full flex items-center">
+                                    <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')...." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36"></textarea>
+                                    <div class="flex items-center space-x-2 pr-3 shrink-0">
+                                        <button id="reroll-btn" type="button" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition p-2.5 rounded-md border border-[#334155] text-xs font-bold flex items-center justify-center h-9 w-9" title="Reroll Last Response (Regenerate)">
+                                            <i class="fa-solid fa-rotate-right text-xs"></i>
+                                        </button>
+                                        <button id="composer-cta" type="button" class="hidden bg-amber-600 text-white hover:bg-amber-500 transition duration-150 px-3 py-2 rounded text-xs font-bold h-9 shadow-md">
+                                            <span id="composer-cta-label">Open</span>
+                                        </button>
+                                        <button id="prompt-submit" type="submit" class="bg-blue-600 text-white hover:bg-blue-500 transition duration-150 px-4 py-2 rounded text-xs font-bold h-9 shadow-md flex items-center space-x-1.5">
+                                            <span id="prompt-submit-label">Execute</span> <i class="fa-solid fa-play"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                            <div id="trigger-overlay" class="hidden absolute left-0 right-0 bottom-full mb-2 rounded-lg border border-[#334155] bg-slate-950/95 shadow-2xl overflow-hidden z-20"></div>
+                        </div>
+                        <div id="composer-state-hint" class="text-[10px] text-slate-500 text-center mt-2 font-mono">
+                            GoHarness Sandbox Mode is active. System write-protection active. Press <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Enter</kbd> to execute, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Shift+Enter</kbd> for new line.
+                        </div>
+                    </div>
+                </div>
+            </div>

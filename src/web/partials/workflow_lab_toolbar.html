@@ -1,0 +1,37 @@
+<!-- Toolbar -->
+                <div class="flex items-center justify-between mb-2 gap-2">
+                    <div class="flex items-center space-x-2">
+                        <div class="relative">
+                            <button type="button" id="workflow-add-node-toggle" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 font-bold py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                                <i class="fa-solid fa-plus text-[10px]"></i><span>Add node</span><i class="fa-solid fa-chevron-down text-[8px] ml-1"></i>
+                            </button>
+                            <div id="add-node-menu" class="hidden absolute z-20 mt-1 w-52 bg-[#0f172a] border border-[#334155] rounded-md shadow-xl overflow-hidden">
+                                <button type="button" data-add-node-kind="llm" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-robot w-5 text-purple-400"></i> LLM</button>
+                                <button type="button" data-add-node-kind="bm25_search" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-magnifying-glass w-5 text-indigo-400"></i> BM25 Search</button>
+                                <button type="button" data-add-node-kind="tool_execution" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-terminal w-5 text-cyan-400"></i> Tool Execution</button>
+                                <button type="button" data-add-node-kind="conditional_router" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-route w-5 text-amber-400"></i> Conditional Router</button>
+                            </div>
+                        </div>
+                        <button type="button" id="workflow-auto-layout-btn" title="Auto-arrange nodes" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                            <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i><span>Auto-layout</span>
+                        </button>
+                        <button type="button" id="workflow-reload-json-btn" title="Reload graph from JSON" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                            <i class="fa-solid fa-arrows-rotate text-[10px]"></i><span>Reload JSON</span>
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 rounded border border-[#334155]/60 bg-slate-900/25 px-2 py-1">
+                            <span class="text-[10px] uppercase tracking-wider text-slate-500">Editing workflow</span>
+                            <select id="wf-lab-selector"  class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono text-xs rounded px-2 py-1.5 outline-none focus:border-purple-500 cursor-pointer" title="Switch workflow to edit"></select>
+                        </div>
+                        <button type="button" id="workflow-new-btn" title="Create a new blank workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-file-circle-plus text-[10px] text-emerald-400"></i><span class="hidden sm:inline">New</span>
+                        </button>
+                        <button type="button" id="workflow-clone-btn" title="Clone the current workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-copy text-[10px] text-blue-400"></i><span class="hidden sm:inline">Clone</span>
+                        </button>
+                        <button type="button" id="workflow-delete-btn" title="Delete the current workflow" class="bg-slate-800 hover:bg-red-900 border border-[#334155] hover:border-red-700 text-slate-400 hover:text-red-300 py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-trash text-[10px]"></i><span class="hidden sm:inline">Delete</span>
+                        </button>
+                    </div>
+                </div>

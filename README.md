@@ -191,7 +191,7 @@ The active workflow is selected by the top-level `"active_workflow"` key. Settin
 The web UI is still delivered from the single Go binary, but the source is no longer maintained as one giant HTML/JS blob.
 
 - `src/web/index.html` is the **HTML composition root**.
-- `src/web/partials/*.html` hold the major shell fragments: header, rail, sidebar, primary surface, details panel, settings modal, fork modal, and shared head/style blocks.
+- `src/web/partials/*.html` hold the major shell fragments and composition roots: header, rail, sidebar, details panel, settings modal, fork modal, shared head/style blocks, plus deeper splits like `styles.html -> styles_*` and `primary_surface.html -> status/composer/workflow-lab` partials.
 - `src/web/js/*.js` are **browser-native ES modules** split by domain ownership.
 - `src/web.go` assembles the HTML partials **server-side from the embedded filesystem** before serving `/`.
 - `scripts/lint-html.js` resolves those includes before validating the final assembled page, so the HTML split does not weaken structural checks.

@@ -1,0 +1,15 @@
+<!-- AI Compiler prompt box -->
+                <div class="bg-slate-900/30 p-3 rounded-xl border border-blue-500/30 space-y-2 mb-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1.5 animate-pulse"></i> Natural Language AI Compiler
+                        </span>
+                        <span class="text-[9px] text-slate-500 font-mono">v2.0 Beta</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <textarea id="ai-workflow-prompt" rows="1" class="flex-1 bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-sans leading-relaxed" placeholder="Describe your pipeline (e.g. 'BM25 search, then 3 parallel LLMs, then aggregate')..."></textarea>
+                        <button type="button" id="workflow-ai-compile-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-4 rounded text-xs transition flex items-center space-x-1.5 whitespace-nowrap">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Compile</span>
+                        </button>
+                    </div>
+                </div>

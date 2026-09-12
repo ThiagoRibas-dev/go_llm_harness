@@ -1,0 +1,100 @@
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal-animate {
+            animation: fadeIn 0.15s ease-out forwards;
+        }
+        /* Rotate the chevron in collapsible tool-call/result <details> */
+        details[open] > summary .details-arrow {
+            transform: rotate(90deg);
+        }
+        details.tool-call-group > summary,
+        details.tool-result-group > summary {
+            list-style: none;
+        }
+        details.tool-call-group > summary::-webkit-details-marker,
+        details.tool-result-group > summary::-webkit-details-marker {
+            display: none;
+        }
+        :root {
+            --gh-bg-app: #0f172a;
+            --gh-bg-canvas: #0b0f19;
+            --gh-bg-panel: #1e293b;
+            --gh-bg-muted: rgba(15, 23, 42, 0.55);
+            --gh-bg-soft: rgba(15, 23, 42, 0.35);
+            --gh-border: #334155;
+            --gh-border-strong: #475569;
+            --gh-text-primary: #f8fafc;
+            --gh-text-secondary: #cbd5e1;
+            --gh-text-muted: #94a3b8;
+            --gh-text-faint: #64748b;
+            --gh-accent: #2563eb;
+            --gh-accent-hover: #3b82f6;
+            --gh-accent-soft: rgba(37, 99, 235, 0.14);
+            --gh-success: #10b981;
+            --gh-warning: #f59e0b;
+            --gh-danger: #ef4444;
+            --gh-scroll-track: #1e293b;
+            --gh-scroll-thumb: #475569;
+            --gh-scroll-thumb-hover: #64748b;
+            --gh-shadow: 0 18px 45px rgba(2, 6, 23, 0.28);
+        }
+        body[data-theme="light"] {
+            --gh-bg-app: #e2e8f0;
+            --gh-bg-canvas: #f8fafc;
+            --gh-bg-panel: #ffffff;
+            --gh-bg-muted: rgba(255, 255, 255, 0.82);
+            --gh-bg-soft: rgba(255, 255, 255, 0.72);
+            --gh-border: #cbd5e1;
+            --gh-border-strong: #94a3b8;
+            --gh-text-primary: #0f172a;
+            --gh-text-secondary: #1e293b;
+            --gh-text-muted: #475569;
+            --gh-text-faint: #64748b;
+            --gh-accent-soft: rgba(37, 99, 235, 0.10);
+            --gh-scroll-track: #cbd5e1;
+            --gh-scroll-thumb: #94a3b8;
+            --gh-scroll-thumb-hover: #64748b;
+        }
+        html {
+            background: var(--gh-bg-app);
+            color-scheme: dark;
+        }
+        body {
+            background: var(--gh-bg-app) !important;
+            color: var(--gh-text-primary) !important;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--gh-scroll-track);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--gh-scroll-thumb);
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--gh-scroll-thumb-hover);
+        }
+        header.app-header,
+        #sidebar,
+        #settings-dialog,
+        #fork-modal > div {
+            background: var(--gh-bg-panel) !important;
+            border-color: var(--gh-border) !important;
+        }
+        main.app-conversation {
+            background: var(--gh-bg-canvas) !important;
+        }

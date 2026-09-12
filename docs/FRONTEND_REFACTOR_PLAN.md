@@ -213,6 +213,8 @@ The frontend no longer lives in a single inline-script page. It is now served as
 
 - `src/web/index.html`
 - `src/web/partials/*.html`
+  - composition roots like `styles.html`, `shell_body.html`, and `primary_surface.html`
+  - smaller shell fragments like `primary_status_row.html`, `composer_surface.html`, and the `workflow_lab_*` partials
 - `src/web/js/app.js`
 - `src/web/js/state.js`
 - `src/web/js/shell.js`
@@ -241,6 +243,7 @@ The frontend no longer lives in a single inline-script page. It is now served as
 - inline CSS
 - static shell/dialog markup with JS-owned IDs and `data-*` hooks
 - server-side composition boundaries via embedded partial includes
+- nested HTML composition roots for larger surfaces (for example `styles.html` and `primary_surface.html`)
 
 The HTML no longer carries inline event handlers. Control wiring now happens through bound listeners and delegated `data-*` actions in the JS modules.
 
@@ -711,11 +714,24 @@ src/web/
 ├── partials/
 │   ├── head_assets.html
 │   ├── styles.html
+│   ├── styles_base.html
+│   ├── styles_shell.html
+│   ├── styles_typed_blocks.html
 │   ├── header.html
 │   ├── shell_body.html
 │   ├── rail.html
 │   ├── sidebar.html
 │   ├── primary_surface.html
+│   ├── primary_status_row.html
+│   ├── console_surface.html
+│   ├── composer_surface.html
+│   ├── workflow_lab_surface.html
+│   ├── workflow_lab_intro.html
+│   ├── workflow_lab_compiler.html
+│   ├── workflow_lab_toolbar.html
+│   ├── workflow_lab_canvas.html
+│   ├── workflow_lab_json.html
+│   ├── workflow_lab_footer.html
 │   ├── details_panel.html
 │   ├── settings_modal.html
 │   └── fork_modal.html
@@ -750,6 +766,8 @@ Why this shape was chosen first:
 
 Longer-term, we can still split into deeper subdirectories (`chat/`, `workflow/`, `settings/`, etc.), but the important step was to establish **real ownership seams** first:
 - `index.html` as an HTML composition root over embedded partials
+- `styles.html` as a style composition root over themed CSS partials
+- `primary_surface.html` as a conversation/workflow composition root over smaller surface partials
 - `chat.js` vs `composer.js`
 - `workflow_graph.js` vs `workflow_manager.js`
 - `settings.js` as a composition root over `settings_runtime.js`, `settings_profiles.js`, and `settings_ops.js`
@@ -894,6 +912,7 @@ What is true now:
 - the HTML no longer relies on inline event handlers
 - `app.js` is no longer exporting a runtime bridge onto `window`
 - `index.html` is now an HTML composition root instead of a giant static document blob
+- `styles.html` and `primary_surface.html` are now second-level composition roots instead of oversized partials
 - the page is assembled server-side from embedded partials, so HTML can be split without adding a bundler or browser-side fragment fetches
 - static shell, settings, workflow, composer, and fork controls are bound through module-owned listeners
 - dynamic transcript, details, queue, staged-context, workspace, provider, snapshot, MCP, and workflow-inspector actions now use delegated `data-*` hooks instead of inline handler strings
@@ -986,6 +1005,7 @@ Instead:
 | 2026-09-12 | Split settings and workflow graph internals again before chasing more UI features | Keeps ownership local and prevents second-generation module blobs |
 | 2026-09-12 | Start replacing inline HTML handlers with bound listeners and delegated `data-action` flows | Reduces global `window` exports and makes module ownership real, not cosmetic |
 | 2026-09-12 | Finish removing inline HTML event handlers from the current shell | Makes the ES module split operationally real instead of relying on `window` bridges |
+| 2026-09-12 | Let large HTML partials become composition roots too | Keeps source manageable without abandoning embedded-asset server-side assembly |
 
 ---
 

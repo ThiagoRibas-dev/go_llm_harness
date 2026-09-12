@@ -1,0 +1,21 @@
+<div id="console-surface" class="flex flex-1 flex-col min-h-0">
+                <div class="px-6 pt-4 pb-0 shrink-0">
+                    <div id="console-header-tabs" class="max-w-4xl mx-auto flex items-center gap-2 text-xs">
+                        <button id="conversation-tab-chat" type="button" class="active px-3 py-1.5 rounded border border-[#334155] text-slate-300 transition">Chat</button>
+                        <button id="conversation-tab-trajectory" type="button" class="px-3 py-1.5 rounded border border-transparent text-slate-400 hover:text-slate-200 transition">Trajectory</button>
+                        <button id="conversation-tab-subagents" type="button" class="px-3 py-1.5 rounded border border-transparent text-slate-400 hover:text-slate-200 transition">Sub-agents</button>
+                    </div>
+                </div>
+                <div class="flex-1 min-h-0 relative">
+                    <div id="chat-view" class="h-full">
+                        <div id="chat-messages" class="h-full overflow-y-auto px-8 py-6 space-y-6">
+                            <!-- Greeting will be appended on boot -->
+                        </div>
+                    </div>
+                    <div id="trajectory-view" class="hidden h-full overflow-y-auto px-8 py-6">
+                        <div id="trajectory-view-body" class="max-w-4xl mx-auto space-y-3"></div>
+                    </div>
+                    <div id="subagents-view" class="hidden h-full overflow-y-auto px-8 py-6">
+                        <div id="subagents-view-body" class="max-w-4xl mx-auto space-y-3"></div>
+                    </div>
+                </div>

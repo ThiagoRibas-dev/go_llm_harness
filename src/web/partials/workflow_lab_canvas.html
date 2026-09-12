@@ -1,0 +1,26 @@
+<!-- Canvas + Inspector -->
+                <div class="flex flex-1 min-h-0 gap-3">
+                    <div class="flex-1 min-w-0 flex flex-col border border-[#334155] rounded-xl overflow-hidden bg-slate-950/40">
+                        <div class="bg-slate-900/40 px-3 py-1.5 border-b border-[#334155] flex items-center justify-between">
+                            <span class="font-bold text-slate-300 flex items-center text-[11px]"><i class="fa-solid fa-diagram-project mr-1.5 text-blue-500"></i> Node Graph</span>
+                            <span class="text-[9px] text-slate-500">drag nodes · drag ports to connect</span>
+                        </div>
+                        <div id="wf-canvas-scroll" class="relative flex-1 overflow-auto bg-[radial-gradient(circle_at_1px_1px,rgba(148,163,184,0.08)_1px,transparent_0)] [background-size:18px_18px]">
+                            <div id="wf-canvas" class="relative" style="min-width:100%;min-height:100%;">
+                                <svg id="wf-edges" class="absolute top-0 left-0 pointer-events-none overflow-visible"></svg>
+                                <svg id="wf-temp-edge" class="absolute top-0 left-0 pointer-events-none overflow-visible"></svg>
+                                <!-- nodes injected here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Inspector -->
+                    <div id="wf-inspector" class="w-72 shrink-0 border border-[#334155] rounded-xl bg-slate-950/40 flex flex-col overflow-hidden">
+                        <div class="bg-slate-900/40 px-3 py-1.5 border-b border-[#334155]">
+                            <span class="font-bold text-slate-300 text-[11px]"><i class="fa-solid fa-sliders mr-1.5 text-amber-400"></i> Inspector</span>
+                        </div>
+                        <div id="wf-inspector-body" class="flex-1 overflow-y-auto p-3 space-y-3 text-[11px]">
+                            <p class="text-slate-500 italic">Select a node to edit its properties.</p>
+                        </div>
+                    </div>
+                </div>

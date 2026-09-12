@@ -1,0 +1,117 @@
+#chat-messages {
+            scrollbar-gutter: stable both-edges;
+        }
+        #composer-shell {
+            background: var(--gh-bg-panel) !important;
+            border-color: var(--gh-border) !important;
+            box-shadow: var(--gh-shadow);
+            transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+        }
+        #composer-shell.is-disabled {
+            border-color: rgba(245, 158, 11, 0.45) !important;
+            background: rgba(30, 41, 59, 0.88) !important;
+            box-shadow: none;
+        }
+        #composer-shell.is-clickable {
+            cursor: pointer;
+        }
+        #composer-shell.is-clickable:hover {
+            border-color: rgba(59, 130, 246, 0.55) !important;
+        }
+        #prompt-input:disabled {
+            color: var(--gh-text-muted);
+            cursor: not-allowed;
+        }
+        #prompt-submit:disabled,
+        #reroll-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        #composer-state-hint {
+            color: var(--gh-text-faint);
+        }
+        .gh-hero {
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.52));
+            border-radius: 18px;
+            padding: 28px;
+            box-shadow: var(--gh-shadow);
+        }
+        .gh-hero[data-state="busy"] {
+            border-color: rgba(245, 158, 11, 0.45);
+        }
+        .gh-hero[data-state="blocked"] {
+            border-color: rgba(239, 68, 68, 0.35);
+        }
+        .gh-hero-chip {
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            background: rgba(15, 23, 42, 0.4);
+            color: var(--gh-text-secondary);
+        }
+        .gh-hero-action {
+            background: var(--gh-accent);
+        }
+        .gh-hero-action:hover {
+            background: var(--gh-accent-hover);
+        }
+        .gh-hero-example {
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            background: rgba(15, 23, 42, 0.32);
+            color: var(--gh-text-secondary);
+        }
+        .gh-hero-example:hover {
+            border-color: rgba(59, 130, 246, 0.55);
+            color: var(--gh-text-primary);
+        }
+        .settings-disclosure > summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        .settings-disclosure > summary::-webkit-details-marker {
+            display: none;
+        }
+        .settings-disclosure[open] .settings-chevron {
+            transform: rotate(180deg);
+        }
+        #chat-status-row select {
+            min-width: 220px;
+        }
+        #app-rail {
+            width: 56px;
+        }
+        .shell-resizer {
+            width: 6px;
+            cursor: col-resize;
+            background: transparent;
+            transition: background 0.15s ease;
+        }
+        .shell-resizer:hover,
+        .shell-resizer.dragging {
+            background: rgba(59, 130, 246, 0.22);
+        }
+        #details-panel[data-open="false"] {
+            width: 0 !important;
+            min-width: 0 !important;
+            border-left-width: 0 !important;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        #details-resizer[data-open="false"] {
+            width: 0 !important;
+            opacity: 0;
+            pointer-events: none;
+        }
+        #console-header-tabs button.active {
+            background: rgba(30, 41, 59, 0.9);
+            color: #fff;
+            border-color: rgba(59, 130, 246, 0.45);
+        }
+        #app-rail .rail-btn.active {
+            background: rgba(30, 41, 59, 0.92);
+            color: #fff;
+            border-color: rgba(59, 130, 246, 0.45);
+        }
+        #app-rail .rail-btn {
+            border: 1px solid transparent;
+        }

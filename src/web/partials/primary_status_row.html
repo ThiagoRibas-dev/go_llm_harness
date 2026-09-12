@@ -1,0 +1,35 @@
+<div id="chat-status-row" class="px-6 pt-4 pb-0 border-t border-[#334155]/70 bg-[#0f172a]/35 shrink-0">
+                <div class="max-w-6xl mx-auto flex flex-wrap items-center gap-2 text-xs">
+                    <div class="flex items-center gap-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155]">
+                        <span class="text-slate-400">View:</span>
+                        <button id="view-console-btn" type="button" class="px-2 py-1 rounded bg-slate-800 text-slate-100 font-bold">Console</button>
+                        <button id="view-workflow-btn" type="button" class="px-2 py-1 rounded text-slate-400 hover:text-slate-200">Workflow Lab</button>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155]">
+                        <i class="fa-solid fa-diagram-project text-purple-400"></i>
+                        <span class="text-slate-400">Active Workflow:</span>
+                        <select id="workflow-selector"  class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono font-bold text-xs rounded px-1.5 py-0.5 outline-none focus:border-purple-500 cursor-pointer">
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155]">
+                        <span class="text-slate-400">Connection:</span>
+                        <span class="text-cyan-400 font-mono font-bold" id="model-name">gpt-4o</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-cyan-950/40 text-cyan-400 border border-cyan-800 px-3 py-1.5 rounded-md shadow-inner">
+                        <i class="fa-solid fa-calculator"></i>
+                        <span class="font-bold">Tokens:</span>
+                        <span class="font-mono font-bold text-sm" id="session-tokens">0</span>
+                        <span class="text-slate-400 font-mono text-[10px]" id="session-chars">(0 chars)</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-emerald-950/40 text-emerald-400 border border-emerald-800 px-3 py-1.5 rounded-md shadow-inner">
+                        <i class="fa-solid fa-dollar-sign"></i>
+                        <span class="font-bold">Spent:</span>
+                        <span class="font-mono font-bold text-sm" id="session-cost">$0.0000</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155] ml-auto">
+                        <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" id="status-dot"></div>
+                        <span class="text-slate-300" id="status-text">Connected</span>
+                    </div>
+                </div>
+            </div>
