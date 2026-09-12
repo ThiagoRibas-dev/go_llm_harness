@@ -218,6 +218,7 @@ export function createSettingsRuntimeModule({ state, actions, escapeHtml, popula
         window.__cfgModel = cfg.api.model || "";
         document.getElementById("model-name").innerText = cfg.api.model + " (" + (cfg.api.provider || "openai").toUpperCase() + ")";
         document.getElementById("workspace-path").innerText = "Path: " + cfg.agent.workspace_dir;
+        document.getElementById("workspace-path").title = cfg.agent.workspace_dir;
         document.getElementById("session-id").innerText = "Session: " + cfg.session_id;
         state.currentUIState = cfg.ui_state || state.currentUIState;
         actions.applyThemeChrome && actions.applyThemeChrome();

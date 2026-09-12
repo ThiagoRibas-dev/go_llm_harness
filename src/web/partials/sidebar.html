@@ -4,9 +4,6 @@
                     <div id="sidebar-surface-title" class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Workspaces & Sessions</div>
                     <div id="sidebar-surface-subtitle" class="text-[10px] text-slate-500 font-mono truncate">Navigate local workspaces and session threads</div>
                 </div>
-                <button id="sidebar-new-session-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center justify-center gap-1.5" title="Start a new session">
-                    <i class="fa-solid fa-plus"></i><span class="hidden sm:inline">New</span>
-                </button>
             </div>
 
             <!-- TAB 1: FILE EXPLORER -->
@@ -46,7 +43,7 @@
                 <!-- WORKSPACE MANAGEMENT SECTION -->
                 <div class="space-y-2 shrink-0">
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Current Workspace</label>
-                    <div class="rounded border border-[#334155]/60 bg-slate-900/25 px-3 py-2 text-[11px] font-mono text-slate-300 break-all" id="workspace-active-summary">./workspace</div>
+                    <div class="rounded border border-[#334155]/60 bg-slate-900/25 px-3 py-2 text-[11px] font-mono text-slate-300 break-all" id="workspace-active-summary" title="./workspace">./workspace</div>
                     <!-- Create New Workspace input -->
                     <div class="flex space-x-2">
                         <input type="text" id="new-workspace-input" placeholder="Add workspace path..." class="flex-1 bg-[#1e293b] border border-[#334155] text-xs px-2 py-1 rounded outline-none focus:border-blue-500 font-mono">
@@ -66,9 +63,11 @@
 
                 <!-- CONVERSATIONS / SESSIONS LOG LIST -->
                 <div class="flex-1 flex flex-col overflow-hidden min-h-0 pt-2 border-t border-[#334155]/60 relative">
-                    <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center justify-between mb-2 gap-2">
                         <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Conversation Sessions</label>
-                        <span class="text-[9px] text-slate-500 font-mono">Use New Session above</span>
+                        <button id="sidebar-new-session-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-[11px] font-bold transition flex items-center justify-center gap-1.5 shrink-0" title="Start a new session in the current workspace">
+                            <i class="fa-solid fa-plus"></i><span>New Session</span>
+                        </button>
                     </div>
                     
                     <div class="flex-1 overflow-y-auto space-y-1.5 pr-1 font-mono text-xs" id="sessions-list">
@@ -100,10 +99,4 @@
                 </div>
             </div>
 
-            <!-- Quick Action controls -->
-            <div class="p-4 border-t border-[#334155] bg-slate-900/30 space-y-2 text-xs shrink-0">
-                <button id="manual-compact-btn" class="w-full py-1.5 px-3 bg-indigo-950/40 text-indigo-400 border border-indigo-900 rounded hover:bg-indigo-900 hover:text-white transition duration-150 flex items-center justify-center">
-                    <i class="fa-solid fa-compress mr-1.5"></i> Manual Context Compact
-                </button>
-            </div>
         </aside>

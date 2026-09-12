@@ -4,7 +4,10 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
       .then(res => res.json())
       .then(data => {
         const summary = document.getElementById("workspace-active-summary");
-        if (summary) summary.textContent = data.active || "./workspace";
+        if (summary) {
+          summary.textContent = data.active || "./workspace";
+          summary.title = data.active || "./workspace";
+        }
 
         let wsHtml = "";
         data.workspaces.forEach(ws => {
@@ -14,7 +17,7 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
             : "bg-slate-900/30 border-transparent text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 font-mono";
           wsHtml += `
             <div class="flex items-center justify-between p-1.5 rounded border border-[#334155]/60 text-[10px] ${activeClass}">
-              <button type="button" data-change-workspace="${escapeHtml(ws)}" class="truncate cursor-pointer flex-1 text-left" title="Click to swap to this workspace">${escapeHtml(ws)}</button>
+              <button type="button" data-change-workspace="${escapeHtml(ws)}" class="truncate cursor-pointer flex-1 text-left" title="${escapeHtml(ws)}">${escapeHtml(ws)}</button>
               ${!isActive ? `
               <button type="button" data-remove-workspace="${escapeHtml(ws)}" class="text-slate-500 hover:text-red-400 p-0.5 ml-1" title="Remove from history">
                 <i class="fa-solid fa-times text-[10px]"></i>
@@ -113,7 +116,7 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
             : "bg-slate-900/30 border-transparent text-slate-400 hover:bg-slate-800/40 hover:text-slate-200";
           const date = new Date(sess.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
           html += `
-            <div data-select-session="${escapeHtml(sess.session_id)}" class="group relative p-2.5 rounded-lg border-l-4 cursor-pointer transition flex flex-col justify-between space-y-1 ${activeClass}">
+            <div data-select-session="${escapeHtml(sess.session_id)}" title="${escapeHtml(sess.name)}" class="group relative p-2.5 rounded-lg border-l-4 cursor-pointer transition flex flex-col justify-between space-y-1 ${activeClass}">
               <div class="flex items-center justify-between text-[11px]">
                 <span class="truncate pr-8 text-slate-200 font-medium" id="sess-display-${sess.session_id}">${escapeHtml(sess.name)}</span>
                 <span class="text-[10px] text-slate-500 shrink-0 font-mono">${date}</span>
@@ -309,6 +312,94 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
       .catch(err => alert("Fork failed: " + err));
   }
 
+  function currentWorkspaceTreeCollapseMap() {
+    const key = state.activeWorkspaceDir || "__workspace__";
+    state.workspaceCollapsedDirs = state.workspaceCollapsedDirs || {};
+    state.workspaceCollapsedDirs[key] = state.workspaceCollapsedDirs[key] || {};
+    return state.workspaceCollapsedDirs[key];
+  }
+
+  function isWorkspaceEntryDir(entry) {
+    return !!(entry && (entry.isDir === true || entry.is_dir === true));
+  }
+
+  function workspaceEntryDepth(entry) {
+    return Number((entry && entry.depth) || 0);
+  }
+
+  function workspaceEntryModifiedNote(entry) {
+    return String((entry && (entry.modifiedNote || entry.modified_note)) || "");
+  }
+
+  function hasCollapsedAncestor(path, collapsedMap) {
+    const parts = String(path || "").split("/");
+    let prefix = "";
+    for (let i = 0; i < parts.length - 1; i++) {
+      prefix = prefix ? `${prefix}/${parts[i]}` : parts[i];
+      if (collapsedMap[prefix]) return true;
+    }
+    return false;
+  }
+
+  function renderWorkspaceTreeEntries() {
+    const treeContainer = document.getElementById("workspace-tree");
+    if (!treeContainer) return;
+    if (!Array.isArray(state.workspaceTreeEntries) || state.workspaceTreeEntries.length === 0) {
+      treeContainer.innerHTML = '<div class="text-slate-500 italic">No files detected yet...</div>';
+      return;
+    }
+
+    const collapsedMap = currentWorkspaceTreeCollapseMap();
+    let html = "";
+
+    state.workspaceTreeEntries.forEach((entry) => {
+      const path = String((entry && entry.path) || "");
+      const label = String((entry && entry.label) || path.split("/").pop() || path || "entry");
+      const isDir = isWorkspaceEntryDir(entry);
+      const depth = workspaceEntryDepth(entry);
+      const defaultCollapsed = !!(entry && entry.collapsed);
+      if (isDir && !(path in collapsedMap)) collapsedMap[path] = defaultCollapsed;
+      if (hasCollapsedAncestor(path, collapsedMap)) return;
+      const indent = depth * 16;
+
+      if (isDir) {
+        const isCollapsed = !!collapsedMap[path];
+        html += `
+          <div class="workspace-tree-row group" style="padding-left:${indent}px">
+            <button type="button" data-toggle-workspace-dir="${escapeHtml(path)}" class="workspace-tree-dir" title="${escapeHtml(path)}">
+              <i class="workspace-tree-expander fa-solid ${isCollapsed ? "fa-chevron-right" : "fa-chevron-down"}"></i>
+              <i class="fa-solid ${isCollapsed ? "fa-folder" : "fa-folder-open"} text-slate-400"></i>
+              <span class="workspace-tree-label">${escapeHtml(label)}</span>
+            </button>
+          </div>`;
+        return;
+      }
+
+      const modifiedNote = workspaceEntryModifiedNote(entry);
+      html += `
+        <div class="workspace-tree-row workspace-tree-file-row group" style="padding-left:${indent}px">
+          <button type="button" data-workspace-file="${escapeHtml(path)}" class="workspace-tree-file-btn" title="${escapeHtml(path)}">
+            <i class="fa-regular fa-file-lines text-slate-500"></i>
+            <span class="workspace-tree-label">${escapeHtml(label)}</span>
+            ${modifiedNote ? `<span class="workspace-tree-meta">${escapeHtml(modifiedNote)}</span>` : ""}
+          </button>
+          <div class="workspace-file-row-actions opacity-0 group-hover:opacity-100 transition">
+            <button type="button" data-stage-file="${escapeHtml(path)}" class="typed-action-btn">Stage</button>
+          </div>
+        </div>`;
+    });
+
+    treeContainer.innerHTML = html || '<div class="text-slate-500 italic">No files detected yet...</div>';
+  }
+
+  function toggleWorkspaceDir(path) {
+    if (!path) return;
+    const collapsedMap = currentWorkspaceTreeCollapseMap();
+    const current = !!collapsedMap[path];
+    collapsedMap[path] = !current;
+    renderWorkspaceTreeEntries();
+  }
+
   function refreshWorkspaceTree() {
     const treeContainer = document.getElementById("workspace-tree");
     if (!treeContainer) return;
@@ -318,36 +409,7 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
       .then(res => res.json())
       .then(data => {
         state.workspaceTreeEntries = Array.isArray(data.entries) ? data.entries : [];
-        const lines = data.tree.split("\n");
-        let html = "";
-        let entryIndex = 0;
-
-        lines.forEach(line => {
-          if (!line.trim()) return;
-          const matchesTreeRow = /^((?:│   |    )*)(?:├── |└── )(.+)$/.test(line);
-          const entry = matchesTreeRow ? state.workspaceTreeEntries[entryIndex++] : null;
-          const processedLine = line
-            .replace("[collapsed]", '<span class="text-slate-500 italic text-[10px] bg-slate-900 px-1.5 py-0.5 rounded ml-1">[collapsed]</span>')
-            .replace(/\[Modified (.*?) ago\]/, '<span class="text-amber-400 text-[10px] bg-amber-950/40 border border-amber-800 px-1.5 py-0.5 rounded ml-2 font-mono"><i class="fa-solid fa-clock mr-0.5"></i>$1</span>')
-            .replace("[New / Untracked]", '<span class="text-emerald-400 text-[10px] bg-emerald-950/40 border border-emerald-800 px-1.5 py-0.5 rounded ml-2 font-mono font-bold"><i class="fa-solid fa-plus-circle mr-0.5"></i>New</span>');
-
-          if (entry && !entry.isDir) {
-            html += `<div class="workspace-file-row group hover:bg-slate-800/40 px-2 py-0.5 rounded transition duration-75"><button type="button" data-workspace-file="${escapeHtml(entry.path)}" class="workspace-file-row-preview truncate">${processedLine}</button><div class="workspace-file-row-actions opacity-0 group-hover:opacity-100 transition"><button type="button" data-stage-file="${escapeHtml(entry.path)}" class="typed-action-btn">Stage</button></div></div>`;
-          } else {
-            html += `<div class="hover:bg-slate-800/20 px-2 py-0.5 rounded transition duration-75 truncate">${processedLine}</div>`;
-          }
-        });
-
-        treeContainer.innerHTML = html;
-        treeContainer.querySelectorAll("[data-workspace-file]").forEach(row => {
-          row.addEventListener("click", () => actions.openWorkspaceFile && actions.openWorkspaceFile(row.getAttribute("data-workspace-file")));
-        });
-        treeContainer.querySelectorAll("[data-stage-file]").forEach(row => {
-          row.addEventListener("click", (event) => {
-            event.stopPropagation();
-            actions.stageWorkspaceFile && actions.stageWorkspaceFile(row.getAttribute("data-stage-file"));
-          });
-        });
+        renderWorkspaceTreeEntries();
       })
       .catch(err => {
         treeContainer.innerHTML = `<div class="text-red-400">Failed to load directory tree: ${err}</div>`;
@@ -541,6 +603,23 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
       removeContextPin(Number(btn.getAttribute("data-remove-context-pin")));
     });
 
+    document.getElementById("workspace-tree")?.addEventListener("click", (event) => {
+      const toggleBtn = event.target.closest("[data-toggle-workspace-dir]");
+      if (toggleBtn) {
+        toggleWorkspaceDir(toggleBtn.getAttribute("data-toggle-workspace-dir"));
+        return;
+      }
+      const openBtn = event.target.closest("[data-workspace-file]");
+      if (openBtn) {
+        actions.openWorkspaceFile && actions.openWorkspaceFile(openBtn.getAttribute("data-workspace-file"));
+        return;
+      }
+      const stageBtn = event.target.closest("[data-stage-file]");
+      if (stageBtn) {
+        actions.stageWorkspaceFile && actions.stageWorkspaceFile(stageBtn.getAttribute("data-stage-file"));
+      }
+    });
+
     document.getElementById("chat-messages")?.addEventListener("click", (event) => {
       const saveBtn = event.target.closest("[data-save-and-branch-card]");
       if (saveBtn) {
@@ -566,6 +645,8 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
     closeForkModal,
     toggleForkFields,
     executeForkAction,
+    renderWorkspaceTreeEntries,
+    toggleWorkspaceDir,
     refreshWorkspaceTree,
     fetchPinnedFiles,
     removeContextPin,

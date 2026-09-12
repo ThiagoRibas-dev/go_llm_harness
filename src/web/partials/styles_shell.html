@@ -129,3 +129,43 @@
         #app-rail .rail-btn {
             border: 1px solid transparent;
         }
+        .workspace-tree-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            min-height: 28px;
+            border-radius: 8px;
+        }
+        .workspace-tree-row:hover {
+            background: rgba(30, 41, 59, 0.35);
+        }
+        .workspace-tree-dir,
+        .workspace-tree-file-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            min-width: 0;
+            text-align: left;
+            padding: 3px 8px;
+            border-radius: 8px;
+        }
+        .workspace-tree-expander {
+            width: 10px;
+            color: #64748b;
+            font-size: 10px;
+            flex: 0 0 auto;
+        }
+        .workspace-tree-label {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .workspace-tree-meta {
+            margin-left: auto;
+            color: #94a3b8;
+            font-size: 10px;
+            white-space: nowrap;
+        }

@@ -191,11 +191,10 @@ export function createShellModule({ state, actions, escapeHtml, deliverablePaths
       <div class="rounded-lg border border-[#334155] bg-slate-900/25 p-4 space-y-3">
         <div>
           <div class="font-bold text-slate-200">History utilities</div>
-          <div class="mt-1 text-[11px] leading-relaxed text-slate-400">Open snapshots or run a manual compaction.</div>
+          <div class="mt-1 text-[11px] leading-relaxed text-slate-400">Open snapshots for the current workspace.</div>
         </div>
         <div class="flex flex-wrap gap-2">
           <button type="button" data-activate-rail-section="snapshots" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 text-xs font-bold">Open Snapshots</button>
-          <button type="button" data-trigger-compaction="1" class="px-3 py-1.5 rounded border border-indigo-900 bg-indigo-950/40 text-indigo-300 text-xs font-bold">Run Compaction</button>
         </div>
         <div class="text-[10px] font-mono text-slate-500">Session: ${escapeHtml(currentSessionId() || "loading")}</div>
       </div>`;
@@ -369,7 +368,6 @@ export function createShellModule({ state, actions, escapeHtml, deliverablePaths
     document.getElementById("rail-workflow-btn")?.addEventListener("click", () => switchPrimarySurface("workflow"));
     document.getElementById("rail-details-btn")?.addEventListener("click", () => toggleDetailsPanel());
     document.getElementById("rail-settings-btn")?.addEventListener("click", () => actions.openSettingsModal && actions.openSettingsModal());
-    document.getElementById("manual-compact-btn")?.addEventListener("click", () => actions.triggerCompaction && actions.triggerCompaction());
     document.getElementById("conversation-tab-chat")?.addEventListener("click", () => switchConversationView("chat"));
     document.getElementById("conversation-tab-trajectory")?.addEventListener("click", () => switchConversationView("trajectory"));
     document.getElementById("conversation-tab-subagents")?.addEventListener("click", () => switchConversationView("subagents"));

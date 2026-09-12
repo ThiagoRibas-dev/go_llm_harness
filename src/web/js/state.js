@@ -15,6 +15,7 @@ export const appState = {
   detailsPanelWidth: 340,
   currentUIState: { composer_enabled: true, status: "ready", title: "GoHarness is ready", summary: "" },
   workspaceTreeEntries: [],
+  workspaceCollapsedDirs: {},
   trajectoryEvents: [],
   subagentRegistry: {},
   deliverableRegistry: [],
