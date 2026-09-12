@@ -472,7 +472,7 @@ func StartWebGUI(port int) {
 		activeConfig.Compaction.KeepLastN = req.CompactKeepN
 		activeConfig.Compaction.SystemPrompt = req.CompactPrompt
 
-		if activeConfig.Agent.WorkspaceDir != req.WorkspaceDir {
+		if req.WorkspaceDir != "" && activeConfig.Agent.WorkspaceDir != req.WorkspaceDir {
 			selectWorkspace(req.WorkspaceDir)
 		}
 

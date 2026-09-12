@@ -744,14 +744,14 @@ Split it according to the new ownership model:
 - improve UX honesty without requiring the whole new shell first
 
 ### Tasks
-- [ ] Remove `#input-workspace-dir` from standard settings and stop persisting workspace navigation through `saveSettings(event)`.
-- [ ] Demote/remove `#tab-snapshots-btn` from the top-level sidebar tab strip; if snapshot actions remain, move them under a history/details utility.
-- [ ] Replace `#quick-pin-input` free-text pinning with a selection-driven flow or temporarily hide it until `@file` exists.
-- [ ] Promote New Session from the Sessions sub-panel into stable visible chrome (rail or sidebar head).
-- [ ] Collapse raw advanced provider fields (`#input-model`, `#input-base-url`, compaction endpoint/model overrides, scan-dir comma lists) behind disclosure UI where a picker/list cannot replace them yet.
-- [ ] Clarify labels between `#workflow-selector` (**active runtime workflow**) and `#wf-lab-selector` (**workflow being edited**).
-- [ ] Reduce header metrics clutter by moving token/cost/runtime state toward a lower status row closer to `#prompt-form`.
-- [ ] Make `switchSidebarTab(...)` either truly support each visible destination or remove the misleading destination if it is not first-class.
+- [x] Remove `#input-workspace-dir` from standard settings and stop persisting workspace navigation through `saveSettings(event)`.
+- [x] Demote/remove `#tab-snapshots-btn` from the top-level sidebar tab strip; if snapshot actions remain, move them under a history/details utility.
+- [x] Replace `#quick-pin-input` free-text pinning with a selection-driven flow or temporarily hide it until `@file` exists.
+- [x] Promote New Session from the Sessions sub-panel into stable visible chrome (rail or sidebar head).
+- [x] Collapse raw advanced provider fields (`#input-model`, `#input-base-url`, compaction endpoint/model overrides, scan-dir comma lists) behind disclosure UI where a picker/list cannot replace them yet.
+- [x] Clarify labels between `#workflow-selector` (**active runtime workflow**) and `#wf-lab-selector` (**workflow being edited**).
+- [x] Reduce header metrics clutter by moving token/cost/runtime state toward a lower status row closer to `#prompt-form`.
+- [x] Make `switchSidebarTab(...)` either truly support each visible destination or remove the misleading destination if it is not first-class.
 
 ---
 
