@@ -35,7 +35,7 @@ GoHarness is engineered to be as **lightweight and secure** as possible, avoidin
 7. **🧠 Sliding-Window Context Compaction:** Automatically compresses history when user-turn count crosses a threshold, using a cheap/fast model while **preserving the last $N$ turns fully raw**. Compacted turns are physically evicted into named sibling folders (`compacted_summary_up_to_turn_%03d/`) with the boundary tracked in `meta.json`, and rollbacks crossing a boundary are archive-aware.
 8. **🔄 Dual-Engine Workspace Rollbacks & Untracked Erasers:** Supports chronological session rollbacks and branching. Going back in time rewinds chat logs and **physically restores your folder structure** (file contents via per-turn backups, plus physical deletion of newly-created untracked files) using Git-native checkpoints where available or local backups as a fallback.
 9. **🌲 Token-Safe Directory Tree (Auto-LS):** Recursively maps your workspace, collapsing heavy dependency folders (`node_modules`, `.venv`) and truncating long outputs, while appending Git-like status flags and relative modification timers inline (e.g. `main.go [Modified 2m ago]`).
-10. **🌐 Embedded Web Console:** Go's native `net/http` plus `//go:embed` serve a modern Single-Page Application (HTML5, Tailwind, vanilla JS) and stream thoughts/tool logs to your browser over **Server-Sent Events (SSE)**. Includes a responsive **Workspace Swapper**, **Conversational History Selector**, **Session Deletion**, and the **AI Workflow Lab**.
+10. **🌐 Embedded Web Console:** Go's native `net/http` plus `//go:embed` serve a modern Single-Page Application (HTML5, Tailwind, vanilla JS) and stream thoughts/tool logs to your browser over **Server-Sent Events (SSE)**. The frontend is now split into **embedded HTML partials composed server-side** plus **browser-native ES modules**, so the UI can grow without turning `index.html` or `app.js` back into monoliths. Includes a responsive **Workspace Swapper**, **Conversational History Selector**, **Session Deletion**, and the **AI Workflow Lab**.
 11. **🔌 Multi-Provider AI API Connectors:** Native, standard-library-only wrappers for:
     * **OpenAI API / compatible routers** (Ollama, DeepSeek, Groq, etc.).
     * **Anthropic Claude Messages API** (system instructions as top-level params, `tool_use`/`tool_result` mapping).
@@ -117,12 +117,12 @@ Manage profiles in **Settings → Providers**, or assign them as the active chat
 1. **`linear_chat`** — `start → llm → terminal`. The standard conversational agent loop with full tool access. Active by default.
 2. **`enhanced_cognition`** (POADR) — `start` fans out to **five parallel `llm` specialists** (chronological, causal-logical, semantic-world, behavioral-psych, stylistic-prose); all five reports plus the raw prompt feed an `llm` aggregator, which produces the final answer at `terminal`.
 
-The active workflow is selected by the top-level `"active_workflow"` key. Setting it to anything other than `linear_chat` routes execution through `ExecuteActiveWorkflow()` in `src/workflow.go`; if the workflow engine errors, the system transparently falls back to the native linear tools loop. Switch workflows instantly from the header **Workflow** dropdown, the `/workflow <id>` chat command, or Settings -> AI Workflow Lab.
+The active workflow is selected by the top-level `"active_workflow"` key. Setting it to anything other than `linear_chat` routes execution through `ExecuteActiveWorkflow()` in `src/workflow.go`; if the workflow engine errors, the system transparently falls back to the native linear tools loop. Switch workflows instantly from the header **Workflow** dropdown, the `/workflow <id>` chat command, or the dedicated **Workflow Lab** surface in the web shell.
 
 ### Designing Workflows
 
 * **By hand** - edit `workflows.json` directly (the schema is documented in [`docs/V2_SPECIFICATION.md`](docs/V2_SPECIFICATION.md)).
-* **Visually** - open **Settings -> AI Workflow Lab**. Drag nodes onto the canvas, drag from output pins (right) to input pins (left) to connect, click a node to edit its profile/model/system-prompt in the inspector, and use the toolbar to add nodes or auto-layout. A collapsible Advanced/JSON panel is available for power users. The lab validates anchors, cycles, required inputs, and reachability; **Compile & Apply** writes to disk and hot-swaps the running engine.
+* **Visually** - open the dedicated **Workflow Lab** surface in the web shell. Drag nodes onto the canvas, drag from output pins (right) to input pins (left) to connect, click a node to edit its profile/model/system-prompt in the inspector, and use the toolbar to add nodes or auto-layout. A collapsible Advanced/JSON panel is available for power users. The lab validates anchors, cycles, required inputs, and reachability; **Compile & Apply** writes to disk and hot-swaps the running engine.
 * The LLM-assisted compiler prompt and staging lifecycle are specified in [`docs/V2_LLM_ASSISTED_WORKFLOW_SPEC.md`](docs/V2_LLM_ASSISTED_WORKFLOW_SPEC.md).
 
 > **Prompt-cache note:** to maximize prefix caching across parallel LLM nodes, keep shared system/context instructions identical at the top of each node's prompt and append the axis-specific instruction at the bottom.
@@ -161,7 +161,9 @@ The active workflow is selected by the top-level `"active_workflow"` key. Settin
 │   ├── sandbox_fallback.go   # Fallback executor for other unmapped OSes
 │   │
 │   └── web/
-│       ├── index.html    # Responsive SPA (chat, settings, visual Workflow Lab, fork modal)
+│       ├── index.html      # HTML composition root for the embedded SPA
+│       ├── partials/       # Server-side-composed HTML partials (header, shell, settings, fork modal, etc.)
+│       ├── js/             # Browser-native ES modules (shell, chat, composer, workflow, settings, SSE)
 │       └── tailwind.min.js
 │
 └── docs/
@@ -183,6 +185,18 @@ The active workflow is selected by the top-level `"active_workflow"` key. Settin
 > At runtime, GoHarness also reads/writes a git-ignored `providers.json` (reusable connections) next to the binary. Copy `providers.example.json` to get started, or let it auto-seed from your `config.json` on first run.
 
 > Binaries are produced under `bin/` on build but are intentionally git-ignored. Cross-compile targets are listed below.
+
+### Embedded frontend layout
+
+The web UI is still delivered from the single Go binary, but the source is no longer maintained as one giant HTML/JS blob.
+
+- `src/web/index.html` is the **HTML composition root**.
+- `src/web/partials/*.html` hold the major shell fragments: header, rail, sidebar, primary surface, details panel, settings modal, fork modal, and shared head/style blocks.
+- `src/web/js/*.js` are **browser-native ES modules** split by domain ownership.
+- `src/web.go` assembles the HTML partials **server-side from the embedded filesystem** before serving `/`.
+- `scripts/lint-html.js` resolves those includes before validating the final assembled page, so the HTML split does not weaken structural checks.
+
+This keeps the runtime local-first and zero-dependency while making the frontend much easier to grow without reintroducing super-files.
 
 ---
 
