@@ -895,6 +895,20 @@ func StartWebGUI(port int) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"tree": tree})
 	})
 
+	mux.HandleFunc("/api/workspace/file", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimSpace(r.URL.Query().Get("path"))
+		if path == "" {
+			http.Error(w, "missing path", http.StatusBadRequest)
+			return
+		}
+		content := executeReadFile(nil, path, 1, 0)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"path":    path,
+			"content": content,
+		})
+	})
+
 	mux.HandleFunc("/api/prompt", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "Only POST supported", http.StatusMethodNotAllowed)

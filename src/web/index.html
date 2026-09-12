@@ -188,6 +188,45 @@
         #chat-status-row select {
             min-width: 220px;
         }
+        #app-rail {
+            width: 56px;
+        }
+        .shell-resizer {
+            width: 6px;
+            cursor: col-resize;
+            background: transparent;
+            transition: background 0.15s ease;
+        }
+        .shell-resizer:hover,
+        .shell-resizer.dragging {
+            background: rgba(59, 130, 246, 0.22);
+        }
+        #details-panel[data-open="false"] {
+            width: 0 !important;
+            min-width: 0 !important;
+            border-left-width: 0 !important;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        #details-resizer[data-open="false"] {
+            width: 0 !important;
+            opacity: 0;
+            pointer-events: none;
+        }
+        #console-header-tabs button.active {
+            background: rgba(30, 41, 59, 0.9);
+            color: #fff;
+            border-color: rgba(59, 130, 246, 0.45);
+        }
+        #app-rail .rail-btn.active {
+            background: rgba(30, 41, 59, 0.92);
+            color: #fff;
+            border-color: rgba(59, 130, 246, 0.45);
+        }
+        #app-rail .rail-btn {
+            border: 1px solid transparent;
+        }
     </style>
 </head>
 <body data-theme="dark" class="font-sans h-full flex flex-col overflow-hidden">
@@ -214,26 +253,39 @@
     </header>
 
     <!-- ================= MAIN WORKSPACE PANEL ================= -->
-    <div class="flex flex-1 overflow-hidden min-h-0 relative">
+    <div id="shell-body" class="flex flex-1 overflow-hidden min-h-0 relative">
+
+        <nav id="app-rail" class="shrink-0 border-r border-[#334155] bg-slate-950/70 flex flex-col items-center gap-2 py-3">
+            <button id="rail-sessions-btn" onclick="activateRailSection('sessions')" class="rail-btn active w-9 h-9 rounded-lg text-slate-200 bg-slate-800 flex items-center justify-center" title="Workspaces & sessions">
+                <i class="fa-solid fa-comments"></i>
+            </button>
+            <button id="rail-files-btn" onclick="activateRailSection('files')" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Files">
+                <i class="fa-solid fa-folder-tree"></i>
+            </button>
+            <button id="rail-history-btn" onclick="activateRailSection('snapshots')" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Snapshots & history utilities">
+                <i class="fa-solid fa-camera"></i>
+            </button>
+            <button id="rail-workflow-btn" onclick="switchPrimarySurface('workflow')" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Workflow Lab">
+                <i class="fa-solid fa-diagram-project"></i>
+            </button>
+            <div class="flex-1"></div>
+            <button id="rail-details-btn" onclick="toggleDetailsPanel()" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Toggle details panel">
+                <i class="fa-solid fa-sidebar"></i>
+            </button>
+            <button id="rail-settings-btn" onclick="openSettingsModal()" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Settings">
+                <i class="fa-solid fa-gear"></i>
+            </button>
+        </nav>
 
         <!-- 🌲 LEFT PANEL: Workspace Explorer, Sessions, & Tree -->
         <aside id="sidebar" class="w-80 bg-[#0f172a] border-r border-[#334155] flex flex-col shrink-0 transition-all duration-200 ease-in-out">
-            
-            <!-- Panel Selector Tabs -->
-            <div class="flex border-b border-[#334155] text-xs bg-slate-900/30">
-                <button onclick="switchSidebarTab('files')" id="tab-files-btn" class="flex-1 py-3 text-center border-b-2 border-blue-500 font-bold text-white transition">
-                    <i class="fa-solid fa-folder-tree mr-1"></i> Files
-                </button>
-                <button onclick="switchSidebarTab('sessions')" id="tab-sessions-btn" class="flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
-                    <i class="fa-solid fa-comments mr-1"></i> Sessions
-                </button>
-            </div>
-            <div class="px-4 py-2 border-b border-[#334155]/70 bg-slate-900/25 flex items-center gap-2 shrink-0">
-                <button onclick="triggerNewSession()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center justify-center gap-1.5" title="Start a new session">
-                    <i class="fa-solid fa-plus"></i><span>New Session</span>
-                </button>
-                <button id="sidebar-snapshots-btn" onclick="switchSidebarTab('snapshots')" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center justify-center gap-1.5" title="Open snapshot manager">
-                    <i class="fa-solid fa-camera"></i><span>Snapshots</span>
+            <div class="px-4 py-3 border-b border-[#334155]/70 bg-slate-900/25 flex items-center gap-2 shrink-0">
+                <div class="min-w-0 flex-1">
+                    <div id="sidebar-surface-title" class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Workspaces & Sessions</div>
+                    <div id="sidebar-surface-subtitle" class="text-[10px] text-slate-500 font-mono truncate">Navigate local workspaces and session threads</div>
+                </div>
+                <button onclick="triggerNewSession()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center justify-center gap-1.5" title="Start a new session">
+                    <i class="fa-solid fa-plus"></i><span class="hidden sm:inline">New</span>
                 </button>
             </div>
 
@@ -273,13 +325,8 @@
                 
                 <!-- WORKSPACE MANAGEMENT SECTION -->
                 <div class="space-y-2 shrink-0">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active Workspace</label>
-                    <div class="flex space-x-2">
-                        <!-- Selector dropdown -->
-                        <select id="workspace-history-select" onchange="changeWorkspaceFromSelector(this.value)" class="flex-1 bg-[#1e293b] border border-[#334155] text-xs text-slate-200 px-2 py-1.5 rounded outline-none focus:border-blue-500 font-mono">
-                            <option value="">Loading workspaces...</option>
-                        </select>
-                    </div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Current Workspace</label>
+                    <div class="rounded border border-[#334155]/60 bg-slate-900/25 px-3 py-2 text-[11px] font-mono text-slate-300 break-all" id="workspace-active-summary">./workspace</div>
                     <!-- Create New Workspace input -->
                     <div class="flex space-x-2">
                         <input type="text" id="new-workspace-input" placeholder="Add workspace path..." class="flex-1 bg-[#1e293b] border border-[#334155] text-xs px-2 py-1 rounded outline-none focus:border-blue-500 font-mono">
@@ -291,7 +338,7 @@
 
                 <!-- WORKSPACE HISTORY CHIPS/LIST -->
                 <div class="space-y-1 shrink-0">
-                    <label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Workspace History</label>
+                    <label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Known Workspaces</label>
                     <div id="workspaces-history-list" class="space-y-1 max-h-24 overflow-y-auto pr-1">
                         <!-- Dynamic list of workspaces -->
                     </div>
@@ -340,6 +387,7 @@
                 </button>
             </div>
         </aside>
+        <div id="sidebar-resizer" class="shell-resizer shrink-0"></div>
 
         <!-- 💬 CENTER PANEL: Interactive Chat Console -->
         <main id="primary-surface" class="app-conversation flex-1 flex flex-col min-w-0 bg-[#0b0f19]">
@@ -380,9 +428,25 @@
             </div>
 
             <div id="console-surface" class="flex flex-1 flex-col min-h-0">
-                <!-- Turn Streams Display Container -->
-                <div class="flex-1 overflow-y-auto px-8 py-6 space-y-6" id="chat-messages">
-                    <!-- Greeting will be appended on boot -->
+                <div class="px-6 pt-4 pb-0 shrink-0">
+                    <div id="console-header-tabs" class="max-w-4xl mx-auto flex items-center gap-2 text-xs">
+                        <button id="conversation-tab-chat" type="button" onclick="switchConversationView('chat')" class="active px-3 py-1.5 rounded border border-[#334155] text-slate-300 transition">Chat</button>
+                        <button id="conversation-tab-trajectory" type="button" onclick="switchConversationView('trajectory')" class="px-3 py-1.5 rounded border border-transparent text-slate-400 hover:text-slate-200 transition">Trajectory</button>
+                        <button id="conversation-tab-subagents" type="button" onclick="switchConversationView('subagents')" class="px-3 py-1.5 rounded border border-transparent text-slate-400 hover:text-slate-200 transition">Sub-agents</button>
+                    </div>
+                </div>
+                <div class="flex-1 min-h-0 relative">
+                    <div id="chat-view" class="h-full">
+                        <div id="chat-messages" class="h-full overflow-y-auto px-8 py-6 space-y-6">
+                            <!-- Greeting will be appended on boot -->
+                        </div>
+                    </div>
+                    <div id="trajectory-view" class="hidden h-full overflow-y-auto px-8 py-6">
+                        <div id="trajectory-view-body" class="max-w-4xl mx-auto space-y-3"></div>
+                    </div>
+                    <div id="subagents-view" class="hidden h-full overflow-y-auto px-8 py-6">
+                        <div id="subagents-view-body" class="max-w-4xl mx-auto space-y-3"></div>
+                    </div>
                 </div>
 
                 <!-- ⌨️ INPUT CONTROL PANEL -->
@@ -528,6 +592,32 @@
             </section>
 
         </main>
+        <div id="details-resizer" class="shell-resizer shrink-0" data-open="true"></div>
+        <aside id="details-panel" class="w-[340px] min-w-[260px] max-w-[520px] border-l border-[#334155] bg-slate-950/50 flex flex-col shrink-0" data-open="true" style="width: 340px;">
+            <div class="px-4 py-3 border-b border-[#334155]/70 flex items-center gap-2">
+                <div class="min-w-0 flex-1">
+                    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Details</div>
+                    <div id="details-subtitle" class="text-[10px] text-slate-500 font-mono truncate">Inspect trajectory, files, tools, deliverables, and history utilities</div>
+                </div>
+                <button onclick="toggleDetailsPanel(false)" class="text-slate-500 hover:text-white transition" title="Close details panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="px-3 py-2 border-b border-[#334155]/60 flex items-center gap-2 text-xs bg-slate-900/25">
+                <button id="details-tab-trajectory-btn" onclick="switchDetailsTab('trajectory')" class="px-2.5 py-1 rounded bg-slate-800 text-white font-bold">Trajectory</button>
+                <button id="details-tab-file-btn" onclick="switchDetailsTab('file')" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">File</button>
+                <button id="details-tab-tool-btn" onclick="switchDetailsTab('tool')" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">Tool</button>
+                <button id="details-tab-deliverable-btn" onclick="switchDetailsTab('deliverable')" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">Deliverables</button>
+                <button id="details-tab-history-btn" onclick="switchDetailsTab('history')" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">History</button>
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto">
+                <div id="details-tab-trajectory" class="p-4 space-y-3"></div>
+                <div id="details-tab-file" class="hidden p-4 space-y-3"></div>
+                <div id="details-tab-tool" class="hidden p-4 space-y-3"></div>
+                <div id="details-tab-deliverable" class="hidden p-4 space-y-3"></div>
+                <div id="details-tab-history" class="hidden p-4 space-y-3"></div>
+            </div>
+        </aside>
     </div>
 
 
@@ -1011,7 +1101,18 @@
         let selectedForkTurn = 0;
         let activeWorkspaceDir = "";
         let currentPrimarySurface = "console";
+        let currentSidebarSection = "sessions";
+        let currentConversationView = "chat";
+        let currentDetailsTab = "trajectory";
+        let detailsPanelOpen = true;
+        let detailsPanelWidth = 340;
         let currentUIState = { composer_enabled: true, status: "ready", title: "GoHarness is ready", summary: "" };
+        let workspaceTreeEntries = [];
+        let trajectoryEvents = [];
+        let subagentRegistry = {};
+        let deliverableRegistry = [];
+        let currentFilePreview = null;
+        let currentToolPreview = null;
         const DEFAULT_PROMPT_PLACEHOLDER = "Type a prompt to solve (e.g., 'Write a python calculation script and test it')....";
 
         window.addEventListener("DOMContentLoaded", () => {
@@ -1025,23 +1126,38 @@
             connectSSE();
             appendGreeting();
             switchPrimarySurface("console");
+            switchSidebarTab("sessions");
+            switchConversationView("chat");
+            switchDetailsTab("trajectory");
+            initShellResizers();
+            syncRailButtons();
         });
 
         // Toggle Workspace Explorer Sidebar
         function toggleSidebar() {
             const sidebar = document.getElementById("sidebar");
+            const resizer = document.getElementById("sidebar-resizer");
             isSidebarCollapsed = !isSidebarCollapsed;
             if (isSidebarCollapsed) {
                 sidebar.style.width = "0px";
                 sidebar.style.opacity = "0";
                 sidebar.style.pointerEvents = "none";
                 sidebar.style.borderRightWidth = "0px";
+                if (resizer) {
+                    resizer.style.width = "0px";
+                    resizer.style.pointerEvents = "none";
+                }
             } else {
                 sidebar.style.width = "320px";
                 sidebar.style.opacity = "1";
                 sidebar.style.pointerEvents = "auto";
                 sidebar.style.borderRightWidth = "1px";
+                if (resizer) {
+                    resizer.style.width = "6px";
+                    resizer.style.pointerEvents = "auto";
+                }
             }
+            enforceShellConcession();
         }
 
         function workflowLabVisible() {
@@ -1074,44 +1190,338 @@
                 consoleBtn.className = consoleActive;
                 workflowBtn.className = workflowIdle;
             }
+            syncRailButtons();
+            enforceShellConcession();
+        }
+
+        function syncRailButtons() {
+            const map = {
+                sessions: document.getElementById("rail-sessions-btn"),
+                files: document.getElementById("rail-files-btn"),
+                snapshots: document.getElementById("rail-history-btn"),
+                workflow: document.getElementById("rail-workflow-btn"),
+            };
+            Object.entries(map).forEach(([key, el]) => {
+                if (!el) return;
+                const active = (key === currentSidebarSection && currentPrimarySurface === "console") || (key === "workflow" && currentPrimarySurface === "workflow");
+                el.classList.toggle("active", active);
+            });
+            const detailsBtn = document.getElementById("rail-details-btn");
+            if (detailsBtn) detailsBtn.classList.toggle("active", detailsPanelOpen);
+        }
+
+        function activateRailSection(section) {
+            if (section === "workflow") {
+                switchPrimarySurface("workflow");
+                return;
+            }
+            switchPrimarySurface("console");
+            switchSidebarTab(section);
+        }
+
+        function switchConversationView(view) {
+            currentConversationView = view === "trajectory" || view === "subagents" ? view : "chat";
+            const views = {
+                chat: document.getElementById("chat-view"),
+                trajectory: document.getElementById("trajectory-view"),
+                subagents: document.getElementById("subagents-view"),
+            };
+            const buttons = {
+                chat: document.getElementById("conversation-tab-chat"),
+                trajectory: document.getElementById("conversation-tab-trajectory"),
+                subagents: document.getElementById("conversation-tab-subagents"),
+            };
+            Object.values(views).forEach(el => el && el.classList.add("hidden"));
+            Object.values(buttons).forEach(el => el && el.classList.remove("active"));
+            if (views[currentConversationView]) views[currentConversationView].classList.remove("hidden");
+            if (buttons[currentConversationView]) buttons[currentConversationView].classList.add("active");
+            if (currentConversationView === "trajectory") {
+                switchDetailsTab("trajectory");
+            }
+            if (currentConversationView === "subagents") {
+                renderSubagentsView();
+            }
+        }
+
+        function detailsEmptyState(title, body) {
+            return `<div class="rounded-lg border border-[#334155] bg-slate-900/25 p-4"><div class="font-bold text-slate-200">${escapeHtml(title)}</div><div class="mt-1 text-[11px] leading-relaxed text-slate-400">${escapeHtml(body)}</div></div>`;
+        }
+
+        function recordTrajectoryEvent(kind, title, detail) {
+            trajectoryEvents.unshift({
+                at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+                kind,
+                title,
+                detail,
+            });
+            if (trajectoryEvents.length > 80) trajectoryEvents.length = 80;
+            renderTrajectoryPanels();
+        }
+
+        function rememberDeliverable(path) {
+            if (!path) return;
+            if (!deliverableRegistry.includes(path)) deliverableRegistry.unshift(path);
+            if (deliverableRegistry.length > 20) deliverableRegistry.length = 20;
+            renderDeliverablesPanel();
+        }
+
+        function extractDeliverablesFromTool(turn) {
+            if (!turn || turn.role !== "tool") return;
+            const content = String(turn.content || "");
+            let m = content.match(/Successfully wrote file to host disk at\s+(.+)$/m) ||
+                content.match(/Successfully wrote file inside Docker at\s+(.+)$/m) ||
+                content.match(/Successfully patched file '([^']+)'/m);
+            if (m) rememberDeliverable((m[1] || "").trim());
+        }
+
+        function updateSubagentRegistry(data, state) {
+            const key = data.session_id || data.description || String(Date.now());
+            subagentRegistry[key] = {
+                label: data.description || data.session_id || "sub-agent",
+                state,
+                duration: data.duration_ms || 0,
+            };
+            renderSubagentsView();
+        }
+
+        function renderTrajectoryPanels() {
+            const html = trajectoryEvents.length === 0
+                ? detailsEmptyState("No trajectory events yet", "Run the agent, tools, or workflow lab to populate a live event ledger.")
+                : trajectoryEvents.map(ev => `<div class="rounded-lg border border-[#334155] bg-slate-900/25 p-3"><div class="flex items-center gap-2 text-[11px]"><span class="font-mono text-slate-500">${escapeHtml(ev.at)}</span><span class="font-bold text-slate-200">${escapeHtml(ev.title)}</span></div><div class="mt-1 text-[11px] text-slate-400">${escapeHtml(ev.detail || "")}</div><div class="mt-2 text-[10px] uppercase tracking-wider text-slate-500">${escapeHtml(ev.kind)}</div></div>`).join("");
+            const detail = document.getElementById("details-tab-trajectory");
+            const view = document.getElementById("trajectory-view-body");
+            if (detail) detail.innerHTML = html;
+            if (view) view.innerHTML = html;
+        }
+
+        function renderSubagentsView() {
+            const entries = Object.values(subagentRegistry);
+            const html = entries.length === 0
+                ? detailsEmptyState("No sub-agent activity yet", "Spawned sub-agents and background workers will appear here.")
+                : entries.map(sa => `<div class="rounded-lg border border-cyan-900/40 bg-slate-900/25 p-3 flex items-center justify-between gap-3"><div><div class="font-mono text-slate-200">${escapeHtml(sa.label)}</div><div class="text-[11px] text-slate-500">${sa.state === "done" ? "Completed" : "Running"}</div></div><div class="text-[11px] font-mono ${sa.state === "done" ? "text-emerald-400" : "text-cyan-400"}">${sa.duration ? escapeHtml(String(sa.duration)) + " ms" : "live"}</div></div>`).join("");
+            const view = document.getElementById("subagents-view-body");
+            if (view) view.innerHTML = html;
+        }
+
+        function renderFilePanel() {
+            const panel = document.getElementById("details-tab-file");
+            if (!panel) return;
+            if (!currentFilePreview) {
+                panel.innerHTML = detailsEmptyState("No file selected", "Choose Files in the rail, then click a file row to preview it here.");
+                return;
+            }
+            panel.innerHTML = `<div class="rounded-lg border border-[#334155] bg-slate-900/25 overflow-hidden"><div class="px-3 py-2 border-b border-[#334155]/60 flex items-center justify-between gap-2"><span class="font-mono text-xs text-slate-200 truncate">${escapeHtml(currentFilePreview.path)}</span><button type="button" onclick="switchSidebarTab('files')" class="text-[10px] text-blue-400 hover:text-blue-300">Back to files</button></div><pre class="max-h-[420px] overflow-auto p-3 text-[11px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap">${escapeHtml(currentFilePreview.content)}</pre></div>`;
+        }
+
+        function renderToolPanel() {
+            const panel = document.getElementById("details-tab-tool");
+            if (!panel) return;
+            if (!currentToolPreview) {
+                panel.innerHTML = detailsEmptyState("No tool selected", "Open or expand a tool result in the transcript to inspect it here.");
+                return;
+            }
+            panel.innerHTML = `<div class="rounded-lg border border-[#334155] bg-slate-900/25 overflow-hidden"><div class="px-3 py-2 border-b border-[#334155]/60"><span class="font-mono text-xs text-slate-200">${escapeHtml(currentToolPreview.name || "tool")}</span></div><pre class="max-h-[420px] overflow-auto p-3 text-[11px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap">${escapeHtml(currentToolPreview.content || "")}</pre></div>`;
+        }
+
+        function renderDeliverablesPanel() {
+            const panel = document.getElementById("details-tab-deliverable");
+            if (!panel) return;
+            if (deliverableRegistry.length === 0) {
+                panel.innerHTML = detailsEmptyState("No deliverables yet", "Files written or patched by successful tool calls will be listed here.");
+                return;
+            }
+            panel.innerHTML = deliverableRegistry.map(path => `<button type="button" onclick="openWorkspaceFile(${JSON.stringify(path)})" class="w-full text-left rounded-lg border border-[#334155] bg-slate-900/25 p-3 hover:bg-slate-800/40 transition"><div class="font-mono text-xs text-slate-200 truncate">${escapeHtml(path)}</div><div class="mt-1 text-[11px] text-slate-500">Open in details panel</div></button>`).join("");
+        }
+
+        function renderHistoryPanel() {
+            const panel = document.getElementById("details-tab-history");
+            if (!panel) return;
+            panel.innerHTML = `
+                <div class="rounded-lg border border-[#334155] bg-slate-900/25 p-4 space-y-3">
+                    <div>
+                        <div class="font-bold text-slate-200">History utilities</div>
+                        <div class="mt-1 text-[11px] leading-relaxed text-slate-400">Snapshots and compaction are currently utility actions. This panel is their long-term home once the dedicated details surface matures.</div>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="activateRailSection('snapshots')" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 text-xs font-bold">Open Snapshots</button>
+                        <button type="button" onclick="triggerCompaction()" class="px-3 py-1.5 rounded border border-indigo-900 bg-indigo-950/40 text-indigo-300 text-xs font-bold">Run Compaction</button>
+                    </div>
+                    <div class="text-[10px] font-mono text-slate-500">Session: ${escapeHtml(currentSessionId() || 'loading')}</div>
+                </div>`;
+        }
+
+        function switchDetailsTab(tab) {
+            currentDetailsTab = ["trajectory", "file", "tool", "deliverable", "history"].includes(tab) ? tab : "trajectory";
+            const tabs = ["trajectory", "file", "tool", "deliverable", "history"];
+            const subtitles = {
+                trajectory: "Live session and workflow event ledger",
+                file: "Preview a selected workspace file",
+                tool: "Inspect the currently selected tool output",
+                deliverable: "Files produced by successful mutations",
+                history: "Snapshots, compaction, and recovery utilities",
+            };
+            tabs.forEach(name => {
+                const body = document.getElementById(`details-tab-${name}`);
+                const btn = document.getElementById(`details-tab-${name}-btn`);
+                if (body) body.classList.toggle("hidden", name !== currentDetailsTab);
+                if (btn) {
+                    btn.className = name === currentDetailsTab
+                        ? "px-2.5 py-1 rounded bg-slate-800 text-white font-bold"
+                        : "px-2.5 py-1 rounded text-slate-400 hover:text-slate-200";
+                }
+            });
+            const subtitle = document.getElementById("details-subtitle");
+            if (subtitle) subtitle.textContent = subtitles[currentDetailsTab];
+            if (!detailsPanelOpen) toggleDetailsPanel(true);
+            renderTrajectoryPanels();
+            renderSubagentsView();
+            renderFilePanel();
+            renderToolPanel();
+            renderDeliverablesPanel();
+            renderHistoryPanel();
+        }
+
+        function toggleDetailsPanel(forceOpen) {
+            if (typeof forceOpen === "boolean") detailsPanelOpen = forceOpen;
+            else detailsPanelOpen = !detailsPanelOpen;
+            const panel = document.getElementById("details-panel");
+            const resizer = document.getElementById("details-resizer");
+            if (!panel || !resizer) return;
+            panel.dataset.open = String(detailsPanelOpen);
+            resizer.dataset.open = String(detailsPanelOpen);
+            if (detailsPanelOpen) {
+                panel.style.width = detailsPanelWidth + "px";
+            }
+            syncRailButtons();
+        }
+
+        function enforceShellConcession() {
+            const minConversation = 760;
+            const occupied = 56 + (isSidebarCollapsed ? 0 : 320) + 6 + 6 + detailsPanelWidth;
+            if (window.innerWidth < occupied + minConversation && detailsPanelOpen) {
+                toggleDetailsPanel(false);
+            }
+        }
+
+        function initShellResizers() {
+            const sidebarResizer = document.getElementById("sidebar-resizer");
+            const detailsResizer = document.getElementById("details-resizer");
+            const sidebar = document.getElementById("sidebar");
+            const details = document.getElementById("details-panel");
+            if (sidebarResizer && sidebar) {
+                sidebarResizer.addEventListener("mousedown", (e) => {
+                    if (isSidebarCollapsed) return;
+                    e.preventDefault();
+                    sidebarResizer.classList.add("dragging");
+                    const startX = e.clientX;
+                    const startW = sidebar.getBoundingClientRect().width;
+                    const onMove = (ev) => {
+                        const next = Math.max(240, Math.min(460, startW + (ev.clientX - startX)));
+                        sidebar.style.width = next + "px";
+                    };
+                    const onUp = () => {
+                        sidebarResizer.classList.remove("dragging");
+                        document.removeEventListener("mousemove", onMove);
+                        document.removeEventListener("mouseup", onUp);
+                        enforceShellConcession();
+                    };
+                    document.addEventListener("mousemove", onMove);
+                    document.addEventListener("mouseup", onUp);
+                });
+            }
+            if (detailsResizer && details) {
+                detailsResizer.addEventListener("mousedown", (e) => {
+                    if (!detailsPanelOpen) return;
+                    e.preventDefault();
+                    detailsResizer.classList.add("dragging");
+                    const startX = e.clientX;
+                    const startW = details.getBoundingClientRect().width;
+                    const onMove = (ev) => {
+                        const next = Math.max(220, Math.min(520, startW - (ev.clientX - startX)));
+                        detailsPanelWidth = next;
+                        details.style.width = next + "px";
+                    };
+                    const onUp = () => {
+                        detailsResizer.classList.remove("dragging");
+                        document.removeEventListener("mousemove", onMove);
+                        document.removeEventListener("mouseup", onUp);
+                        if (detailsPanelWidth < 240) toggleDetailsPanel(false);
+                        enforceShellConcession();
+                    };
+                    document.addEventListener("mousemove", onMove);
+                    document.addEventListener("mouseup", onUp);
+                });
+            }
+            window.addEventListener("resize", enforceShellConcession);
+        }
+
+        async function openWorkspaceFile(path) {
+            if (!path) return;
+            try {
+                const res = await fetch("/api/workspace/file?path=" + encodeURIComponent(path));
+                if (!res.ok) throw new Error("Failed to read file");
+                const data = await res.json();
+                currentFilePreview = data;
+                switchDetailsTab("file");
+            } catch (err) {
+                currentFilePreview = { path, content: "Failed to read file preview: " + err.message };
+                switchDetailsTab("file");
+            }
+        }
+
+        function parseWorkspaceTreeEntries(tree) {
+            const entries = [];
+            const stack = [];
+            String(tree || "").split("\n").forEach(line => {
+                const match = line.match(/^((?:│   |    )*)(?:├── |└── )(.+)$/);
+                if (!match) return;
+                const depth = match[1].length / 4;
+                let label = match[2].replace(/\s*\[Modified .*? ago\]$/, "").replace(/\s*\[collapsed\]$/, "");
+                const isDir = /\/$/.test(label);
+                label = label.replace(/\/$/, "").trim();
+                stack.length = depth;
+                if (isDir) {
+                    stack[depth] = label;
+                    entries.push({ path: stack.slice(0, depth + 1).join("/"), isDir: true, depth, label });
+                } else {
+                    const path = stack.concat(label).filter(Boolean).join("/");
+                    entries.push({ path, isDir: false, depth, label });
+                }
+            });
+            return entries;
         }
 
         // Switch Left Panel Sidebar tabs / utilities
         function switchSidebarTab(tabName) {
+            currentSidebarSection = ["files", "snapshots"].includes(tabName) ? tabName : "sessions";
             const filesTab = document.getElementById("tab-files");
             const sessionsTab = document.getElementById("tab-sessions");
             const snapshotsTab = document.getElementById("tab-snapshots");
-            const filesBtn = document.getElementById("tab-files-btn");
-            const sessionsBtn = document.getElementById("tab-sessions-btn");
-            const snapshotsBtn = document.getElementById("sidebar-snapshots-btn");
-
+            const title = document.getElementById("sidebar-surface-title");
+            const subtitle = document.getElementById("sidebar-surface-subtitle");
             filesTab.classList.add("hidden");
             sessionsTab.classList.add("hidden");
             snapshotsTab.classList.add("hidden");
-            filesBtn.className = "flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition";
-            sessionsBtn.className = "flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition";
-            if (snapshotsBtn) {
-                snapshotsBtn.className = "bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center justify-center gap-1.5";
-            }
 
-            if (tabName === "files") {
+            if (currentSidebarSection === "files") {
                 filesTab.classList.remove("hidden");
-                filesBtn.className = "flex-1 py-3 text-center border-b-2 border-blue-500 font-bold text-white transition";
-                return;
-            }
-            if (tabName === "snapshots") {
+                if (title) title.textContent = "Files";
+                if (subtitle) subtitle.textContent = "Browse workspace files and staged prompt context";
+                refreshWorkspaceTree();
+            } else if (currentSidebarSection === "snapshots") {
                 snapshotsTab.classList.remove("hidden");
+                if (title) title.textContent = "History Utilities";
+                if (subtitle) subtitle.textContent = "Snapshots and workspace recovery tools";
                 fetchSnapshots();
-                if (snapshotsBtn) {
-                    snapshotsBtn.className = "bg-indigo-950/40 hover:bg-indigo-900 border border-indigo-900 text-indigo-300 hover:text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center justify-center gap-1.5";
-                }
-                return;
+                switchDetailsTab("history");
+            } else {
+                sessionsTab.classList.remove("hidden");
+                if (title) title.textContent = "Workspaces & Sessions";
+                if (subtitle) subtitle.textContent = "Navigate local workspaces and session threads";
+                fetchSessions();
+                fetchWorkspaces();
             }
-
-            sessionsTab.classList.remove("hidden");
-            sessionsBtn.className = "flex-1 py-3 text-center border-b-2 border-blue-500 font-bold text-white transition";
-            fetchSessions();
-            fetchWorkspaces();
+            syncRailButtons();
         }
 
         // Suggest Base URL based on provider selection
@@ -1144,13 +1554,8 @@
             fetch("/api/workspaces")
                 .then(res => res.json())
                 .then(data => {
-                    const select = document.getElementById("workspace-history-select");
-                    let html = "";
-                    data.workspaces.forEach(ws => {
-                        const selected = ws === data.active ? "selected" : "";
-                        html += `<option value="${ws}" ${selected}>${ws}</option>`;
-                    });
-                    select.innerHTML = html;
+                    const summary = document.getElementById("workspace-active-summary");
+                    if (summary) summary.textContent = data.active || "./workspace";
 
                     // Render gorgeous workspace history list
                     let wsHtml = "";
@@ -1366,7 +1771,7 @@
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    workspace_dir: document.getElementById("workspace-history-select").value,
+                    workspace_dir: activeWorkspaceDir,
                     name: name.trim() || "New Session"
                 })
             })
@@ -1657,19 +2062,30 @@
             fetch("/api/workspace/tree")
                 .then(res => res.json())
                 .then(data => {
+                    workspaceTreeEntries = parseWorkspaceTreeEntries(data.tree);
                     const lines = data.tree.split("\n");
                     let html = "";
+                    let entryIndex = 0;
                     lines.forEach(line => {
                         if (!line.trim()) return;
-                        
+
+                        const matchesTreeRow = /^((?:│   |    )*)(?:├── |└── )(.+)$/.test(line);
+                        const entry = matchesTreeRow ? workspaceTreeEntries[entryIndex++] : null;
                         let processedLine = line
                             .replace("[collapsed]", '<span class="text-slate-500 italic text-[10px] bg-slate-900 px-1.5 py-0.5 rounded ml-1">[collapsed]</span>')
                             .replace(/\[Modified (.*?) ago\]/, '<span class="text-amber-400 text-[10px] bg-amber-950/40 border border-amber-800 px-1.5 py-0.5 rounded ml-2 font-mono"><i class="fa-solid fa-clock mr-0.5"></i>$1</span>')
                             .replace("[New / Untracked]", '<span class="text-emerald-400 text-[10px] bg-emerald-950/40 border border-emerald-800 px-1.5 py-0.5 rounded ml-2 font-mono font-bold"><i class="fa-solid fa-plus-circle mr-0.5"></i>New</span>');
-                        
-                        html += `<div class="hover:bg-slate-800/40 px-2 py-0.5 rounded transition duration-75 truncate">${processedLine}</div>`;
+
+                        if (entry && !entry.isDir) {
+                            html += `<button type="button" data-workspace-file="${escapeHtml(entry.path)}" class="workspace-file-row w-full text-left hover:bg-slate-800/40 px-2 py-0.5 rounded transition duration-75 truncate">${processedLine}</button>`;
+                        } else {
+                            html += `<div class="hover:bg-slate-800/20 px-2 py-0.5 rounded transition duration-75 truncate">${processedLine}</div>`;
+                        }
                     });
                     treeContainer.innerHTML = html;
+                    treeContainer.querySelectorAll(".workspace-file-row").forEach(row => {
+                        row.addEventListener("click", () => openWorkspaceFile(row.getAttribute("data-workspace-file")));
+                    });
                 })
                 .catch(err => {
                     treeContainer.innerHTML = `<div class="text-red-400">Failed to load directory tree: ${err}</div>`;
@@ -1701,11 +2117,22 @@
         function handleIncomingEvent(packet) {
             if (packet.event === "session_init") {
                 document.getElementById("session-id").innerText = "Session: " + packet.data.session_id;
+                trajectoryEvents = [];
+                subagentRegistry = {};
+                deliverableRegistry = [];
+                currentFilePreview = null;
+                currentToolPreview = null;
+                recordTrajectoryEvent("session", "session_init", `Active session is now ${packet.data.session_id}.`);
+                renderSubagentsView();
+                renderDeliverablesPanel();
+                renderFilePanel();
+                renderToolPanel();
                 fetchConfig();
             }
 
             if (packet.event === "run_state") {
                 if (packet.data && packet.data.session_id === currentSessionId()) {
+                    recordTrajectoryEvent("run", packet.data.running ? "run_state:start" : "run_state:end", packet.data.running ? "Session execution started." : "Session execution completed.");
                     fetchConfig();
                 }
             }
@@ -1713,10 +2140,13 @@
             if (packet.event === "turn_secured") {
                 const turnData = packet.data;
                 appendTurnToChat(turnData);
+                extractDeliverablesFromTool(turnData);
+                recordTrajectoryEvent(turnData.role || "turn", `turn_secured:${turnData.role || "message"}`, (turnData.name ? `${turnData.name} · ` : "") + ((turnData.content || "").slice(0, 140) || "(no content)"));
                 refreshWorkspaceTree();
             }
 
             if (packet.event === "compaction") {
+                recordTrajectoryEvent("compaction", "compaction", `Compacted history up to turn ${packet.data.boundary_turn}.`);
                 appendSystemAlert("Compaction Engaged", `Context compacted up to Turn ${packet.data.boundary_turn}. History older than this turn has been summarized to save tokens.`, "fa-compress text-indigo-400");
             }
 
@@ -1745,20 +2175,27 @@
 
             // ===== v2.0 LIVE WORKFLOW TRACE =====
             if (packet.event === "workflow_start") {
+                recordTrajectoryEvent("workflow", "workflow_start", packet.data.name || packet.data.workflow_id || "workflow started");
                 renderWorkflowTrace(packet.data);
             }
             if (packet.event === "workflow_node") {
+                recordTrajectoryEvent("workflow_node", `${packet.data.node_id || "node"} · ${packet.data.status || "update"}`, packet.data.preview || packet.data.error || packet.data.label || packet.data.type || "");
                 updateWorkflowNode(packet.data);
             }
             if (packet.event === "workflow_end") {
+                recordTrajectoryEvent("workflow", `workflow_${packet.data.status || "end"}`, packet.data.name || packet.data.workflow_id || "workflow finished");
                 finalizeWorkflowTrace(packet.data);
             }
 
             // ===== PARALLEL SUB-AGENTS =====
             if (packet.event === "subagent_start") {
+                updateSubagentRegistry(packet.data, "running");
+                recordTrajectoryEvent("subagent", "subagent_start", packet.data.description || packet.data.session_id || "sub-agent started");
                 renderSubAgentRow(packet.data, "running");
             }
             if (packet.event === "subagent_done") {
+                updateSubagentRegistry(packet.data, "done");
+                recordTrajectoryEvent("subagent", "subagent_done", packet.data.description || packet.data.session_id || "sub-agent finished");
                 renderSubAgentRow(packet.data, "done");
             }
         }
@@ -2106,6 +2543,15 @@
             `;
 
             chatContainer.appendChild(msgDiv);
+            if (turn.role === "tool") {
+                const summary = msgDiv.querySelector(".tool-result-group > summary");
+                if (summary) {
+                    summary.addEventListener("click", () => {
+                        currentToolPreview = { name: turn.name || "tool", content: turn.content || "" };
+                        switchDetailsTab("tool");
+                    });
+                }
+            }
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 

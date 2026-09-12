@@ -778,12 +778,12 @@ Split it according to the new ownership model:
 - stop overloading transcript and settings with inspection work
 
 ### Tasks
-- [ ] Add rail + sidebar + conversation + details shell structure.
-- [ ] Add explicit resize handles and implement the concession rule: details shrinks first, then closes.
-- [ ] Convert the left sidebar into the primary workspace/session browser; remove the current split-brain between dropdowns, history widgets, and settings fields.
-- [ ] Define details tabs: Trajectory / File / Tool / Deliverable / History utilities.
-- [ ] Add conversation header tabs for Chat / Trajectory / Sub-agents while keeping the conversation shell mounted.
-- [ ] Ensure collapsed sidebar behavior converges toward a 56 px rail target and does not merely set width to zero.
+- [x] Add rail + sidebar + conversation + details shell structure.
+- [x] Add explicit resize handles and implement the concession rule: details shrinks first, then closes.
+- [x] Convert the left sidebar into the primary workspace/session browser; remove the current split-brain between dropdowns, history widgets, and settings fields.
+- [x] Define details tabs: Trajectory / File / Tool / Deliverable / History utilities.
+- [x] Add conversation header tabs for Chat / Trajectory / Sub-agents while keeping the conversation shell mounted.
+- [x] Ensure collapsed sidebar behavior converges toward a 56 px rail target and does not merely set width to zero.
 
 ---
 
