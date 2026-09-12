@@ -227,6 +227,168 @@
         #app-rail .rail-btn {
             border: 1px solid transparent;
         }
+        .typed-tool-body {
+            border-top: 1px solid rgba(51, 65, 85, 0.7);
+            background: rgba(2, 6, 23, 0.42);
+        }
+        .typed-terminal-lines {
+            background: #020617;
+            color: #cbd5e1;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.45;
+            padding: 10px 12px;
+            max-height: 320px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .typed-terminal-lines .term-line { display:block; }
+        .typed-terminal-lines .term-exit { color: #f8fafc; font-weight: 700; }
+        .typed-terminal-lines .term-section { color: #38bdf8; font-weight: 700; }
+        .typed-terminal-lines .term-error { color: #fca5a5; }
+        .typed-terminal-lines .term-warning { color: #fcd34d; }
+        .typed-read-block {
+            background: #020617;
+            max-height: 360px;
+            overflow: auto;
+            padding: 8px 0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.45;
+        }
+        .typed-read-row {
+            display: grid;
+            grid-template-columns: 56px 1fr;
+            gap: 0;
+            padding: 0 12px;
+        }
+        .typed-read-line {
+            color: #64748b;
+            text-align: right;
+            padding-right: 12px;
+            user-select: none;
+        }
+        .typed-read-text {
+            color: #cbd5e1;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .typed-block-meta {
+            padding: 8px 12px;
+            border-top: 1px solid rgba(51, 65, 85, 0.55);
+            background: rgba(15, 23, 42, 0.45);
+            color: #94a3b8;
+            font-size: 10px;
+        }
+        .typed-search-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px 12px;
+        }
+        .typed-search-item {
+            border: 1px solid rgba(51, 65, 85, 0.7);
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.55);
+            padding: 10px;
+        }
+        .typed-search-item .search-path {
+            color: #93c5fd;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 11px;
+            word-break: break-all;
+        }
+        .typed-search-item .search-score {
+            color: #94a3b8;
+            font-size: 10px;
+            margin-top: 2px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        .typed-search-item .search-excerpt {
+            margin-top: 8px;
+            color: #cbd5e1;
+            font-size: 11px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+        }
+        .typed-search-actions,
+        .deliverable-chip-row,
+        .workspace-file-row-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+        .typed-action-btn,
+        .deliverable-chip {
+            border: 1px solid rgba(51, 65, 85, 0.8);
+            background: rgba(15, 23, 42, 0.72);
+            color: #cbd5e1;
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 700;
+            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+        }
+        .typed-action-btn:hover,
+        .deliverable-chip:hover {
+            color: #fff;
+            border-color: rgba(59, 130, 246, 0.5);
+            background: rgba(30, 41, 59, 0.95);
+        }
+        .workspace-file-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            text-align: left;
+        }
+        .workspace-file-row-preview {
+            flex: 1;
+            min-width: 0;
+            text-align: left;
+        }
+        .typed-web-block {
+            padding: 10px 12px;
+            color: #cbd5e1;
+            font-size: 11px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+        }
+        .typed-diff-block {
+            background: #020617;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.45;
+            max-height: 320px;
+            overflow: auto;
+            padding: 8px 0;
+        }
+        .typed-diff-header {
+            color: #94a3b8;
+            padding: 0 12px 8px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .typed-diff-line {
+            display: block;
+            white-space: pre-wrap;
+            padding: 0 12px;
+        }
+        .typed-diff-add {
+            color: #86efac;
+            background: rgba(20, 83, 45, 0.22);
+        }
+        .typed-diff-del {
+            color: #fca5a5;
+            background: rgba(127, 29, 29, 0.22);
+        }
+        .typed-diff-ctx {
+            color: #cbd5e1;
+        }
     </style>
 </head>
 <body data-theme="dark" class="font-sans h-full flex flex-col overflow-hidden">
@@ -1341,7 +1503,8 @@
                 panel.innerHTML = detailsEmptyState("No tool selected", "Open or expand a tool result in the transcript to inspect it here.");
                 return;
             }
-            panel.innerHTML = `<div class="rounded-lg border border-[#334155] bg-slate-900/25 overflow-hidden"><div class="px-3 py-2 border-b border-[#334155]/60"><span class="font-mono text-xs text-slate-200">${escapeHtml(currentToolPreview.name || "tool")}</span></div><pre class="max-h-[420px] overflow-auto p-3 text-[11px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap">${escapeHtml(currentToolPreview.content || "")}</pre></div>`;
+            const paths = deliverablePathsFromTool({ role: "tool", name: currentToolPreview.name, content: currentToolPreview.content });
+            panel.innerHTML = `<div class="rounded-lg border border-[#334155] bg-slate-900/25 overflow-hidden"><div class="px-3 py-2 border-b border-[#334155]/60"><span class="font-mono text-xs text-slate-200">${escapeHtml(currentToolPreview.name || "tool")}</span></div><div class="typed-tool-body">${renderToolBody(currentToolPreview.name, currentToolPreview.content || "")}${renderDeliverableChips(paths)}</div></div>`;
         }
 
         function renderDeliverablesPanel() {
@@ -1400,6 +1563,7 @@
             renderToolPanel();
             renderDeliverablesPanel();
             renderHistoryPanel();
+            syncRailButtons();
         }
 
         function toggleDetailsPanel(forceOpen) {
@@ -2479,14 +2643,20 @@
                             .replace("[New / Untracked]", '<span class="text-emerald-400 text-[10px] bg-emerald-950/40 border border-emerald-800 px-1.5 py-0.5 rounded ml-2 font-mono font-bold"><i class="fa-solid fa-plus-circle mr-0.5"></i>New</span>');
 
                         if (entry && !entry.isDir) {
-                            html += `<button type="button" data-workspace-file="${escapeHtml(entry.path)}" class="workspace-file-row w-full text-left hover:bg-slate-800/40 px-2 py-0.5 rounded transition duration-75 truncate">${processedLine}</button>`;
+                            html += `<div class="workspace-file-row group hover:bg-slate-800/40 px-2 py-0.5 rounded transition duration-75"><button type="button" data-workspace-file="${escapeHtml(entry.path)}" class="workspace-file-row-preview truncate">${processedLine}</button><div class="workspace-file-row-actions opacity-0 group-hover:opacity-100 transition"><button type="button" data-stage-file="${escapeHtml(entry.path)}" class="typed-action-btn">Stage</button></div></div>`;
                         } else {
                             html += `<div class="hover:bg-slate-800/20 px-2 py-0.5 rounded transition duration-75 truncate">${processedLine}</div>`;
                         }
                     });
                     treeContainer.innerHTML = html;
-                    treeContainer.querySelectorAll(".workspace-file-row").forEach(row => {
+                    treeContainer.querySelectorAll("[data-workspace-file]").forEach(row => {
                         row.addEventListener("click", () => openWorkspaceFile(row.getAttribute("data-workspace-file")));
+                    });
+                    treeContainer.querySelectorAll("[data-stage-file]").forEach(row => {
+                        row.addEventListener("click", (event) => {
+                            event.stopPropagation();
+                            stageWorkspaceFile(row.getAttribute("data-stage-file"));
+                        });
                     });
                 })
                 .catch(err => {
@@ -2903,16 +3073,15 @@
                             </summary>
                             <div class="px-3 pb-2 pt-1 border-t border-slate-800/70">
                                 <div class="text-[9px] uppercase tracking-wider text-slate-500 mb-1">Arguments</div>
-                                <pre class="overflow-x-auto whitespace-pre-wrap text-slate-300 font-mono text-[11px]">${escapeHtml(tc.function.arguments || "")}</pre>
+                                ${renderToolCallArgumentsBody(tc)}
                             </div>
                         </details>
                     `;
                 });
             } else if (turn.role === "tool") {
-                // Foldable tool result: collapsed by default, title shows a
-                // short preview + size. Full content is kept in the DOM.
                 const full = turn.content || "";
                 const title = toolResultTitle(turn.name, full);
+                const deliverables = deliverablePathsFromTool(turn);
                 textHtml = `
                     <details class="tool-result-group bg-slate-950 border border-slate-800 rounded-md overflow-hidden">
                         <summary class="cursor-pointer select-none px-3 py-1.5 text-emerald-400 font-mono text-[11px] hover:bg-slate-900/60 flex items-center">
@@ -2920,7 +3089,7 @@
                             <i class="fa-solid fa-terminal mr-2"></i>
                             <span class="truncate">${escapeHtml(title)}</span>
                         </summary>
-                        <pre class="overflow-x-auto whitespace-pre-wrap text-emerald-300/90 font-mono text-[11px] px-3 pb-2 pt-1 border-t border-slate-800/70">${escapeHtml(full)}</pre>
+                        <div class="typed-tool-body">${renderToolBody(turn.name, full)}${renderDeliverableChips(deliverables)}</div>
                     </details>
                 `;
             } else {
@@ -3153,6 +3322,127 @@
             const sizeLabel = len < 1024 ? `${len} ch` : `${(len / 1024).toFixed(1)} KB`;
             const base = `result · ${name || "tool"} · ${sizeLabel}`;
             return firstLine ? `${base} — ${firstLine}` : base;
+        }
+
+        function deliverablePathsFromTool(turn) {
+            if (!turn || turn.role !== "tool") return [];
+            const content = String(turn.content || "");
+            const out = [];
+            const matches = [
+                content.match(/Successfully wrote file to host disk at\s+(.+)$/m),
+                content.match(/Successfully wrote file inside Docker at\s+(.+)$/m),
+                content.match(/Successfully patched file '([^']+)'/m),
+            ].filter(Boolean);
+            matches.forEach(m => {
+                const path = (m[1] || "").trim();
+                if (path && !out.includes(path)) out.push(path);
+            });
+            return out;
+        }
+
+        function renderDeliverableChips(paths) {
+            if (!paths || paths.length === 0) return "";
+            return `<div class="deliverable-chip-row px-3 py-2 border-t border-slate-800/70">` + paths.map(path => `
+                <button type="button" class="deliverable-chip" onclick="openWorkspaceFile(${JSON.stringify(path)})">Open ${escapeHtml(path)}</button>
+                <button type="button" class="deliverable-chip" onclick="stageWorkspaceFile(${JSON.stringify(path)})">Stage ${escapeHtml(path)}</button>
+            `).join("") + `</div>`;
+        }
+
+        function renderTerminalBlock(content) {
+            const lines = String(content || "").split(/\r?\n/);
+            const rendered = lines.map(line => {
+                let cls = "term-line";
+                if (/^Exit Code:/i.test(line)) cls += " term-exit";
+                else if (/^(Stdout:|Stderr:)/.test(line)) cls += " term-section";
+                else if (/^(Sandbox Execution Error:|Security Exception:|Docker write failed:|Patch Error:|Failed to)/.test(line)) cls += " term-error";
+                else if (/^⚠️|^Warning/i.test(line)) cls += " term-warning";
+                return `<span class="${cls}">${escapeHtml(line || " ")}</span>`;
+            }).join("");
+            return `<div class="typed-terminal-lines">${rendered}</div>`;
+        }
+
+        function renderReadBlock(content) {
+            const lines = String(content || "").split(/\r?\n/);
+            const rows = [];
+            const extras = [];
+            lines.forEach(line => {
+                const m = line.match(/^(\d+) \| ?(.*)$/);
+                if (m) {
+                    rows.push(`<div class="typed-read-row"><span class="typed-read-line">${escapeHtml(m[1])}</span><span class="typed-read-text">${escapeHtml(m[2])}</span></div>`);
+                } else if (line.trim()) {
+                    extras.push(line);
+                }
+            });
+            const meta = extras.length ? `<div class="typed-block-meta">${escapeHtml(extras.join(" "))}</div>` : "";
+            if (rows.length === 0) return renderTerminalBlock(content);
+            return `<div class="typed-read-block">${rows.join("")}</div>${meta}`;
+        }
+
+        function renderSearchBlock(content) {
+            const headerMatch = String(content || "").match(/^===\s*(.*?)\s*===/m);
+            const body = [];
+            const re = /\[(\d+)\]\s+File:\s+(.+?)\s+\(BM25 Relevance Score:\s+([^)]+)\)\nExcerpt:\n([\s\S]*?)(?=\n--------------------------------------------------\n|$)/g;
+            let m;
+            while ((m = re.exec(String(content || ""))) !== null) {
+                const path = m[2].trim();
+                const score = m[3].trim();
+                const excerpt = m[4].trim();
+                body.push(`<div class="typed-search-item"><div class="search-path">${escapeHtml(path)}</div><div class="search-score">score ${escapeHtml(score)}</div><div class="search-excerpt">${escapeHtml(excerpt)}</div><div class="typed-search-actions"><button type="button" class="typed-action-btn" onclick="openWorkspaceFile(${JSON.stringify(path)})">Open file</button><button type="button" class="typed-action-btn" onclick="stageWorkspaceFile(${JSON.stringify(path)})">Stage file</button></div></div>`);
+            }
+            if (body.length === 0) return renderTerminalBlock(content);
+            const header = headerMatch ? `<div class="typed-block-meta">${escapeHtml(headerMatch[1])}</div>` : "";
+            return `${header}<div class="typed-search-list">${body.join("")}</div>`;
+        }
+
+        function renderWebBlock(content) {
+            return `<div class="typed-web-block">${escapeHtml(content || "")}</div>`;
+        }
+
+        function renderPatchArgumentDiff(rawArgs) {
+            try {
+                const args = JSON.parse(rawArgs || "{}");
+                const path = args.path || "patch";
+                const searchLines = String(args.search || "").split(/\r?\n/);
+                const replaceLines = String(args.replace || "").split(/\r?\n/);
+                const previewLimit = 24;
+                const del = searchLines.slice(0, previewLimit).map(line => `<span class="typed-diff-line typed-diff-del">- ${escapeHtml(line)}</span>`).join("");
+                const add = replaceLines.slice(0, previewLimit).map(line => `<span class="typed-diff-line typed-diff-add">+ ${escapeHtml(line)}</span>`).join("");
+                const more = (searchLines.length > previewLimit || replaceLines.length > previewLimit)
+                    ? `<div class="typed-block-meta">Diff preview truncated for readability.</div>` : "";
+                return `<div class="typed-diff-block"><div class="typed-diff-header">Patch preview · ${escapeHtml(path)}</div>${del}${add}${more}</div>`;
+            } catch {
+                return `<pre class="overflow-x-auto whitespace-pre-wrap text-slate-300 font-mono text-[11px]">${escapeHtml(rawArgs || "")}</pre>`;
+            }
+        }
+
+        function renderToolCallArgumentsBody(tc) {
+            const name = tc && tc.function ? tc.function.name : "tool";
+            const rawArgs = tc && tc.function ? tc.function.arguments || "" : "";
+            if (name === "patch_file") {
+                return renderPatchArgumentDiff(rawArgs);
+            }
+            if (name === "write_file") {
+                try {
+                    const args = JSON.parse(rawArgs || "{}");
+                    const content = String(args.content || "");
+                    const rows = content.split(/\r?\n/).slice(0, 24).map((line, idx) => `<div class="typed-read-row"><span class="typed-read-line">${idx + 1}</span><span class="typed-read-text">${escapeHtml(line)}</span></div>`).join("");
+                    const more = content.split(/\r?\n/).length > 24 ? `<div class="typed-block-meta">Write preview truncated for readability.</div>` : "";
+                    return `<div class="typed-read-block">${rows}</div>${more}`;
+                } catch {
+                    return `<pre class="overflow-x-auto whitespace-pre-wrap text-slate-300 font-mono text-[11px]">${escapeHtml(rawArgs)}</pre>`;
+                }
+            }
+            return `<pre class="overflow-x-auto whitespace-pre-wrap text-slate-300 font-mono text-[11px]">${escapeHtml(rawArgs)}</pre>`;
+        }
+
+        function renderToolBody(name, content) {
+            const tool = String(name || "");
+            const text = String(content || "");
+            if (tool === "execute_command") return renderTerminalBlock(text);
+            if (tool === "read_file" || tool === "read_spill") return renderReadBlock(text);
+            if (tool === "bm25_search") return renderSearchBlock(text);
+            if (tool === "web_search" || tool === "web_fetch") return renderWebBlock(text);
+            return renderTerminalBlock(text);
         }
 
         // =============================================================

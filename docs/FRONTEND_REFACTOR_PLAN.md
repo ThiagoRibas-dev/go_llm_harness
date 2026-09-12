@@ -810,12 +810,12 @@ Split it according to the new ownership model:
 - make transcript structure more inspectable
 
 ### Tasks
-- [ ] Add file preview in details panel with a stable open target.
-- [ ] Add contextual pin/stage/open actions from file rows, search results, and deliverable chips.
-- [ ] Implement typed blocks for Terminal / Diff / Read / Search / Web.
-- [ ] Move tool-result inspection out of giant raw `<pre>` dependence and into typed block renderers with collapse/expand behavior.
-- [ ] Add deliverable chips that open previews directly and derive from real successful file mutations.
-- [ ] Make file interactions consistent: click row = preview, explicit secondary action = stage/pin, `@file` = mention.
+- [x] Add file preview in details panel with a stable open target.
+- [x] Add contextual pin/stage/open actions from file rows, search results, and deliverable chips.
+- [x] Implement typed blocks for Terminal / Diff / Read / Search / Web. *(Web blocks are renderer-ready now; they will become fully exercised once web tools land.)*
+- [x] Move tool-result inspection out of giant raw `<pre>` dependence and into typed block renderers with collapse/expand behavior.
+- [x] Add deliverable chips that open previews directly and derive from real successful file mutations.
+- [x] Make file interactions consistent: click row = preview, explicit secondary action = stage/pin, `@file` = mention/stage.
 
 ---
 
