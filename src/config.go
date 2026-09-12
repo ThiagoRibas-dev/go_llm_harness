@@ -37,8 +37,8 @@ type APIConfig struct {
 	Key           string  `json:"key"`            // API Key or Access Token
 	BaseURL       string  `json:"base_url"`       // Manual Override URL (if non-empty)
 	Model         string  `json:"model"`          // Target model name
-	Temperature   float64 `json:"temperature"`     // LLM Temperature
-	MaxTokens     int     `json:"max_tokens"`      // Maximum output token ceiling
+	Temperature   float64 `json:"temperature"`    // LLM Temperature
+	MaxTokens     int     `json:"max_tokens"`     // Maximum output token ceiling
 	TopP          float64 `json:"top_p"`          // Top-P sampling (Phase 8.6)
 	TopK          int     `json:"top_k"`          // Top-K sampling (Phase 8.6)
 	ThinkingLevel string  `json:"thinking_level"` // Thinking / Reasoning level: "off", "low", "medium", "high" (Phase 8.6)
@@ -54,8 +54,8 @@ type APIConfig struct {
 
 type AgentConfig struct {
 	WorkspaceDir          string   `json:"workspace_dir"`
-	WorkspacesHistory     []string `json:"workspaces_history"`       // Workspace History (Phase 6.3)
-	LastActiveSessionID   string   `json:"last_active_session_id"`   // Last Active Session ID for launch persistence (Phase 8.6)
+	WorkspacesHistory     []string `json:"workspaces_history"`     // Workspace History (Phase 6.3)
+	LastActiveSessionID   string   `json:"last_active_session_id"` // Last Active Session ID for launch persistence (Phase 8.6)
 	MaxTurns              int      `json:"max_turns"`
 	CommandTimeoutSeconds int      `json:"command_timeout_seconds"`
 	TargetScanDirs        []string `json:"target_scan_dirs,omitempty"` // Specific subdirectory paths to target (e.g. ["src", "docs"])
@@ -173,11 +173,12 @@ type SessionMeta struct {
 
 // OpenAI Chat Completion API Schema structures
 type Message struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content,omitempty"`
-	Name       string     `json:"name,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	Role       string                 `json:"role"`
+	Content    string                 `json:"content,omitempty"`
+	Name       string                 `json:"name,omitempty"`
+	ToolCallID string                 `json:"tool_call_id,omitempty"`
+	ToolCalls  []ToolCall             `json:"tool_calls,omitempty"`
+	Meta       map[string]interface{} `json:"meta,omitempty"`
 }
 
 type ToolCall struct {

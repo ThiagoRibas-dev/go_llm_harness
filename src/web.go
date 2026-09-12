@@ -923,9 +923,10 @@ func StartWebGUI(port int) {
 		}
 		result := executeTerminalCommand(nil, req.Command)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"command": req.Command,
-			"result":  result,
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"command":   req.Command,
+			"result":    result,
+			"artifacts": inferArtifactsFromToolResult("execute_command", result),
 		})
 	})
 

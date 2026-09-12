@@ -35,6 +35,7 @@ func saveMessageTurn(msg Message) {
 		"name":        msg.Name,
 		"content":     msg.Content,
 		"tool_calls":  msg.ToolCalls,
+		"meta":        msg.Meta,
 	})
 }
 
@@ -44,7 +45,7 @@ func loadHistoryFromFiles() []Message {
 	if activeConfig.Debug {
 		fmt.Printf("[DEBUG] Loading history from directory: %s\n", sessionPath)
 	}
-	
+
 	entries, err := os.ReadDir(sessionPath)
 	if err != nil {
 		if activeConfig.Debug {
@@ -60,7 +61,7 @@ func loadHistoryFromFiles() []Message {
 	var history []Message
 	for _, entry := range entries {
 		name := entry.Name()
-		
+
 		isDir := entry.IsDir()
 		isJson := strings.HasSuffix(name, ".json")
 		longEnough := len(name) > 4
@@ -243,16 +244,16 @@ func executeSlidingWindowCompaction(a *Agent, history []Message, force bool) {
 	boundaryTurnNumber := compactionEndIndex
 
 	if force {
-		fmt.Printf("\n%s⚡ [COMPACTION] Manual compaction forced. Compacting turns 1 to %d while keeping the last %d turns untouched...%s\n", 
+		fmt.Printf("\n%s⚡ [COMPACTION] Manual compaction forced. Compacting turns 1 to %d while keeping the last %d turns untouched...%s\n",
 			ColorBold+ColorMagenta, boundaryTurnNumber, keepLastN, ColorReset)
 	} else {
-		fmt.Printf("\n%s⚡ [COMPACTION] User turn limit reached (%d / %d prompts). Compacting turns 1 to %d while keeping the last %d turns untouched...%s\n", 
+		fmt.Printf("\n%s⚡ [COMPACTION] User turn limit reached (%d / %d prompts). Compacting turns 1 to %d while keeping the last %d turns untouched...%s\n",
 			ColorBold+ColorMagenta, userTurns, limit, boundaryTurnNumber, keepLastN, ColorReset)
 	}
 
 	// 1. Read previous summary if it exists to accumulate knowledge recursively
 	prevSummary, _ := a.compactionSummary()
-	
+
 	var historyToCompact strings.Builder
 	if prevSummary != "" {
 		historyToCompact.WriteString("=== PREVIOUS CONTEXT SUMMARY (BASELINE) ===\n")
@@ -288,14 +289,14 @@ func executeSlidingWindowCompaction(a *Agent, history []Message, force bool) {
 	}
 
 	respMsg, err := sendProviderRequest(compAPI, reqBody.Messages, nil)
-	
+
 	if err != nil {
 		fmt.Printf("%s[WARNING] Context Compaction API call failed: %v. Skipping compaction.%s\n", ColorYellow, err, ColorReset)
 		return
 	}
 
 	sessionPath := GetSystemPath(filepath.Join(".goharness", "sessions", a.SessionID))
-	
+
 	// Create named compacted output file
 	summaryFilename := fmt.Sprintf("compacted_summary_up_to_turn_%03d.json", boundaryTurnNumber)
 	summaryPath := filepath.Join(sessionPath, summaryFilename)
@@ -435,7 +436,7 @@ func getSessionPinnedFiles(sessionID string) []string {
 // for AGENTS.md, SKILLS.md, INSTRUCTIONS.md, and standard CLAUDE.md files, injecting them dynamically on Turn 1 (Phase 8.6)
 func LoadLocalInstructions() string {
 	var instructions []string
-	
+
 	// Load specifically pinned context files for this session
 	pinned := getSessionPinnedFiles(activeSessionID)
 
@@ -524,7 +525,7 @@ func scanDir(currentPath, prefix string, depth int, config DirectoryScanConfig, 
 	for i, dir := range dirs {
 		name := dir.Name()
 		isLast := (i == len(dirs)-1) && (len(files) == 0)
-		
+
 		char := "├── "
 		nextPrefix := prefix + "│   "
 		if isLast {
@@ -596,6 +597,7 @@ func shouldCollapse(name string, patterns []string) bool {
 	}
 	return false
 }
+
 // executeBM25Search indexes and queries workspace or session folder files using our custom BM25 engine
 func executeBM25Search(a *Agent, query, scope string, limit int) string {
 	engine := NewBM25Engine()

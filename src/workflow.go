@@ -1075,6 +1075,7 @@ func (e *WorkflowExecutor) runLLMNode(ctx context.Context, n *RuntimeNode, input
 				ToolCallID: toolCall.ID,
 				Name:       toolCall.Function.Name,
 				Content:    result,
+				Meta:       buildToolMessageMeta(toolCall.Function.Name, result),
 			}
 			nodeAgent.saveTurn(toolMsg)
 			messages = append(messages, toolMsg)

@@ -1450,11 +1450,7 @@
 
         function extractDeliverablesFromTool(turn) {
             if (!turn || turn.role !== "tool") return;
-            const content = String(turn.content || "");
-            let m = content.match(/Successfully wrote file to host disk at\s+(.+)$/m) ||
-                content.match(/Successfully wrote file inside Docker at\s+(.+)$/m) ||
-                content.match(/Successfully patched file '([^']+)'/m);
-            if (m) rememberDeliverable((m[1] || "").trim());
+            deliverablePathsFromTool(turn).forEach(rememberDeliverable);
         }
 
         function updateSubagentRegistry(data, state) {
@@ -1654,30 +1650,33 @@
             }
         }
 
-        function parseWorkspaceTreeEntries(tree) {
-            const entries = [];
-            const stack = [];
-            String(tree || "").split("\n").forEach(line => {
-                const match = line.match(/^((?:│   |    )*)(?:├── |└── )(.+)$/);
-                if (!match) return;
-                const depth = match[1].length / 4;
-                let label = match[2].replace(/\s*\[Modified .*? ago\]$/, "").replace(/\s*\[collapsed\]$/, "");
-                const isDir = /\/$/.test(label);
-                label = label.replace(/\/$/, "").trim();
-                stack.length = depth;
-                if (isDir) {
-                    stack[depth] = label;
-                    entries.push({ path: stack.slice(0, depth + 1).join("/"), isDir: true, depth, label });
-                } else {
-                    const path = stack.concat(label).filter(Boolean).join("/");
-                    entries.push({ path, isDir: false, depth, label });
-                }
-            });
-            return entries;
-        }
-
         function currentSessionKey() {
             return currentSessionId() || "pending-session";
+        }
+
+        function storageKey(kind, sessionKey) {
+            return `goharness:${kind}:${sessionKey}`;
+        }
+
+        function persistSessionUIState() {
+            try {
+                const key = currentSessionKey();
+                sessionStorage.setItem(storageKey("queue", key), JSON.stringify(sessionQueues[key] || []));
+                sessionStorage.setItem(storageKey("staged", key), JSON.stringify(stagedContextBySession[key] || []));
+            } catch {}
+        }
+
+        function restoreSessionUIState(sessionKey) {
+            const key = sessionKey || currentSessionKey();
+            try {
+                const q = sessionStorage.getItem(storageKey("queue", key));
+                const s = sessionStorage.getItem(storageKey("staged", key));
+                sessionQueues[key] = q ? JSON.parse(q) : (sessionQueues[key] || []);
+                stagedContextBySession[key] = s ? JSON.parse(s) : (stagedContextBySession[key] || []);
+            } catch {
+                sessionQueues[key] = sessionQueues[key] || [];
+                stagedContextBySession[key] = stagedContextBySession[key] || [];
+            }
         }
 
         function isSessionBusy() {
@@ -1686,12 +1685,14 @@
 
         function queueForCurrentSession() {
             const key = currentSessionKey();
+            if (!sessionQueues[key]) restoreSessionUIState(key);
             sessionQueues[key] = sessionQueues[key] || [];
             return sessionQueues[key];
         }
 
         function stagedContextForCurrentSession() {
             const key = currentSessionKey();
+            if (!stagedContextBySession[key]) restoreSessionUIState(key);
             stagedContextBySession[key] = stagedContextBySession[key] || [];
             return stagedContextBySession[key];
         }
@@ -1708,12 +1709,14 @@
                 if (firstFollow === -1) queue.push(item);
                 else queue.splice(firstFollow, 0, item);
             }
+            persistSessionUIState();
             renderQueuedMessages();
             renderComposerActionRow();
         }
 
         function removeQueuedMessage(id) {
             sessionQueues[currentSessionKey()] = queueForCurrentSession().filter(item => item.id !== id);
+            persistSessionUIState();
             renderQueuedMessages();
             renderComposerActionRow();
         }
@@ -1730,6 +1733,7 @@
                 input.style.height = input.scrollHeight + "px";
                 input.focus();
             }
+            persistSessionUIState();
             renderQueuedMessages();
             renderComposerActionRow();
             updateTriggerOverlay();
@@ -1766,6 +1770,7 @@
                 if (!res.ok) throw new Error("Failed to read file");
                 const data = await res.json();
                 staged.push({ id: "ctx-" + (queueItemSeq++), type: "file", path: data.path, content: data.content });
+                persistSessionUIState();
                 renderStagedContextStrip();
                 renderComposerActionRow();
                 switchDetailsTab("file");
@@ -1778,12 +1783,14 @@
 
         function removeStagedContext(id) {
             stagedContextBySession[currentSessionKey()] = stagedContextForCurrentSession().filter(item => item.id !== id);
+            persistSessionUIState();
             renderStagedContextStrip();
             renderComposerActionRow();
         }
 
         function clearStagedContext() {
             stagedContextBySession[currentSessionKey()] = [];
+            persistSessionUIState();
             renderStagedContextStrip();
             renderComposerActionRow();
         }
@@ -1816,6 +1823,7 @@
             if (staged.length === 0) return prompt;
             const blocks = staged.map(item => `\n\n## Staged file: ${item.path}\n\n\`\`\`text\n${item.content}\n\`\`\``).join("");
             stagedContextBySession[currentSessionKey()] = [];
+            persistSessionUIState();
             renderStagedContextStrip();
             renderComposerActionRow();
             return prompt + blocks;
@@ -1992,7 +2000,7 @@
             });
             if (!res.ok) throw new Error("Command execution failed");
             const data = await res.json();
-            currentToolPreview = { name: `shell · ${command}`, content: data.result || "" };
+            currentToolPreview = { role: "tool", name: `shell · ${command}`, content: data.result || "", meta: { artifacts: data.artifacts || [] } };
             recordTrajectoryEvent("tool", "direct_shell_command", command);
             switchDetailsTab("tool");
             appendSystemAlert("Shell Command Completed", `Executed sandboxed command: ${command}`, "fa-terminal text-cyan-400");
@@ -2037,6 +2045,7 @@
             const queue = queueForCurrentSession();
             if (queue.length === 0) return;
             const item = queue.shift();
+            persistSessionUIState();
             renderQueuedMessages();
             renderComposerActionRow();
             queueDispatchInFlight = true;
@@ -2628,7 +2637,7 @@
             fetch("/api/workspace/tree")
                 .then(res => res.json())
                 .then(data => {
-                    workspaceTreeEntries = parseWorkspaceTreeEntries(data.tree);
+                    workspaceTreeEntries = Array.isArray(data.entries) ? data.entries : [];
                     const lines = data.tree.split("\n");
                     let html = "";
                     let entryIndex = 0;
@@ -2694,6 +2703,7 @@
                 deliverableRegistry = [];
                 currentFilePreview = null;
                 currentToolPreview = null;
+                restoreSessionUIState(packet.data.session_id);
                 recordTrajectoryEvent("session", "session_init", `Active session is now ${packet.data.session_id}.`);
                 renderSubagentsView();
                 renderDeliverablesPanel();
@@ -3139,7 +3149,7 @@
                 const summary = msgDiv.querySelector(".tool-result-group > summary");
                 if (summary) {
                     summary.addEventListener("click", () => {
-                        currentToolPreview = { name: turn.name || "tool", content: turn.content || "" };
+                        currentToolPreview = { role: "tool", name: turn.name || "tool", content: turn.content || "", meta: turn.meta || null };
                         switchDetailsTab("tool");
                     });
                 }
@@ -3326,6 +3336,10 @@
 
         function deliverablePathsFromTool(turn) {
             if (!turn || turn.role !== "tool") return [];
+            const metaArtifacts = turn.meta && Array.isArray(turn.meta.artifacts) ? turn.meta.artifacts : null;
+            if (metaArtifacts && metaArtifacts.length > 0) {
+                return metaArtifacts.filter(Boolean);
+            }
             const content = String(turn.content || "");
             const out = [];
             const matches = [

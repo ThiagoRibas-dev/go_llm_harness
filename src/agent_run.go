@@ -123,6 +123,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) string {
 				ToolCallID: tr.ToolCallID,
 				Name:       tr.Name,
 				Content:    tr.Result,
+				Meta:       buildToolMessageMeta(tr.Name, tr.Result),
 			}
 			a.saveTurn(toolMsg)
 			requestMessages = append(requestMessages, toolMsg)

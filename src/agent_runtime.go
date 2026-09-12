@@ -26,9 +26,9 @@ type Agent struct {
 	ProfileName string    // profile that resolved API (for throttle keying); "" for inline/global
 	Depth       int       // 0 for the root/main agent
 
-	turn      int                      // next turn number for this session (local, not global)
+	turn       int                      // next turn number for this session (local, not global)
 	throttlers map[string]chan struct{} // per-profile concurrency semaphores
-	mu        sync.Mutex
+	mu         sync.Mutex
 }
 
 // NewRootAgent builds the agent for the active UI/TUI session using the
@@ -95,6 +95,7 @@ func (a *Agent) saveTurn(msg Message) {
 		"name":        msg.Name,
 		"content":     msg.Content,
 		"tool_calls":  msg.ToolCalls,
+		"meta":        msg.Meta,
 	})
 }
 
