@@ -762,12 +762,12 @@ Split it according to the new ownership model:
 - give graph editing real space
 
 ### Tasks
-- [ ] Remove `#settings-panel-workflow` and `#btn-settings-tab-workflow` from the Settings modal contract.
-- [ ] Create a dedicated app-level Workflow Lab surface with full-height canvas, inspector, and advanced JSON drawer owned by the lab itself.
-- [ ] Keep `#workflow-selector` in the main shell as the runtime selector only.
-- [ ] Keep `#wf-lab-selector` inside Workflow Lab as the editing-target selector only.
-- [ ] Move `#workflow-json-editor` into a Workflow Lab-owned disclosure/panel, not a settings sub-scroll.
-- [ ] Preserve `Compile & Apply` semantics, but stop closing Settings as a side-effect of saving workflow edits because workflow editing should no longer live there.
+- [x] Remove `#settings-panel-workflow` and `#btn-settings-tab-workflow` from the Settings modal contract.
+- [x] Create a dedicated app-level Workflow Lab surface with full-height canvas, inspector, and advanced JSON drawer owned by the lab itself.
+- [x] Keep `#workflow-selector` in the main shell as the runtime selector only.
+- [x] Keep `#wf-lab-selector` inside Workflow Lab as the editing-target selector only.
+- [x] Move `#workflow-json-editor` into a Workflow Lab-owned disclosure/panel, not a settings sub-scroll.
+- [x] Preserve `Compile & Apply` semantics, but stop closing Settings as a side-effect of saving workflow edits because workflow editing should no longer live there.
 
 ---
 

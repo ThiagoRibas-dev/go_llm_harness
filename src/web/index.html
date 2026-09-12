@@ -342,14 +342,14 @@
         </aside>
 
         <!-- 💬 CENTER PANEL: Interactive Chat Console -->
-        <main class="app-conversation flex-1 flex flex-col min-w-0 bg-[#0b0f19]">
-            <!-- Turn Streams Display Container -->
-            <div class="flex-1 overflow-y-auto px-8 py-6 space-y-6" id="chat-messages">
-                <!-- Greeting will be appended on boot -->
-            </div>
-
+        <main id="primary-surface" class="app-conversation flex-1 flex flex-col min-w-0 bg-[#0b0f19]">
             <div id="chat-status-row" class="px-6 pt-4 pb-0 border-t border-[#334155]/70 bg-[#0f172a]/35 shrink-0">
-                <div class="max-w-4xl mx-auto flex flex-wrap items-center gap-2 text-xs">
+                <div class="max-w-6xl mx-auto flex flex-wrap items-center gap-2 text-xs">
+                    <div class="flex items-center gap-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155]">
+                        <span class="text-slate-400">View:</span>
+                        <button id="view-console-btn" type="button" onclick="switchPrimarySurface('console')" class="px-2 py-1 rounded bg-slate-800 text-slate-100 font-bold">Console</button>
+                        <button id="view-workflow-btn" type="button" onclick="switchPrimarySurface('workflow')" class="px-2 py-1 rounded text-slate-400 hover:text-slate-200">Workflow Lab</button>
+                    </div>
                     <div class="flex items-center space-x-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155]">
                         <i class="fa-solid fa-diagram-project text-purple-400"></i>
                         <span class="text-slate-400">Active Workflow:</span>
@@ -379,30 +379,157 @@
                 </div>
             </div>
 
-            <!-- ⌨️ INPUT CONTROL PANEL -->
-            <div class="p-6 bg-[#0f172a]/50 shrink-0">
-                <form id="prompt-form" onsubmit="submitPrompt(event)" onclick="handleComposerShellClick(event)" class="relative max-w-4xl mx-auto flex items-center bg-[#1e293b] rounded-lg border border-[#334155] shadow-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition duration-150">
-                    <div id="composer-shell" class="w-full flex items-center">
-                        <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')...." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36" onkeydown="handleInputKeydown(event)"></textarea>
-                        <div class="flex items-center space-x-2 pr-3 shrink-0">
-                            <button id="reroll-btn" type="button" onclick="triggerReroll()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition p-2.5 rounded-md border border-[#334155] text-xs font-bold flex items-center justify-center h-9 w-9" title="Reroll Last Response (Regenerate)">
-                                <i class="fa-solid fa-rotate-right text-xs"></i>
-                            </button>
-                            <button id="composer-cta" type="button" onclick="runComposerCta()" class="hidden bg-amber-600 text-white hover:bg-amber-500 transition duration-150 px-3 py-2 rounded text-xs font-bold h-9 shadow-md">
-                                <span id="composer-cta-label">Open</span>
-                            </button>
-                            <button id="prompt-submit" type="submit" class="bg-blue-600 text-white hover:bg-blue-500 transition duration-150 px-4 py-2 rounded text-xs font-bold h-9 shadow-md flex items-center space-x-1.5">
-                                <span>Execute</span> <i class="fa-solid fa-play"></i>
-                            </button>
+            <div id="console-surface" class="flex flex-1 flex-col min-h-0">
+                <!-- Turn Streams Display Container -->
+                <div class="flex-1 overflow-y-auto px-8 py-6 space-y-6" id="chat-messages">
+                    <!-- Greeting will be appended on boot -->
+                </div>
+
+                <!-- ⌨️ INPUT CONTROL PANEL -->
+                <div class="p-6 bg-[#0f172a]/50 shrink-0">
+                    <form id="prompt-form" onsubmit="submitPrompt(event)" onclick="handleComposerShellClick(event)" class="relative max-w-4xl mx-auto flex items-center bg-[#1e293b] rounded-lg border border-[#334155] shadow-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition duration-150">
+                        <div id="composer-shell" class="w-full flex items-center">
+                            <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')...." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36" onkeydown="handleInputKeydown(event)"></textarea>
+                            <div class="flex items-center space-x-2 pr-3 shrink-0">
+                                <button id="reroll-btn" type="button" onclick="triggerReroll()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition p-2.5 rounded-md border border-[#334155] text-xs font-bold flex items-center justify-center h-9 w-9" title="Reroll Last Response (Regenerate)">
+                                    <i class="fa-solid fa-rotate-right text-xs"></i>
+                                </button>
+                                <button id="composer-cta" type="button" onclick="runComposerCta()" class="hidden bg-amber-600 text-white hover:bg-amber-500 transition duration-150 px-3 py-2 rounded text-xs font-bold h-9 shadow-md">
+                                    <span id="composer-cta-label">Open</span>
+                                </button>
+                                <button id="prompt-submit" type="submit" class="bg-blue-600 text-white hover:bg-blue-500 transition duration-150 px-4 py-2 rounded text-xs font-bold h-9 shadow-md flex items-center space-x-1.5">
+                                    <span>Execute</span> <i class="fa-solid fa-play"></i>
+                                </button>
+                            </div>
                         </div>
+                    </form>
+                    <div id="composer-state-hint" class="text-[10px] text-slate-500 text-center mt-2 font-mono">
+                        GoHarness Sandbox Mode is active. System write-protection active. Press <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Enter</kbd> to execute, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Shift+Enter</kbd> for new line.
                     </div>
-                </form>
-                <div id="composer-state-hint" class="text-[10px] text-slate-500 text-center mt-2 font-mono">
-                    GoHarness Sandbox Mode is active. System write-protection active. Press <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Enter</kbd> to execute, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Shift+Enter</kbd> for new line.
                 </div>
             </div>
+            <section id="workflow-lab-surface" class="hidden flex-1 min-h-0 flex flex-col overflow-hidden p-6 text-xs">
+                <div class="max-w-7xl mx-auto w-full flex-1 min-h-0 flex flex-col">
+                    <div class="mb-4 flex items-start justify-between gap-4 rounded-xl border border-[#334155] bg-slate-900/25 px-4 py-3">
+                        <div>
+                            <div class="text-[10px] font-bold text-purple-400 uppercase tracking-wider flex items-center"><i class="fa-solid fa-diagram-project mr-1.5"></i>Workflow Lab</div>
+                            <h2 class="mt-1 text-lg font-bold text-slate-100">Edit workflow definitions as a first-class surface</h2>
+                            <p class="mt-1 text-xs text-slate-400 max-w-3xl">Use the selector in the status row to choose the active runtime workflow. This surface is only for editing workflow definitions and applying them.</p>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button type="button" onclick="switchPrimarySurface('console')" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Back to Console</button>
+                            <button type="button" onclick="openSettingsModal()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition font-bold text-xs flex items-center gap-1.5"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
+                        </div>
+                    </div>
+                <!-- AI Compiler prompt box -->
+                <div class="bg-slate-900/30 p-3 rounded-xl border border-blue-500/30 space-y-2 mb-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1.5 animate-pulse"></i> Natural Language AI Compiler
+                        </span>
+                        <span class="text-[9px] text-slate-500 font-mono">v2.0 Beta</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <textarea id="ai-workflow-prompt" rows="1" class="flex-1 bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-sans leading-relaxed" placeholder="Describe your pipeline (e.g. 'BM25 search, then 3 parallel LLMs, then aggregate')..."></textarea>
+                        <button type="button" onclick="compileWorkflowWithAI()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-4 rounded text-xs transition flex items-center space-x-1.5 whitespace-nowrap">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Compile</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="flex items-center justify-between mb-2 gap-2">
+                    <div class="flex items-center space-x-2">
+                        <div class="relative">
+                            <button type="button" onclick="toggleAddNodeMenu()" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 font-bold py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                                <i class="fa-solid fa-plus text-[10px]"></i><span>Add node</span><i class="fa-solid fa-chevron-down text-[8px] ml-1"></i>
+                            </button>
+                            <div id="add-node-menu" class="hidden absolute z-20 mt-1 w-52 bg-[#0f172a] border border-[#334155] rounded-md shadow-xl overflow-hidden">
+                                <button type="button" onclick="addNode('llm')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-robot w-5 text-purple-400"></i> LLM</button>
+                                <button type="button" onclick="addNode('bm25_search')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-magnifying-glass w-5 text-indigo-400"></i> BM25 Search</button>
+                                <button type="button" onclick="addNode('tool_execution')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-terminal w-5 text-cyan-400"></i> Tool Execution</button>
+                                <button type="button" onclick="addNode('conditional_router')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-route w-5 text-amber-400"></i> Conditional Router</button>
+                            </div>
+                        </div>
+                        <button type="button" onclick="autoLayoutNodes()" title="Auto-arrange nodes" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                            <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i><span>Auto-layout</span>
+                        </button>
+                        <button type="button" onclick="reloadGraphFromJson()" title="Reload graph from JSON" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
+                            <i class="fa-solid fa-arrows-rotate text-[10px]"></i><span>Reload JSON</span>
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 rounded border border-[#334155]/60 bg-slate-900/25 px-2 py-1">
+                            <span class="text-[10px] uppercase tracking-wider text-slate-500">Editing workflow</span>
+                            <select id="wf-lab-selector" onchange="switchLabWorkflow(this.value)" class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono text-xs rounded px-2 py-1.5 outline-none focus:border-purple-500 cursor-pointer" title="Switch workflow to edit"></select>
+                        </div>
+                        <button type="button" onclick="newWorkflow()" title="Create a new blank workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-file-circle-plus text-[10px] text-emerald-400"></i><span class="hidden sm:inline">New</span>
+                        </button>
+                        <button type="button" onclick="cloneWorkflow()" title="Clone the current workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-copy text-[10px] text-blue-400"></i><span class="hidden sm:inline">Clone</span>
+                        </button>
+                        <button type="button" onclick="deleteWorkflow()" title="Delete the current workflow" class="bg-slate-800 hover:bg-red-900 border border-[#334155] hover:border-red-700 text-slate-400 hover:text-red-300 py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-trash text-[10px]"></i><span class="hidden sm:inline">Delete</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Canvas + Inspector -->
+                <div class="flex flex-1 min-h-0 gap-3">
+                    <div class="flex-1 min-w-0 flex flex-col border border-[#334155] rounded-xl overflow-hidden bg-slate-950/40">
+                        <div class="bg-slate-900/40 px-3 py-1.5 border-b border-[#334155] flex items-center justify-between">
+                            <span class="font-bold text-slate-300 flex items-center text-[11px]"><i class="fa-solid fa-diagram-project mr-1.5 text-blue-500"></i> Node Graph</span>
+                            <span class="text-[9px] text-slate-500">drag nodes · drag ports to connect</span>
+                        </div>
+                        <div id="wf-canvas-scroll" class="relative flex-1 overflow-auto bg-[radial-gradient(circle_at_1px_1px,rgba(148,163,184,0.08)_1px,transparent_0)] [background-size:18px_18px]">
+                            <div id="wf-canvas" class="relative" style="min-width:100%;min-height:100%;">
+                                <svg id="wf-edges" class="absolute top-0 left-0 pointer-events-none overflow-visible"></svg>
+                                <svg id="wf-temp-edge" class="absolute top-0 left-0 pointer-events-none overflow-visible"></svg>
+                                <!-- nodes injected here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Inspector -->
+                    <div id="wf-inspector" class="w-72 shrink-0 border border-[#334155] rounded-xl bg-slate-950/40 flex flex-col overflow-hidden">
+                        <div class="bg-slate-900/40 px-3 py-1.5 border-b border-[#334155]">
+                            <span class="font-bold text-slate-300 text-[11px]"><i class="fa-solid fa-sliders mr-1.5 text-amber-400"></i> Inspector</span>
+                        </div>
+                        <div id="wf-inspector-body" class="flex-1 overflow-y-auto p-3 space-y-3 text-[11px]">
+                            <p class="text-slate-500 italic">Select a node to edit its properties.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced JSON (collapsible) -->
+                <div class="mt-3 border border-[#334155] rounded-xl overflow-hidden bg-slate-950/30">
+                    <button type="button" onclick="toggleWorkflowJson()" class="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-800/40">
+                        <span class="font-bold text-slate-300 text-[11px] flex items-center"><i class="fa-solid fa-code mr-1.5 text-indigo-400"></i> Advanced / workflows.json</span>
+                        <i id="workflow-json-chevron" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform"></i>
+                    </button>
+                    <div id="workflow-json-wrap" class="hidden">
+                        <textarea id="workflow-json-editor" class="w-full h-48 bg-[#0f172a] p-3 text-slate-300 font-mono text-[10px] leading-normal outline-none resize-y border-t border-[#334155]" placeholder="Paste or edit workflows.json schema here..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Footer Operations -->
+                <div class="pt-3 mt-3 border-t border-[#334155] flex items-center justify-between">
+                    <span id="workflow-validation-status" class="text-emerald-400 font-mono text-[10px] flex items-center">
+                        <i class="fa-solid fa-circle-check mr-1.5"></i> Ready.
+                    </span>
+                    <div class="flex space-x-2">
+                        <button type="button" onclick="switchPrimarySurface('console')" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Back to Console</button>
+                        <button type="button" onclick="saveWorkflowConfigurations()" class="px-5 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white transition font-bold text-xs shadow-md">Compile &amp; Apply</button>
+                    </div>
+                </div>
+
+                </div>
+            </section>
+
         </main>
     </div>
+
 
     <!-- ================= 🛠️ SETTINGS CONFIGURATION MODAL ================= -->
     <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 bg-black/60 backdrop-blur-sm overflow-y-auto">
@@ -411,9 +538,6 @@
                 <div class="flex items-center space-x-4">
                     <button type="button" onclick="switchSettingsTab('standard')" id="btn-settings-tab-standard" class="font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition">
                         <i class="fa-solid fa-sliders mr-2"></i> Settings
-                    </button>
-                    <button type="button" onclick="switchSettingsTab('workflow')" id="btn-settings-tab-workflow" class="font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition">
-                        <i class="fa-solid fa-wand-magic-sparkles mr-2 animate-pulse"></i> AI Workflow Lab (v2.0)
                     </button>
                     <button type="button" onclick="switchSettingsTab('providers')" id="btn-settings-tab-providers" class="font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 pb-1 flex items-center text-xs uppercase tracking-wider transition">
                         <i class="fa-solid fa-plug-circle-bolt mr-2"></i> Providers
@@ -427,6 +551,11 @@
             <form id="settings-form" onsubmit="saveSettings(event)" class="flex-1 min-h-0 flex flex-col text-xs">
                 <div id="settings-panel-standard" class="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
                 
+                <div class="rounded-lg border border-blue-500/30 bg-blue-950/20 px-4 py-3 text-[11px] text-slate-300 leading-relaxed">
+                    <div class="font-bold text-blue-400 uppercase tracking-wider mb-1">Settings scope</div>
+                    Workflow Lab has moved out of Settings and is now a first-class surface in the main shell. Settings now focuses on runtime, provider, compaction, sandbox, and MCP configuration.
+                </div>
+
                 <!-- API Provider Settings -->
                 <div class="space-y-3">
                     <div class="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#334155] pb-1">API Provider Configurations</div>
@@ -722,112 +851,6 @@
                 </div>
             </form>
 
-            <!-- TAB 2: AI WORKFLOW LAB v2.0 (Visual Node Graph Editor) -->
-            <div id="settings-panel-workflow" class="hidden flex-1 min-h-0 flex flex-col p-6 text-xs">
-                <!-- AI Compiler prompt box -->
-                <div class="bg-slate-900/30 p-3 rounded-xl border border-blue-500/30 space-y-2 mb-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center">
-                            <i class="fa-solid fa-wand-magic-sparkles mr-1.5 animate-pulse"></i> Natural Language AI Compiler
-                        </span>
-                        <span class="text-[9px] text-slate-500 font-mono">v2.0 Beta</span>
-                    </div>
-                    <div class="flex space-x-2">
-                        <textarea id="ai-workflow-prompt" rows="1" class="flex-1 bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 placeholder-slate-600 outline-none focus:border-blue-500 font-sans leading-relaxed" placeholder="Describe your pipeline (e.g. 'BM25 search, then 3 parallel LLMs, then aggregate')..."></textarea>
-                        <button type="button" onclick="compileWorkflowWithAI()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-4 rounded text-xs transition flex items-center space-x-1.5 whitespace-nowrap">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Compile</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Toolbar -->
-                <div class="flex items-center justify-between mb-2 gap-2">
-                    <div class="flex items-center space-x-2">
-                        <div class="relative">
-                            <button type="button" onclick="toggleAddNodeMenu()" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-200 font-bold py-1.5 px-3 rounded text-xs flex items-center space-x-1">
-                                <i class="fa-solid fa-plus text-[10px]"></i><span>Add node</span><i class="fa-solid fa-chevron-down text-[8px] ml-1"></i>
-                            </button>
-                            <div id="add-node-menu" class="hidden absolute z-20 mt-1 w-52 bg-[#0f172a] border border-[#334155] rounded-md shadow-xl overflow-hidden">
-                                <button type="button" onclick="addNode('llm')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-robot w-5 text-purple-400"></i> LLM</button>
-                                <button type="button" onclick="addNode('bm25_search')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-magnifying-glass w-5 text-indigo-400"></i> BM25 Search</button>
-                                <button type="button" onclick="addNode('tool_execution')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-terminal w-5 text-cyan-400"></i> Tool Execution</button>
-                                <button type="button" onclick="addNode('conditional_router')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-200 flex items-center"><i class="fa-solid fa-route w-5 text-amber-400"></i> Conditional Router</button>
-                            </div>
-                        </div>
-                        <button type="button" onclick="autoLayoutNodes()" title="Auto-arrange nodes" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
-                            <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i><span>Auto-layout</span>
-                        </button>
-                        <button type="button" onclick="reloadGraphFromJson()" title="Reload graph from JSON" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1.5 px-3 rounded text-xs flex items-center space-x-1">
-                            <i class="fa-solid fa-arrows-rotate text-[10px]"></i><span>Reload JSON</span>
-                        </button>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <div class="flex items-center gap-2 rounded border border-[#334155]/60 bg-slate-900/25 px-2 py-1">
-                            <span class="text-[10px] uppercase tracking-wider text-slate-500">Editing workflow</span>
-                            <select id="wf-lab-selector" onchange="switchLabWorkflow(this.value)" class="bg-[#0f172a] border border-[#334155] text-purple-300 font-mono text-xs rounded px-2 py-1.5 outline-none focus:border-purple-500 cursor-pointer" title="Switch workflow to edit"></select>
-                        </div>
-                        <button type="button" onclick="newWorkflow()" title="Create a new blank workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
-                            <i class="fa-solid fa-file-circle-plus text-[10px] text-emerald-400"></i><span class="hidden sm:inline">New</span>
-                        </button>
-                        <button type="button" onclick="cloneWorkflow()" title="Clone the current workflow" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 hover:text-white py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
-                            <i class="fa-solid fa-copy text-[10px] text-blue-400"></i><span class="hidden sm:inline">Clone</span>
-                        </button>
-                        <button type="button" onclick="deleteWorkflow()" title="Delete the current workflow" class="bg-slate-800 hover:bg-red-900 border border-[#334155] hover:border-red-700 text-slate-400 hover:text-red-300 py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
-                            <i class="fa-solid fa-trash text-[10px]"></i><span class="hidden sm:inline">Delete</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Canvas + Inspector -->
-                <div class="flex flex-1 min-h-0 gap-3">
-                    <div class="flex-1 min-w-0 flex flex-col border border-[#334155] rounded-xl overflow-hidden bg-slate-950/40">
-                        <div class="bg-slate-900/40 px-3 py-1.5 border-b border-[#334155] flex items-center justify-between">
-                            <span class="font-bold text-slate-300 flex items-center text-[11px]"><i class="fa-solid fa-diagram-project mr-1.5 text-blue-500"></i> Node Graph</span>
-                            <span class="text-[9px] text-slate-500">drag nodes · drag ports to connect</span>
-                        </div>
-                        <div id="wf-canvas-scroll" class="relative flex-1 overflow-auto bg-[radial-gradient(circle_at_1px_1px,rgba(148,163,184,0.08)_1px,transparent_0)] [background-size:18px_18px]">
-                            <div id="wf-canvas" class="relative" style="min-width:100%;min-height:100%;">
-                                <svg id="wf-edges" class="absolute top-0 left-0 pointer-events-none overflow-visible"></svg>
-                                <svg id="wf-temp-edge" class="absolute top-0 left-0 pointer-events-none overflow-visible"></svg>
-                                <!-- nodes injected here -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Inspector -->
-                    <div id="wf-inspector" class="w-72 shrink-0 border border-[#334155] rounded-xl bg-slate-950/40 flex flex-col overflow-hidden">
-                        <div class="bg-slate-900/40 px-3 py-1.5 border-b border-[#334155]">
-                            <span class="font-bold text-slate-300 text-[11px]"><i class="fa-solid fa-sliders mr-1.5 text-amber-400"></i> Inspector</span>
-                        </div>
-                        <div id="wf-inspector-body" class="flex-1 overflow-y-auto p-3 space-y-3 text-[11px]">
-                            <p class="text-slate-500 italic">Select a node to edit its properties.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Advanced JSON (collapsible) -->
-                <div class="mt-3 border border-[#334155] rounded-xl overflow-hidden bg-slate-950/30">
-                    <button type="button" onclick="toggleWorkflowJson()" class="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-800/40">
-                        <span class="font-bold text-slate-300 text-[11px] flex items-center"><i class="fa-solid fa-code mr-1.5 text-indigo-400"></i> Advanced / workflows.json</span>
-                        <i id="workflow-json-chevron" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform"></i>
-                    </button>
-                    <div id="workflow-json-wrap" class="hidden">
-                        <textarea id="workflow-json-editor" class="w-full h-48 bg-[#0f172a] p-3 text-slate-300 font-mono text-[10px] leading-normal outline-none resize-y border-t border-[#334155]" placeholder="Paste or edit workflows.json schema here..."></textarea>
-                    </div>
-                </div>
-
-                <!-- Footer Operations -->
-                <div class="pt-3 mt-3 border-t border-[#334155] flex items-center justify-between">
-                    <span id="workflow-validation-status" class="text-emerald-400 font-mono text-[10px] flex items-center">
-                        <i class="fa-solid fa-circle-check mr-1.5"></i> Ready.
-                    </span>
-                    <div class="flex space-x-2">
-                        <button type="button" onclick="closeSettingsModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Cancel</button>
-                        <button type="button" onclick="saveWorkflowConfigurations()" class="px-5 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white transition font-bold text-xs shadow-md">Compile &amp; Apply</button>
-                    </div>
-                </div>
-            </div>
-
             <!-- TAB 3: PROVIDER PROFILES (reusable connections) -->
             <div id="settings-panel-providers" class="hidden flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs">
                 <div class="flex items-center justify-between">
@@ -987,6 +1010,7 @@
         let isSidebarCollapsed = false;
         let selectedForkTurn = 0;
         let activeWorkspaceDir = "";
+        let currentPrimarySurface = "console";
         let currentUIState = { composer_enabled: true, status: "ready", title: "GoHarness is ready", summary: "" };
         const DEFAULT_PROMPT_PLACEHOLDER = "Type a prompt to solve (e.g., 'Write a python calculation script and test it')....";
 
@@ -1000,6 +1024,7 @@
             loadWorkflowSelector();
             connectSSE();
             appendGreeting();
+            switchPrimarySurface("console");
         });
 
         // Toggle Workspace Explorer Sidebar
@@ -1016,6 +1041,38 @@
                 sidebar.style.opacity = "1";
                 sidebar.style.pointerEvents = "auto";
                 sidebar.style.borderRightWidth = "1px";
+            }
+        }
+
+        function workflowLabVisible() {
+            const lab = document.getElementById("workflow-lab-surface");
+            return !!lab && !lab.classList.contains("hidden");
+        }
+
+        function switchPrimarySurface(surface) {
+            const target = surface === "workflow" ? "workflow" : "console";
+            currentPrimarySurface = target;
+            const consoleSurface = document.getElementById("console-surface");
+            const workflowSurface = document.getElementById("workflow-lab-surface");
+            const consoleBtn = document.getElementById("view-console-btn");
+            const workflowBtn = document.getElementById("view-workflow-btn");
+            if (!consoleSurface || !workflowSurface || !consoleBtn || !workflowBtn) return;
+            const consoleActive = "px-2 py-1 rounded bg-slate-800 text-slate-100 font-bold";
+            const consoleIdle = "px-2 py-1 rounded text-slate-400 hover:text-slate-200";
+            const workflowActive = "px-2 py-1 rounded bg-purple-950/50 text-purple-200 font-bold border border-purple-700/60";
+            const workflowIdle = "px-2 py-1 rounded text-slate-400 hover:text-slate-200";
+
+            if (target === "workflow") {
+                consoleSurface.classList.add("hidden");
+                workflowSurface.classList.remove("hidden");
+                consoleBtn.className = consoleIdle;
+                workflowBtn.className = workflowActive;
+                loadWorkflowsSchema();
+            } else {
+                workflowSurface.classList.add("hidden");
+                consoleSurface.classList.remove("hidden");
+                consoleBtn.className = consoleActive;
+                workflowBtn.className = workflowIdle;
             }
         }
 
@@ -3154,7 +3211,7 @@
         // Click on an edge (its SVG hit area) selects it; empty canvas deselects.
         document.addEventListener("click", (e) => {
             const canvas = wfCanvas();
-            const panel = document.getElementById("settings-panel-workflow");
+            const panel = document.getElementById("workflow-lab-surface");
             if (!canvas || !panel || panel.classList.contains("hidden")) return;
             const g = e.target.closest && e.target.closest("g[data-edge='1']");
             if (g && canvas.contains(g)) {
@@ -3183,7 +3240,7 @@
 
         // Delete/Backspace removes the selected edge.
         document.addEventListener("keydown", (e) => {
-            const panel = document.getElementById("settings-panel-workflow");
+            const panel = document.getElementById("workflow-lab-surface");
             if (!panel || panel.classList.contains("hidden")) return;
             const tag = (e.target.tagName || "").toLowerCase();
             if (tag === "input" || tag === "textarea" || tag === "select") return;
@@ -3792,14 +3849,12 @@
         function switchSettingsTab(tabName) {
             const panels = {
                 standard: document.getElementById("settings-panel-standard"),
-                workflow: document.getElementById("settings-panel-workflow"),
                 providers: document.getElementById("settings-panel-providers"),
             };
             const stdFooter = document.getElementById("settings-standard-footer");
             if (stdFooter) stdFooter.classList.toggle("hidden", tabName !== "standard");
             const buttons = {
                 standard: document.getElementById("btn-settings-tab-standard"),
-                workflow: document.getElementById("btn-settings-tab-workflow"),
                 providers: document.getElementById("btn-settings-tab-providers"),
             };
             Object.keys(panels).forEach(k => panels[k].classList.add("hidden"));
@@ -3808,7 +3863,6 @@
             });
             panels[tabName].classList.remove("hidden");
             buttons[tabName].className = "font-bold text-blue-500 border-b-2 border-blue-500 pb-1 flex items-center text-xs uppercase tracking-wider transition";
-            if (tabName === "workflow") loadWorkflowsSchema();
             if (tabName === "providers") fetchProviders();
         }
 
@@ -3933,7 +3987,6 @@
             })
             .then(() => {
                 document.getElementById("workflow-json-editor").value = JSON.stringify(schema, null, 2);
-                closeSettingsModal();
                 loadWorkflowSelector();
                 setValidation(true, "Saved.");
                 appendSystemAlert("Active Pipeline Saved", `workflows.json saved and hot-swapped! Active pipeline: '${schema.active_workflow}'.`, "fa-check-double text-green-400");
@@ -4178,7 +4231,7 @@
                 const selector = document.getElementById("workflow-selector");
                 if (selector) selector.value = id;
                 // Refresh the AI Workflow Lab editor if it happens to be open.
-                const labPanel = document.getElementById("settings-panel-workflow");
+                const labPanel = document.getElementById("workflow-lab-surface");
                 if (labPanel && !labPanel.classList.contains("hidden")) {
                     loadWorkflowsSchema();
                 }
