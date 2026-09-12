@@ -69,6 +69,13 @@ Object.assign(actions, createEventsModule({
 }));
 
 window.addEventListener("DOMContentLoaded", () => {
+  actions.initShellBindings();
+  actions.initChatBindings();
+  actions.initComposerBindings();
+  actions.initSessionsBindings();
+  actions.initSettingsBindings();
+  actions.initWorkflowBindings();
+
   actions.applyThemeChrome();
   actions.fetchConfig();
   actions.refreshWorkspaceTree();
@@ -83,19 +90,6 @@ window.addEventListener("DOMContentLoaded", () => {
   actions.switchConversationView("chat");
   actions.switchDetailsTab("trajectory");
   actions.initShellResizers();
-  actions.initSettingsBindings();
-  actions.initWorkflowBindings();
   actions.initWorkflowLabEvents();
   actions.syncRailButtons();
 });
-
-function exposeInlineHandlerFunctions() {
-  const names = [
-    "toggleSidebar", "openSettingsModal", "activateRailSection", "switchPrimarySurface", "toggleDetailsPanel", "triggerNewSession", "triggerFileUpload", "uploadSelectedFile", "addNewWorkspace", "createSnapshot", "triggerCompaction", "switchConversationView", "switchDetailsTab", "submitPrompt", "handleComposerShellClick", "handleInputKeydown", "handleComposerInput", "triggerReroll", "runComposerCta", "closeForkModal", "toggleForkFields", "executeForkAction", "stageWorkspaceFile", "switchSidebarTab", "openWorkspaceFile", "editQueuedMessage", "removeQueuedMessage", "clearStagedContext", "removeStagedContext", "changeWorkspaceFromSelector", "removeWorkspaceFromHistory", "selectSession", "renameSessionPrompt", "deleteSessionConfirm", "seedPromptExample", "enableCardEdit", "triggerFork", "toggleCardMetrics", "toggleWfPreview", "removeContextPin", "saveAndBranchCard", "cancelCardEdit"
-  ];
-  for (const name of names) {
-    if (typeof actions[name] === "function") window[name] = actions[name];
-  }
-}
-
-exposeInlineHandlerFunctions();

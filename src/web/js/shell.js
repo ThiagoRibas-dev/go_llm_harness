@@ -171,7 +171,7 @@ export function createShellModule({ state, actions, escapeHtml, deliverablePaths
       panel.innerHTML = detailsEmptyState("No file selected", "Choose Files in the rail, then click a file row to preview it here.");
       return;
     }
-    panel.innerHTML = `<div class="rounded-lg border border-[#334155] bg-slate-900/25 overflow-hidden"><div class="px-3 py-2 border-b border-[#334155]/60 flex items-center justify-between gap-2"><span class="font-mono text-xs text-slate-200 truncate">${escapeHtml(state.currentFilePreview.path)}</span><div class="flex items-center gap-2"><button type="button" onclick="stageWorkspaceFile(${JSON.stringify(state.currentFilePreview.path)})" class="text-[10px] text-cyan-400 hover:text-cyan-300">Stage for next prompt</button><button type="button" onclick="switchSidebarTab('files')" class="text-[10px] text-blue-400 hover:text-blue-300">Back to files</button></div></div><pre class="max-h-[420px] overflow-auto p-3 text-[11px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap">${escapeHtml(state.currentFilePreview.content)}</pre></div>`;
+    panel.innerHTML = `<div class="rounded-lg border border-[#334155] bg-slate-900/25 overflow-hidden"><div class="px-3 py-2 border-b border-[#334155]/60 flex items-center justify-between gap-2"><span class="font-mono text-xs text-slate-200 truncate">${escapeHtml(state.currentFilePreview.path)}</span><div class="flex items-center gap-2"><button type="button" data-stage-workspace-file="${escapeHtml(state.currentFilePreview.path)}" class="text-[10px] text-cyan-400 hover:text-cyan-300">Stage for next prompt</button><button type="button" data-switch-sidebar-tab="files" class="text-[10px] text-blue-400 hover:text-blue-300">Back to files</button></div></div><pre class="max-h-[420px] overflow-auto p-3 text-[11px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap">${escapeHtml(state.currentFilePreview.content)}</pre></div>`;
   }
 
   function renderToolPanel() {
@@ -192,7 +192,7 @@ export function createShellModule({ state, actions, escapeHtml, deliverablePaths
       panel.innerHTML = detailsEmptyState("No deliverables yet", "Files written or patched by successful tool calls will be listed here.");
       return;
     }
-    panel.innerHTML = state.deliverableRegistry.map(path => `<div class="rounded-lg border border-[#334155] bg-slate-900/25 p-3"><div class="font-mono text-xs text-slate-200 truncate">${escapeHtml(path)}</div><div class="mt-2 flex items-center gap-3 text-[11px]"><button type="button" onclick="openWorkspaceFile(${JSON.stringify(path)})" class="text-blue-400 hover:text-blue-300">Open preview</button><button type="button" onclick="stageWorkspaceFile(${JSON.stringify(path)})" class="text-cyan-400 hover:text-cyan-300">Stage for next prompt</button></div></div>`).join("");
+    panel.innerHTML = state.deliverableRegistry.map(path => `<div class="rounded-lg border border-[#334155] bg-slate-900/25 p-3"><div class="font-mono text-xs text-slate-200 truncate">${escapeHtml(path)}</div><div class="mt-2 flex items-center gap-3 text-[11px]"><button type="button" data-open-workspace-file="${escapeHtml(path)}" class="text-blue-400 hover:text-blue-300">Open preview</button><button type="button" data-stage-workspace-file="${escapeHtml(path)}" class="text-cyan-400 hover:text-cyan-300">Stage for next prompt</button></div></div>`).join("");
   }
 
   function renderHistoryPanel() {
@@ -205,8 +205,8 @@ export function createShellModule({ state, actions, escapeHtml, deliverablePaths
           <div class="mt-1 text-[11px] leading-relaxed text-slate-400">Snapshots and compaction are currently utility actions. This panel is their long-term home once the dedicated details surface matures.</div>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button type="button" onclick="activateRailSection('snapshots')" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 text-xs font-bold">Open Snapshots</button>
-          <button type="button" onclick="triggerCompaction()" class="px-3 py-1.5 rounded border border-indigo-900 bg-indigo-950/40 text-indigo-300 text-xs font-bold">Run Compaction</button>
+          <button type="button" data-activate-rail-section="snapshots" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 text-xs font-bold">Open Snapshots</button>
+          <button type="button" data-trigger-compaction="1" class="px-3 py-1.5 rounded border border-indigo-900 bg-indigo-950/40 text-indigo-300 text-xs font-bold">Run Compaction</button>
         </div>
         <div class="text-[10px] font-mono text-slate-500">Session: ${escapeHtml(currentSessionId() || "loading")}</div>
       </div>`;
@@ -367,6 +367,62 @@ export function createShellModule({ state, actions, escapeHtml, deliverablePaths
     syncRailButtons();
   }
 
+  let shellBindingsInitialized = false;
+  function initShellBindings() {
+    if (shellBindingsInitialized) return;
+    shellBindingsInitialized = true;
+
+    document.getElementById("toggle-sidebar-btn")?.addEventListener("click", toggleSidebar);
+    document.getElementById("header-settings-btn")?.addEventListener("click", () => actions.openSettingsModal && actions.openSettingsModal());
+    document.getElementById("rail-sessions-btn")?.addEventListener("click", () => activateRailSection("sessions"));
+    document.getElementById("rail-files-btn")?.addEventListener("click", () => activateRailSection("files"));
+    document.getElementById("rail-history-btn")?.addEventListener("click", () => activateRailSection("snapshots"));
+    document.getElementById("rail-workflow-btn")?.addEventListener("click", () => switchPrimarySurface("workflow"));
+    document.getElementById("rail-details-btn")?.addEventListener("click", () => toggleDetailsPanel());
+    document.getElementById("rail-settings-btn")?.addEventListener("click", () => actions.openSettingsModal && actions.openSettingsModal());
+    document.getElementById("manual-compact-btn")?.addEventListener("click", () => actions.triggerCompaction && actions.triggerCompaction());
+    document.getElementById("view-console-btn")?.addEventListener("click", () => switchPrimarySurface("console"));
+    document.getElementById("view-workflow-btn")?.addEventListener("click", () => switchPrimarySurface("workflow"));
+    document.getElementById("conversation-tab-chat")?.addEventListener("click", () => switchConversationView("chat"));
+    document.getElementById("conversation-tab-trajectory")?.addEventListener("click", () => switchConversationView("trajectory"));
+    document.getElementById("conversation-tab-subagents")?.addEventListener("click", () => switchConversationView("subagents"));
+    document.getElementById("workflow-console-back-btn-top")?.addEventListener("click", () => switchPrimarySurface("console"));
+    document.getElementById("workflow-settings-btn")?.addEventListener("click", () => actions.openSettingsModal && actions.openSettingsModal());
+    document.getElementById("workflow-console-back-btn-bottom")?.addEventListener("click", () => switchPrimarySurface("console"));
+    document.getElementById("details-close-btn")?.addEventListener("click", () => toggleDetailsPanel(false));
+    document.getElementById("details-tab-trajectory-btn")?.addEventListener("click", () => switchDetailsTab("trajectory"));
+    document.getElementById("details-tab-file-btn")?.addEventListener("click", () => switchDetailsTab("file"));
+    document.getElementById("details-tab-tool-btn")?.addEventListener("click", () => switchDetailsTab("tool"));
+    document.getElementById("details-tab-deliverable-btn")?.addEventListener("click", () => switchDetailsTab("deliverable"));
+    document.getElementById("details-tab-history-btn")?.addEventListener("click", () => switchDetailsTab("history"));
+
+    document.getElementById("details-panel")?.addEventListener("click", (event) => {
+      const openBtn = event.target.closest("[data-open-workspace-file]");
+      if (openBtn) {
+        openWorkspaceFile(openBtn.getAttribute("data-open-workspace-file"));
+        return;
+      }
+      const stageBtn = event.target.closest("[data-stage-workspace-file]");
+      if (stageBtn) {
+        actions.stageWorkspaceFile && actions.stageWorkspaceFile(stageBtn.getAttribute("data-stage-workspace-file"));
+        return;
+      }
+      const tabBtn = event.target.closest("[data-switch-sidebar-tab]");
+      if (tabBtn) {
+        switchSidebarTab(tabBtn.getAttribute("data-switch-sidebar-tab"));
+        return;
+      }
+      const railBtn = event.target.closest("[data-activate-rail-section]");
+      if (railBtn) {
+        activateRailSection(railBtn.getAttribute("data-activate-rail-section"));
+        return;
+      }
+      if (event.target.closest("[data-trigger-compaction]")) {
+        actions.triggerCompaction && actions.triggerCompaction();
+      }
+    });
+  }
+
   return {
     toggleSidebar,
     workflowLabVisible,
@@ -389,6 +445,7 @@ export function createShellModule({ state, actions, escapeHtml, deliverablePaths
     toggleDetailsPanel,
     enforceShellConcession,
     initShellResizers,
+    initShellBindings,
     openWorkspaceFile,
     switchSidebarTab,
   };

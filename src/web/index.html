@@ -396,7 +396,7 @@
     <!-- ================= HEADER / TOP STATUS BAR ================= -->
     <header class="app-header bg-[#1e293b] border-b border-[#334155] px-6 py-3 flex items-center justify-between shadow-md shrink-0 z-10">
         <div class="flex items-center space-x-3 min-w-0">
-            <button onclick="toggleSidebar()" class="text-slate-400 hover:text-white transition p-1 rounded hover:bg-slate-800" title="Toggle Sidebar">
+            <button id="toggle-sidebar-btn" class="text-slate-400 hover:text-white transition p-1 rounded hover:bg-slate-800" title="Toggle Sidebar">
                 <i class="fa-solid fa-bars text-sm"></i>
             </button>
             <div class="bg-blue-600 text-white px-2.5 py-1 rounded text-sm font-bold tracking-wider flex items-center shrink-0">
@@ -408,7 +408,7 @@
 
         <div class="flex items-center space-x-3 shrink-0">
             <span class="text-[10px] uppercase tracking-wider text-slate-500 hidden md:inline">Runtime controls moved closer to the composer</span>
-            <button onclick="openSettingsModal()" class="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition px-3 py-1.5 rounded-md border border-[#334155] text-xs font-bold flex items-center space-x-1.5" title="Configure goharness settings">
+            <button id="header-settings-btn" class="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition px-3 py-1.5 rounded-md border border-[#334155] text-xs font-bold flex items-center space-x-1.5" title="Configure goharness settings">
                 <i class="fa-solid fa-gear"></i> <span>Settings</span>
             </button>
         </div>
@@ -418,23 +418,23 @@
     <div id="shell-body" class="flex flex-1 overflow-hidden min-h-0 relative">
 
         <nav id="app-rail" class="shrink-0 border-r border-[#334155] bg-slate-950/70 flex flex-col items-center gap-2 py-3">
-            <button id="rail-sessions-btn" onclick="activateRailSection('sessions')" class="rail-btn active w-9 h-9 rounded-lg text-slate-200 bg-slate-800 flex items-center justify-center" title="Workspaces & sessions">
+            <button id="rail-sessions-btn" class="rail-btn active w-9 h-9 rounded-lg text-slate-200 bg-slate-800 flex items-center justify-center" title="Workspaces & sessions">
                 <i class="fa-solid fa-comments"></i>
             </button>
-            <button id="rail-files-btn" onclick="activateRailSection('files')" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Files">
+            <button id="rail-files-btn" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Files">
                 <i class="fa-solid fa-folder-tree"></i>
             </button>
-            <button id="rail-history-btn" onclick="activateRailSection('snapshots')" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Snapshots & history utilities">
+            <button id="rail-history-btn" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Snapshots & history utilities">
                 <i class="fa-solid fa-camera"></i>
             </button>
-            <button id="rail-workflow-btn" onclick="switchPrimarySurface('workflow')" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Workflow Lab">
+            <button id="rail-workflow-btn" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Workflow Lab">
                 <i class="fa-solid fa-diagram-project"></i>
             </button>
             <div class="flex-1"></div>
-            <button id="rail-details-btn" onclick="toggleDetailsPanel()" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Toggle details panel">
+            <button id="rail-details-btn" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Toggle details panel">
                 <i class="fa-solid fa-sidebar"></i>
             </button>
-            <button id="rail-settings-btn" onclick="openSettingsModal()" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Settings">
+            <button id="rail-settings-btn" class="rail-btn w-9 h-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center" title="Settings">
                 <i class="fa-solid fa-gear"></i>
             </button>
         </nav>
@@ -446,7 +446,7 @@
                     <div id="sidebar-surface-title" class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Workspaces & Sessions</div>
                     <div id="sidebar-surface-subtitle" class="text-[10px] text-slate-500 font-mono truncate">Navigate local workspaces and session threads</div>
                 </div>
-                <button onclick="triggerNewSession()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center justify-center gap-1.5" title="Start a new session">
+                <button id="sidebar-new-session-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center justify-center gap-1.5" title="Start a new session">
                     <i class="fa-solid fa-plus"></i><span class="hidden sm:inline">New</span>
                 </button>
             </div>
@@ -456,11 +456,11 @@
                 <!-- Pre-defined workspace path banner & upload controller -->
                 <div class="px-4 py-2 bg-slate-900/20 text-[11px] font-mono text-slate-400 border-b border-[#334155]/60 flex items-center justify-between">
                     <span id="workspace-path" class="truncate pr-2">Path: ./workspace</span>
-                    <button onclick="triggerFileUpload()" class="text-slate-400 hover:text-white transition shrink-0" title="Upload Custom Memory Reference File to Active Session">
+                    <button id="file-upload-btn" class="text-slate-400 hover:text-white transition shrink-0" title="Upload Custom Memory Reference File to Active Session">
                         <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
                     </button>
                     <!-- Hidden file input element -->
-                    <input type="file" id="hidden-file-input" onchange="uploadSelectedFile(this)" class="hidden">
+                    <input type="file" id="hidden-file-input" class="hidden">
                 </div>
                 <!-- PINNED CONTEXT SECTION -->
                 <div class="px-4 py-2 border-b border-[#334155]/60 bg-slate-900/10 space-y-1.5 shrink-0">
@@ -492,7 +492,7 @@
                     <!-- Create New Workspace input -->
                     <div class="flex space-x-2">
                         <input type="text" id="new-workspace-input" placeholder="Add workspace path..." class="flex-1 bg-[#1e293b] border border-[#334155] text-xs px-2 py-1 rounded outline-none focus:border-blue-500 font-mono">
-                        <button onclick="addNewWorkspace()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs transition">
+                        <button id="add-workspace-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs transition">
                             Add
                         </button>
                     </div>
@@ -527,7 +527,7 @@
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Workspace Snapshotting</label>
                     <div class="flex flex-col space-y-2">
                         <input type="text" id="snapshot-name-input" placeholder="Snapshot label (e.g. Pre-Refactor)..." class="bg-[#1e293b] border border-[#334155] text-xs px-2.5 py-1.5 rounded outline-none focus:border-blue-500 font-mono text-slate-200">
-                        <button onclick="createSnapshot()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-3 rounded text-xs transition flex items-center justify-center space-x-1">
+                        <button id="create-snapshot-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-3 rounded text-xs transition flex items-center justify-center space-x-1">
                             <i class="fa-solid fa-camera"></i> <span>Capture Workspace</span>
                         </button>
                     </div>
@@ -544,7 +544,7 @@
 
             <!-- Quick Action controls -->
             <div class="p-4 border-t border-[#334155] bg-slate-900/30 space-y-2 text-xs shrink-0">
-                <button onclick="triggerCompaction()" class="w-full py-1.5 px-3 bg-indigo-950/40 text-indigo-400 border border-indigo-900 rounded hover:bg-indigo-900 hover:text-white transition duration-150 flex items-center justify-center">
+                <button id="manual-compact-btn" class="w-full py-1.5 px-3 bg-indigo-950/40 text-indigo-400 border border-indigo-900 rounded hover:bg-indigo-900 hover:text-white transition duration-150 flex items-center justify-center">
                     <i class="fa-solid fa-compress mr-1.5"></i> Manual Context Compact
                 </button>
             </div>
@@ -557,8 +557,8 @@
                 <div class="max-w-6xl mx-auto flex flex-wrap items-center gap-2 text-xs">
                     <div class="flex items-center gap-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155]">
                         <span class="text-slate-400">View:</span>
-                        <button id="view-console-btn" type="button" onclick="switchPrimarySurface('console')" class="px-2 py-1 rounded bg-slate-800 text-slate-100 font-bold">Console</button>
-                        <button id="view-workflow-btn" type="button" onclick="switchPrimarySurface('workflow')" class="px-2 py-1 rounded text-slate-400 hover:text-slate-200">Workflow Lab</button>
+                        <button id="view-console-btn" type="button" class="px-2 py-1 rounded bg-slate-800 text-slate-100 font-bold">Console</button>
+                        <button id="view-workflow-btn" type="button" class="px-2 py-1 rounded text-slate-400 hover:text-slate-200">Workflow Lab</button>
                     </div>
                     <div class="flex items-center space-x-2 bg-slate-900/50 px-3 py-1.5 rounded-md border border-[#334155]">
                         <i class="fa-solid fa-diagram-project text-purple-400"></i>
@@ -592,9 +592,9 @@
             <div id="console-surface" class="flex flex-1 flex-col min-h-0">
                 <div class="px-6 pt-4 pb-0 shrink-0">
                     <div id="console-header-tabs" class="max-w-4xl mx-auto flex items-center gap-2 text-xs">
-                        <button id="conversation-tab-chat" type="button" onclick="switchConversationView('chat')" class="active px-3 py-1.5 rounded border border-[#334155] text-slate-300 transition">Chat</button>
-                        <button id="conversation-tab-trajectory" type="button" onclick="switchConversationView('trajectory')" class="px-3 py-1.5 rounded border border-transparent text-slate-400 hover:text-slate-200 transition">Trajectory</button>
-                        <button id="conversation-tab-subagents" type="button" onclick="switchConversationView('subagents')" class="px-3 py-1.5 rounded border border-transparent text-slate-400 hover:text-slate-200 transition">Sub-agents</button>
+                        <button id="conversation-tab-chat" type="button" class="active px-3 py-1.5 rounded border border-[#334155] text-slate-300 transition">Chat</button>
+                        <button id="conversation-tab-trajectory" type="button" class="px-3 py-1.5 rounded border border-transparent text-slate-400 hover:text-slate-200 transition">Trajectory</button>
+                        <button id="conversation-tab-subagents" type="button" class="px-3 py-1.5 rounded border border-transparent text-slate-400 hover:text-slate-200 transition">Sub-agents</button>
                     </div>
                 </div>
                 <div class="flex-1 min-h-0 relative">
@@ -615,26 +615,26 @@
                 <div class="p-6 bg-[#0f172a]/50 shrink-0">
                     <div class="max-w-4xl mx-auto space-y-2">
                         <div id="composer-action-row" class="flex flex-wrap items-center gap-2 text-[11px]">
-                            <button id="composer-provider-chip" type="button" onclick="openSettingsModal()" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Provider · loading</button>
-                            <button id="composer-model-chip" type="button" onclick="openSettingsModal()" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Model · loading</button>
-                            <button id="composer-tools-chip" type="button" onclick="switchDetailsTab('tool')" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Tools · inspect</button>
-                            <button id="composer-approvals-chip" type="button" onclick="openSettingsModal()" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Approvals · none</button>
-                            <button id="composer-sources-chip" type="button" onclick="switchDetailsTab('file')" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Sources · 0 staged</button>
-                            <button id="composer-scope-chip" type="button" onclick="activateRailSection('sessions')" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Scope · workspace-wide</button>
+                            <button id="composer-provider-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Provider · loading</button>
+                            <button id="composer-model-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Model · loading</button>
+                            <button id="composer-tools-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Tools · inspect</button>
+                            <button id="composer-approvals-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Approvals · none</button>
+                            <button id="composer-sources-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Sources · 0 staged</button>
+                            <button id="composer-scope-chip" type="button" class="px-2.5 py-1 rounded border border-[#334155] bg-slate-900/50 text-slate-300 hover:text-white transition">Scope · workspace-wide</button>
                             <span id="composer-queue-chip" class="ml-auto text-slate-500 font-mono">Queue · 0</span>
                         </div>
                         <div id="composer-takeover" class="hidden rounded-lg border border-amber-500/40 bg-amber-950/10 px-3 py-2 text-sm text-slate-200"></div>
                         <div id="staged-context-strip" class="hidden rounded-lg border border-cyan-900/40 bg-slate-900/30 p-2"></div>
                         <div id="queued-messages-strip" class="hidden rounded-lg border border-purple-900/40 bg-slate-900/30 p-2"></div>
                         <div class="relative">
-                            <form id="prompt-form" onsubmit="submitPrompt(event)" onclick="handleComposerShellClick(event)" class="relative flex items-center bg-[#1e293b] rounded-lg border border-[#334155] shadow-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition duration-150">
+                            <form id="prompt-form" class="relative flex items-center bg-[#1e293b] rounded-lg border border-[#334155] shadow-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition duration-150">
                                 <div id="composer-shell" class="w-full flex items-center">
-                                    <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')...." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36" onkeydown="handleInputKeydown(event)" oninput="handleComposerInput(event)"></textarea>
+                                    <textarea id="prompt-input" rows="1" placeholder="Type a prompt to solve (e.g., 'Write a python calculation script and test it')...." class="flex-1 bg-transparent px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 outline-none resize-none overflow-y-hidden max-h-36"></textarea>
                                     <div class="flex items-center space-x-2 pr-3 shrink-0">
-                                        <button id="reroll-btn" type="button" onclick="triggerReroll()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition p-2.5 rounded-md border border-[#334155] text-xs font-bold flex items-center justify-center h-9 w-9" title="Reroll Last Response (Regenerate)">
+                                        <button id="reroll-btn" type="button" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition p-2.5 rounded-md border border-[#334155] text-xs font-bold flex items-center justify-center h-9 w-9" title="Reroll Last Response (Regenerate)">
                                             <i class="fa-solid fa-rotate-right text-xs"></i>
                                         </button>
-                                        <button id="composer-cta" type="button" onclick="runComposerCta()" class="hidden bg-amber-600 text-white hover:bg-amber-500 transition duration-150 px-3 py-2 rounded text-xs font-bold h-9 shadow-md">
+                                        <button id="composer-cta" type="button" class="hidden bg-amber-600 text-white hover:bg-amber-500 transition duration-150 px-3 py-2 rounded text-xs font-bold h-9 shadow-md">
                                             <span id="composer-cta-label">Open</span>
                                         </button>
                                         <button id="prompt-submit" type="submit" class="bg-blue-600 text-white hover:bg-blue-500 transition duration-150 px-4 py-2 rounded text-xs font-bold h-9 shadow-md flex items-center space-x-1.5">
@@ -660,8 +660,8 @@
                             <p class="mt-1 text-xs text-slate-400 max-w-3xl">Use the selector in the status row to choose the active runtime workflow. This surface is only for editing workflow definitions and applying them.</p>
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
-                            <button type="button" onclick="switchPrimarySurface('console')" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Back to Console</button>
-                            <button type="button" onclick="openSettingsModal()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition font-bold text-xs flex items-center gap-1.5"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
+                            <button type="button" id="workflow-console-back-btn-top" class="px-3 py-1.5 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Back to Console</button>
+                            <button type="button" id="workflow-settings-btn" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition font-bold text-xs flex items-center gap-1.5"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
                         </div>
                     </div>
                 <!-- AI Compiler prompt box -->
@@ -762,7 +762,7 @@
                         <i class="fa-solid fa-circle-check mr-1.5"></i> Ready.
                     </span>
                     <div class="flex space-x-2">
-                        <button type="button" onclick="switchPrimarySurface('console')" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Back to Console</button>
+                        <button type="button" id="workflow-console-back-btn-bottom" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold text-xs">Back to Console</button>
                         <button type="button" id="workflow-apply-btn" class="px-5 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white transition font-bold text-xs shadow-md">Compile &amp; Apply</button>
                     </div>
                 </div>
@@ -778,16 +778,16 @@
                     <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Details</div>
                     <div id="details-subtitle" class="text-[10px] text-slate-500 font-mono truncate">Inspect trajectory, files, tools, deliverables, and history utilities</div>
                 </div>
-                <button onclick="toggleDetailsPanel(false)" class="text-slate-500 hover:text-white transition" title="Close details panel">
+                <button id="details-close-btn" class="text-slate-500 hover:text-white transition" title="Close details panel">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
             <div class="px-3 py-2 border-b border-[#334155]/60 flex items-center gap-2 text-xs bg-slate-900/25">
-                <button id="details-tab-trajectory-btn" onclick="switchDetailsTab('trajectory')" class="px-2.5 py-1 rounded bg-slate-800 text-white font-bold">Trajectory</button>
-                <button id="details-tab-file-btn" onclick="switchDetailsTab('file')" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">File</button>
-                <button id="details-tab-tool-btn" onclick="switchDetailsTab('tool')" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">Tool</button>
-                <button id="details-tab-deliverable-btn" onclick="switchDetailsTab('deliverable')" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">Deliverables</button>
-                <button id="details-tab-history-btn" onclick="switchDetailsTab('history')" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">History</button>
+                <button id="details-tab-trajectory-btn" class="px-2.5 py-1 rounded bg-slate-800 text-white font-bold">Trajectory</button>
+                <button id="details-tab-file-btn" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">File</button>
+                <button id="details-tab-tool-btn" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">Tool</button>
+                <button id="details-tab-deliverable-btn" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">Deliverables</button>
+                <button id="details-tab-history-btn" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200">History</button>
             </div>
             <div class="flex-1 min-h-0 overflow-y-auto">
                 <div id="details-tab-trajectory" class="p-4 space-y-3"></div>
@@ -1257,7 +1257,7 @@
                 <h3 class="font-bold text-slate-100 flex items-center text-sm uppercase tracking-wider">
                     <i class="fa-solid fa-code-fork mr-2 text-cyan-400"></i> Rewind or Branch Timeline
                 </h3>
-                <button onclick="closeForkModal()" class="text-slate-400 hover:text-white transition">
+                <button id="fork-close-btn" class="text-slate-400 hover:text-white transition">
                     <i class="fa-solid fa-xmark text-sm"></i>
                 </button>
             </div>
@@ -1267,7 +1267,7 @@
 
                 <div class="bg-slate-900/40 border border-[#334155] rounded-lg p-4 space-y-3">
                     <div class="flex items-start space-x-2">
-                        <input type="radio" id="fork-type-branch" name="fork-type" value="branch" checked onchange="toggleForkFields('branch')" class="mt-1 accent-blue-500 h-4 w-4">
+                        <input type="radio" id="fork-type-branch" name="fork-type" value="branch" checked class="mt-1 accent-blue-500 h-4 w-4">
                         <label for="fork-type-branch" class="block cursor-pointer">
                             <span class="block font-bold text-slate-200">1. Create Parallel Branch (Recommended)</span>
                             <span class="block text-[11px] text-slate-400 mt-0.5">Clones the timeline up to Turn <span class="fork-turn-sub"></span> into a brand-new, isolated session. The original thread remains completely untouched on disk!</span>
@@ -1281,7 +1281,7 @@
 
                 <div class="bg-red-950/10 border border-red-900/40 rounded-lg p-4">
                     <div class="flex items-start space-x-2">
-                        <input type="radio" id="fork-type-truncate" name="fork-type" value="truncate" onchange="toggleForkFields('truncate')" class="mt-1 accent-red-500 h-4 w-4">
+                        <input type="radio" id="fork-type-truncate" name="fork-type" value="truncate" class="mt-1 accent-red-500 h-4 w-4">
                         <label for="fork-type-truncate" class="block cursor-pointer">
                             <span class="block font-bold text-red-400"><i class="fa-solid fa-triangle-exclamation mr-1"></i> 2. Truncate &amp; Overwrite (Destructive)</span>
                             <span class="block text-[11px] text-slate-400 mt-0.5">Permanently deletes all future turns greater than <span class="fork-turn-sub"></span> and overwrites files on disk. There is no way to undo this action.</span>
@@ -1290,10 +1290,10 @@
                 </div>
 
                 <div class="pt-4 border-t border-[#334155] flex items-center justify-end space-x-3 bg-slate-900/20 -mx-6 -mb-6 p-4">
-                    <button onclick="closeForkModal()" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
+                    <button id="fork-cancel-btn" class="px-4 py-2 rounded border border-[#334155] hover:bg-slate-800 text-slate-300 hover:text-white transition font-bold">
                         Cancel
                     </button>
-                    <button onclick="executeForkAction()" class="px-5 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-white transition font-bold shadow-md">
+                    <button id="fork-execute-btn" class="px-5 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-white transition font-bold shadow-md">
                         Execute Rollback
                     </button>
                 </div>

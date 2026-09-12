@@ -14,9 +14,9 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
             : "bg-slate-900/30 border-transparent text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 font-mono";
           wsHtml += `
             <div class="flex items-center justify-between p-1.5 rounded border border-[#334155]/60 text-[10px] ${activeClass}">
-              <span class="truncate cursor-pointer flex-1" onclick="changeWorkspaceFromSelector('${ws.replace(/\\/g, "\\\\")}')" title="Click to swap to this workspace">${ws}</span>
+              <button type="button" data-change-workspace="${escapeHtml(ws)}" class="truncate cursor-pointer flex-1 text-left" title="Click to swap to this workspace">${escapeHtml(ws)}</button>
               ${!isActive ? `
-              <button onclick="removeWorkspaceFromHistory(event, '${ws.replace(/\\/g, "\\\\")}')" class="text-slate-500 hover:text-red-400 p-0.5 ml-1" title="Remove from history">
+              <button type="button" data-remove-workspace="${escapeHtml(ws)}" class="text-slate-500 hover:text-red-400 p-0.5 ml-1" title="Remove from history">
                 <i class="fa-solid fa-times text-[10px]"></i>
               </button>` : ""}
             </div>`;
@@ -112,17 +112,17 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
             : "bg-slate-900/30 border-transparent text-slate-400 hover:bg-slate-800/40 hover:text-slate-200";
           const date = new Date(sess.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
           html += `
-            <div onclick="selectSession('${sess.session_id}')" class="group relative p-2.5 rounded-lg border-l-4 cursor-pointer transition flex flex-col justify-between space-y-1 ${activeClass}">
+            <div data-select-session="${escapeHtml(sess.session_id)}" class="group relative p-2.5 rounded-lg border-l-4 cursor-pointer transition flex flex-col justify-between space-y-1 ${activeClass}">
               <div class="flex items-center justify-between text-[11px]">
-                <span class="truncate pr-8 text-slate-200 font-medium" id="sess-display-${sess.session_id}">${sess.name}</span>
+                <span class="truncate pr-8 text-slate-200 font-medium" id="sess-display-${sess.session_id}">${escapeHtml(sess.name)}</span>
                 <span class="text-[10px] text-slate-500 shrink-0 font-mono">${date}</span>
               </div>
-              <div class="text-[10px] text-slate-500 truncate font-mono">Dir: ${sess.workspace_dir}</div>
+              <div class="text-[10px] text-slate-500 truncate font-mono">Dir: ${escapeHtml(sess.workspace_dir)}</div>
               <div class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition duration-150 flex items-center space-x-1">
-                <button onclick="renameSessionPrompt(event, '${sess.session_id}', '${sess.name.replace(/'/g, "\\'")}')" class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white" title="Rename Session">
+                <button type="button" data-rename-session="${escapeHtml(sess.session_id)}" data-session-name="${escapeHtml(sess.name)}" class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white" title="Rename Session">
                   <i class="fa-solid fa-pen text-[9px]"></i>
                 </button>
-                <button onclick="deleteSessionConfirm(event, '${sess.session_id}')" class="p-1 rounded bg-red-950/60 hover:bg-red-900 text-red-400 hover:text-white" title="Delete Session">
+                <button type="button" data-delete-session="${escapeHtml(sess.session_id)}" class="p-1 rounded bg-red-950/60 hover:bg-red-900 text-red-400 hover:text-white" title="Delete Session">
                   <i class="fa-solid fa-trash text-[9px]"></i>
                 </button>
               </div>
@@ -365,8 +365,8 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
         }
         list.innerHTML = state.activePinnedFiles.map((file, idx) => `
           <span class="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded bg-blue-950/40 text-blue-400 border border-blue-900/60 text-[9px] font-mono leading-none truncate max-w-[120px]">
-            <span class="truncate" title="${file}">${file}</span>
-            <button type="button" onclick="removeContextPin(${idx})" class="text-slate-500 hover:text-red-400 font-bold text-[10px]">&times;</button>
+            <span class="truncate" title="${escapeHtml(file)}">${escapeHtml(file)}</span>
+            <button type="button" data-remove-context-pin="${idx}" class="text-slate-500 hover:text-red-400 font-bold text-[10px]">&times;</button>
           </span>`).join("");
       })
       .catch(err => {
@@ -423,10 +423,10 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
     const originalText = textDiv.innerText;
     bodyDiv.innerHTML = `
       <div class="space-y-2 mt-1">
-        <textarea id="edit-textarea-${turnNum}" rows="4" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 text-sm outline-none focus:border-blue-500 font-mono leading-normal">${originalText}</textarea>
+        <textarea id="edit-textarea-${turnNum}" rows="4" class="w-full bg-[#0f172a] border border-[#334155] rounded-md px-3 py-2 text-slate-100 text-sm outline-none focus:border-blue-500 font-mono leading-normal">${escapeHtml(originalText)}</textarea>
         <div class="flex items-center space-x-2">
-          <button onclick="saveAndBranchCard(event, ${turnNum})" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded text-[11px] transition">Save &amp; Branch</button>
-          <button onclick="cancelCardEdit(event, ${turnNum})" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1 px-3 rounded text-[11px] transition">Cancel</button>
+          <button type="button" data-save-and-branch-card="${turnNum}" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded text-[11px] transition">Save &amp; Branch</button>
+          <button type="button" data-cancel-card-edit="${turnNum}" class="bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 py-1 px-3 rounded text-[11px] transition">Cancel</button>
         </div>
       </div>`;
   }
@@ -492,6 +492,64 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
       .catch(err => alert("Reroll failed: " + err));
   }
 
+  let sessionsBindingsInitialized = false;
+  function initSessionsBindings() {
+    if (sessionsBindingsInitialized) return;
+    sessionsBindingsInitialized = true;
+
+    document.getElementById("sidebar-new-session-btn")?.addEventListener("click", triggerNewSession);
+    document.getElementById("file-upload-btn")?.addEventListener("click", triggerFileUpload);
+    document.getElementById("hidden-file-input")?.addEventListener("change", (event) => uploadSelectedFile(event.target));
+    document.getElementById("add-workspace-btn")?.addEventListener("click", addNewWorkspace);
+    document.getElementById("create-snapshot-btn")?.addEventListener("click", () => actions.createSnapshot && actions.createSnapshot());
+    document.getElementById("fork-close-btn")?.addEventListener("click", closeForkModal);
+    document.getElementById("fork-cancel-btn")?.addEventListener("click", closeForkModal);
+    document.getElementById("fork-execute-btn")?.addEventListener("click", executeForkAction);
+    document.getElementById("fork-type-branch")?.addEventListener("change", () => toggleForkFields("branch"));
+    document.getElementById("fork-type-truncate")?.addEventListener("change", () => toggleForkFields("truncate"));
+
+    document.getElementById("workspaces-history-list")?.addEventListener("click", (event) => {
+      const changeBtn = event.target.closest("[data-change-workspace]");
+      if (changeBtn) {
+        changeWorkspaceFromSelector(changeBtn.getAttribute("data-change-workspace"));
+        return;
+      }
+      const removeBtn = event.target.closest("[data-remove-workspace]");
+      if (removeBtn) removeWorkspaceFromHistory(event, removeBtn.getAttribute("data-remove-workspace"));
+    });
+
+    document.getElementById("sessions-list")?.addEventListener("click", (event) => {
+      const renameBtn = event.target.closest("[data-rename-session]");
+      if (renameBtn) {
+        renameSessionPrompt(event, renameBtn.getAttribute("data-rename-session"), renameBtn.getAttribute("data-session-name") || "");
+        return;
+      }
+      const deleteBtn = event.target.closest("[data-delete-session]");
+      if (deleteBtn) {
+        deleteSessionConfirm(event, deleteBtn.getAttribute("data-delete-session"));
+        return;
+      }
+      const card = event.target.closest("[data-select-session]");
+      if (card) selectSession(card.getAttribute("data-select-session"));
+    });
+
+    document.getElementById("pinned-chips-list")?.addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-remove-context-pin]");
+      if (!btn) return;
+      removeContextPin(Number(btn.getAttribute("data-remove-context-pin")));
+    });
+
+    document.getElementById("chat-messages")?.addEventListener("click", (event) => {
+      const saveBtn = event.target.closest("[data-save-and-branch-card]");
+      if (saveBtn) {
+        saveAndBranchCard(event, Number(saveBtn.getAttribute("data-save-and-branch-card")));
+        return;
+      }
+      const cancelBtn = event.target.closest("[data-cancel-card-edit]");
+      if (cancelBtn) cancelCardEdit(event, Number(cancelBtn.getAttribute("data-cancel-card-edit")));
+    });
+  }
+
   return {
     fetchWorkspaces,
     removeWorkspaceFromHistory,
@@ -515,5 +573,6 @@ export function createSessionsModule({ state, actions, escapeHtml }) {
     cancelCardEdit,
     saveAndBranchCard,
     triggerReroll,
+    initSessionsBindings,
   };
 }

@@ -105,8 +105,8 @@ export function createComposerModule({ state, actions, escapeHtml }) {
       <div class="flex items-center gap-2 rounded border border-[#334155] bg-slate-950/40 px-3 py-2 text-xs mb-2 last:mb-0">
         <span class="px-1.5 py-0.5 rounded ${item.kind === "follow_up" ? "bg-purple-950/50 text-purple-300" : "bg-amber-950/40 text-amber-300"} font-mono">${item.kind === "follow_up" ? "follow-up" : "steering"}</span>
         <span class="flex-1 text-slate-300 truncate">${escapeHtml(item.text)}</span>
-        <button type="button" onclick="editQueuedMessage('${item.id}')" class="text-slate-400 hover:text-white">Edit</button>
-        <button type="button" onclick="removeQueuedMessage('${item.id}')" class="text-slate-500 hover:text-red-400">✕</button>
+        <button type="button" data-edit-queued-message="${item.id}" class="text-slate-400 hover:text-white">Edit</button>
+        <button type="button" data-remove-queued-message="${item.id}" class="text-slate-500 hover:text-red-400">✕</button>
       </div>`).join("");
   }
 
@@ -159,13 +159,13 @@ export function createComposerModule({ state, actions, escapeHtml }) {
     el.innerHTML = `
       <div class="flex items-center justify-between gap-2 mb-2">
         <div class="text-[10px] uppercase tracking-wider text-slate-500">Staged context for next send</div>
-        <button type="button" onclick="clearStagedContext()" class="text-[10px] text-slate-500 hover:text-red-400">Clear all</button>
+        <button type="button" data-clear-staged-context="1" class="text-[10px] text-slate-500 hover:text-red-400">Clear all</button>
       </div>
       <div class="flex flex-wrap gap-2">` + staged.map(item => `
         <div class="inline-flex items-center gap-2 rounded border border-cyan-900/40 bg-cyan-950/10 px-2.5 py-1.5 text-xs">
           <span class="text-cyan-300 font-mono truncate max-w-[260px]">${escapeHtml(item.path)}</span>
-          <button type="button" onclick="openWorkspaceFile(${JSON.stringify(item.path)})" class="text-cyan-400 hover:text-cyan-300">Open</button>
-          <button type="button" onclick="removeStagedContext('${item.id}')" class="text-slate-500 hover:text-red-400">✕</button>
+          <button type="button" data-open-workspace-file="${escapeHtml(item.path)}" class="text-cyan-400 hover:text-cyan-300">Open</button>
+          <button type="button" data-remove-staged-context="${item.id}" class="text-slate-500 hover:text-red-400">✕</button>
         </div>`).join("") + `</div>`;
   }
 
@@ -219,7 +219,7 @@ export function createComposerModule({ state, actions, escapeHtml }) {
           <div class="font-bold text-amber-300">${escapeHtml(state.currentUIState.title || "Blocked")}</div>
           <div class="text-[11px] text-slate-300">${escapeHtml(state.currentUIState.blocked_reason || state.currentUIState.summary || "GoHarness is blocked.")}</div>
         </div>
-        <button type="button" onclick="runComposerCta()" class="px-3 py-2 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold">${escapeHtml(state.currentUIState.cta_label || "Resolve")}</button>
+        <button type="button" data-run-composer-cta="1" class="px-3 py-2 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold">${escapeHtml(state.currentUIState.cta_label || "Resolve")}</button>
       </div>`;
   }
 
@@ -623,6 +623,51 @@ export function createComposerModule({ state, actions, escapeHtml }) {
     }
   }
 
+  let composerBindingsInitialized = false;
+  function initComposerBindings() {
+    if (composerBindingsInitialized) return;
+    composerBindingsInitialized = true;
+
+    document.getElementById("prompt-form")?.addEventListener("submit", submitPrompt);
+    document.getElementById("prompt-form")?.addEventListener("click", handleComposerShellClick);
+    document.getElementById("prompt-input")?.addEventListener("keydown", handleInputKeydown);
+    document.getElementById("prompt-input")?.addEventListener("input", handleComposerInput);
+    document.getElementById("reroll-btn")?.addEventListener("click", () => actions.triggerReroll && actions.triggerReroll());
+    document.getElementById("composer-cta")?.addEventListener("click", runComposerCta);
+    document.getElementById("composer-provider-chip")?.addEventListener("click", () => actions.openSettingsModal && actions.openSettingsModal());
+    document.getElementById("composer-model-chip")?.addEventListener("click", () => actions.openSettingsModal && actions.openSettingsModal());
+    document.getElementById("composer-tools-chip")?.addEventListener("click", () => actions.switchDetailsTab && actions.switchDetailsTab("tool"));
+    document.getElementById("composer-approvals-chip")?.addEventListener("click", () => actions.openSettingsModal && actions.openSettingsModal());
+    document.getElementById("composer-sources-chip")?.addEventListener("click", () => actions.switchDetailsTab && actions.switchDetailsTab("file"));
+    document.getElementById("composer-scope-chip")?.addEventListener("click", () => actions.activateRailSection && actions.activateRailSection("sessions"));
+
+    document.getElementById("composer-takeover")?.addEventListener("click", (event) => {
+      if (event.target.closest("[data-run-composer-cta]")) runComposerCta();
+    });
+    document.getElementById("staged-context-strip")?.addEventListener("click", (event) => {
+      if (event.target.closest("[data-clear-staged-context]")) {
+        clearStagedContext();
+        return;
+      }
+      const openBtn = event.target.closest("[data-open-workspace-file]");
+      if (openBtn) {
+        actions.openWorkspaceFile && actions.openWorkspaceFile(openBtn.getAttribute("data-open-workspace-file"));
+        return;
+      }
+      const removeBtn = event.target.closest("[data-remove-staged-context]");
+      if (removeBtn) removeStagedContext(removeBtn.getAttribute("data-remove-staged-context"));
+    });
+    document.getElementById("queued-messages-strip")?.addEventListener("click", (event) => {
+      const editBtn = event.target.closest("[data-edit-queued-message]");
+      if (editBtn) {
+        editQueuedMessage(editBtn.getAttribute("data-edit-queued-message"));
+        return;
+      }
+      const removeBtn = event.target.closest("[data-remove-queued-message]");
+      if (removeBtn) removeQueuedMessage(removeBtn.getAttribute("data-remove-queued-message"));
+    });
+  }
+
   return {
     persistSessionUIState,
     restoreSessionUIState,
@@ -652,5 +697,6 @@ export function createComposerModule({ state, actions, escapeHtml }) {
     updateComposerState,
     submitPrompt,
     handleInputKeydown,
+    initComposerBindings,
   };
 }

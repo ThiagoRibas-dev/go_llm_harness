@@ -23,8 +23,8 @@ export function deliverablePathsFromTool(turn) {
 export function renderDeliverableChips(paths) {
   if (!paths || paths.length === 0) return "";
   return `<div class="deliverable-chip-row px-3 py-2 border-t border-slate-800/70">` + paths.map((path) => `
-      <button type="button" class="deliverable-chip" onclick="openWorkspaceFile(${JSON.stringify(path)})">Open ${escapeHtml(path)}</button>
-      <button type="button" class="deliverable-chip" onclick="stageWorkspaceFile(${JSON.stringify(path)})">Stage ${escapeHtml(path)}</button>
+      <button type="button" class="deliverable-chip" data-open-workspace-file="${escapeHtml(path)}">Open ${escapeHtml(path)}</button>
+      <button type="button" class="deliverable-chip" data-stage-workspace-file="${escapeHtml(path)}">Stage ${escapeHtml(path)}</button>
     `).join("") + `</div>`;
 }
 
@@ -67,7 +67,7 @@ export function renderSearchBlock(content) {
     const path = m[2].trim();
     const score = m[3].trim();
     const excerpt = m[4].trim();
-    body.push(`<div class="typed-search-item"><div class="search-path">${escapeHtml(path)}</div><div class="search-score">score ${escapeHtml(score)}</div><div class="search-excerpt">${escapeHtml(excerpt)}</div><div class="typed-search-actions"><button type="button" class="typed-action-btn" onclick="openWorkspaceFile(${JSON.stringify(path)})">Open file</button><button type="button" class="typed-action-btn" onclick="stageWorkspaceFile(${JSON.stringify(path)})">Stage file</button></div></div>`);
+    body.push(`<div class="typed-search-item"><div class="search-path">${escapeHtml(path)}</div><div class="search-score">score ${escapeHtml(score)}</div><div class="search-excerpt">${escapeHtml(excerpt)}</div><div class="typed-search-actions"><button type="button" class="typed-action-btn" data-open-workspace-file="${escapeHtml(path)}">Open file</button><button type="button" class="typed-action-btn" data-stage-workspace-file="${escapeHtml(path)}">Stage file</button></div></div>`);
   }
   if (body.length === 0) return renderTerminalBlock(content);
   const header = headerMatch ? `<div class="typed-block-meta">${escapeHtml(headerMatch[1])}</div>` : "";

@@ -50,13 +50,13 @@ export function createChatModule({
     const summary = escapeHtml((state.currentUIState && state.currentUIState.summary) || "");
     const blocked = state.currentUIState && state.currentUIState.status !== "ready";
     const cta = state.currentUIState && state.currentUIState.cta_label
-      ? `<button type="button" onclick="runComposerCta()" class="gh-hero-action mt-5 inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-bold text-white shadow-md"><i class="fa-solid fa-arrow-right"></i><span>${escapeHtml(state.currentUIState.cta_label)}</span></button>`
+      ? `<button type="button" data-run-composer-cta="1" class="gh-hero-action mt-5 inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-bold text-white shadow-md"><i class="fa-solid fa-arrow-right"></i><span>${escapeHtml(state.currentUIState.cta_label)}</span></button>`
       : "";
     const examples = blocked ? "" : `
       <div class="mt-6 grid gap-2 sm:grid-cols-3">
-        <button type="button" onclick="seedPromptExample('Summarize this repository architecture and call out the risky parts.')" class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Summarize this repository architecture and call out the risky parts.</button>
-        <button type="button" onclick="seedPromptExample('Run the tests, explain the failures, and propose the minimal fix.')" class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Run the tests, explain the failures, and propose the minimal fix.</button>
-        <button type="button" onclick="seedPromptExample('Inspect workflows.json and explain how the active DAG executes this task.')" class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Inspect workflows.json and explain how the active DAG executes this task.</button>
+        <button type="button" data-seed-prompt="Summarize this repository architecture and call out the risky parts." class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Summarize this repository architecture and call out the risky parts.</button>
+        <button type="button" data-seed-prompt="Run the tests, explain the failures, and propose the minimal fix." class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Run the tests, explain the failures, and propose the minimal fix.</button>
+        <button type="button" data-seed-prompt="Inspect workflows.json and explain how the active DAG executes this task." class="gh-hero-example rounded-lg px-3 py-2 text-left text-xs transition">Inspect workflows.json and explain how the active DAG executes this task.</button>
       </div>`;
 
     hero.innerHTML = `
@@ -122,10 +122,10 @@ export function createChatModule({
       rollbackButton = `
         <div class="opacity-0 group-hover:opacity-100 transition duration-150 flex items-center space-x-1.5">
           ${canEdit ? `
-          <button onclick="enableCardEdit(event, ${turn.turn_number})" class="text-[10px] bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 font-mono px-2 py-0.5 rounded transition" title="Edit and Fork Conversation">
+          <button type="button" data-enable-card-edit="${turn.turn_number}" class="text-[10px] bg-slate-800 hover:bg-slate-700 border border-[#334155] text-slate-300 font-mono px-2 py-0.5 rounded transition" title="Edit and Fork Conversation">
             <i class="fa-solid fa-pen text-[9px] mr-1"></i> Edit &amp; Fork
           </button>` : ""}
-          <button onclick="triggerFork(${turn.turn_number})" class="text-[10px] bg-red-950/40 hover:bg-red-900 border border-red-800 text-red-400 font-mono px-2 py-0.5 rounded transition">
+          <button type="button" data-trigger-fork="${turn.turn_number}" class="text-[10px] bg-red-950/40 hover:bg-red-900 border border-red-800 text-red-400 font-mono px-2 py-0.5 rounded transition">
             <i class="fa-solid fa-code-fork mr-1"></i> Rollback / Branch
           </button>
         </div>`;
@@ -133,7 +133,7 @@ export function createChatModule({
 
     let textHtml = "";
     if (turn.role === "assistant" && turn.tool_calls) {
-      textHtml += `<div id="turn-text-${turn.turn_number}" class="text-slate-300 text-sm font-sans mb-2">${turn.content || "Calling tools..."}</div>`;
+      textHtml += `<div id="turn-text-${turn.turn_number}" class="text-slate-300 text-sm font-sans mb-2">${escapeHtml(turn.content || "Calling tools...")}</div>`;
       turn.tool_calls.forEach((tc) => {
         const title = toolCallTitle(tc);
         textHtml += `
@@ -163,14 +163,14 @@ export function createChatModule({
           <div class="typed-tool-body">${renderToolBody(turn.name, full)}${renderDeliverableChips(deliverables)}</div>
         </details>`;
     } else {
-      textHtml = `<div id="turn-text-${turn.turn_number}" class="text-slate-300 text-sm whitespace-pre-wrap font-sans">${turn.content}</div>`;
+      textHtml = `<div id="turn-text-${turn.turn_number}" class="text-slate-300 text-sm whitespace-pre-wrap font-sans">${escapeHtml(turn.content)}</div>`;
     }
 
     let metricsHtml = "";
     if (turn.role === "assistant") {
       metricsHtml = `
         <div class="mt-2 text-[10px] text-slate-500 font-mono">
-          <button onclick="toggleCardMetrics(event, ${turn.turn_number})" class="text-slate-400 hover:text-white bg-slate-800/40 hover:bg-slate-800 border border-[#334155]/60 px-2 py-0.5 rounded transition">
+          <button type="button" data-toggle-card-metrics="${turn.turn_number}" class="text-slate-400 hover:text-white bg-slate-800/40 hover:bg-slate-800 border border-[#334155]/60 px-2 py-0.5 rounded transition">
             <i class="fa-solid fa-microscope mr-1 text-[9px]"></i> Inspect Execution Metrics
           </button>
           <div id="card-metrics-${turn.turn_number}" class="hidden mt-1.5 p-2.5 bg-slate-950/40 rounded border border-slate-800/80 space-y-1">
@@ -224,8 +224,8 @@ export function createChatModule({
     alertDiv.innerHTML = `
       <i class="fa-solid ${iconClass} text-lg shrink-0"></i>
       <div class="flex-1">
-        <div class="font-bold uppercase tracking-wider">${title}</div>
-        <div class="mt-0.5 text-indigo-400/80">${message}</div>
+        <div class="font-bold uppercase tracking-wider">${escapeHtml(title)}</div>
+        <div class="mt-0.5 text-indigo-400/80">${escapeHtml(message)}</div>
       </div>`;
     chatContainer.appendChild(alertDiv);
     chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -349,7 +349,7 @@ export function createChatModule({
       const dur = data.duration_ms ? ` · ${data.duration_ms} ms` : "";
       const preview = data.preview ? escapeHtml(data.preview) : "";
       detailEl.className = "wf-node-detail text-[10px] text-slate-400 mt-0.5";
-      detailEl.innerHTML = `<span class="text-emerald-400">done${dur}</span>` + (preview ? `<button onclick="toggleWfPreview(this)" class="ml-2 text-purple-400 hover:text-purple-300 underline">show output</button><pre class="wf-preview hidden mt-1.5 p-2 bg-slate-950/60 border border-slate-800 rounded text-[10px] text-slate-300 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${preview}</pre>` : "");
+      detailEl.innerHTML = `<span class="text-emerald-400">done${dur}</span>` + (preview ? `<button type="button" data-toggle-wf-preview="1" class="ml-2 text-purple-400 hover:text-purple-300 underline">show output</button><pre class="wf-preview hidden mt-1.5 p-2 bg-slate-950/60 border border-slate-800 rounded text-[10px] text-slate-300 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${preview}</pre>` : "");
     } else if (data.status === "failed") {
       statusEl.className = "wf-node-status mt-0.5 text-red-400";
       statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark text-[10px]"></i>';
@@ -387,9 +387,58 @@ export function createChatModule({
   }
 
   function toggleCardMetrics(e, turnNum) {
-    if (e) e.stopPropagation();
-    const panel = document.getElementById(`card-metrics-${turnNum}`);
+    if (typeof e !== "number" && e) e.stopPropagation();
+    const actualTurn = typeof e === "number" && turnNum === undefined ? e : turnNum;
+    const panel = document.getElementById(`card-metrics-${actualTurn}`);
     if (panel) panel.classList.toggle("hidden");
+  }
+
+  let chatBindingsInitialized = false;
+  function initChatBindings() {
+    if (chatBindingsInitialized) return;
+    chatBindingsInitialized = true;
+    const chatContainer = document.getElementById("chat-messages");
+    if (!chatContainer) return;
+    chatContainer.addEventListener("click", (event) => {
+      const seedBtn = event.target.closest("[data-seed-prompt]");
+      if (seedBtn) {
+        seedPromptExample(seedBtn.getAttribute("data-seed-prompt"));
+        return;
+      }
+      if (event.target.closest("[data-run-composer-cta]")) {
+        actions.runComposerCta && actions.runComposerCta();
+        return;
+      }
+      const editBtn = event.target.closest("[data-enable-card-edit]");
+      if (editBtn) {
+        actions.enableCardEdit && actions.enableCardEdit(event, Number(editBtn.getAttribute("data-enable-card-edit")));
+        return;
+      }
+      const forkBtn = event.target.closest("[data-trigger-fork]");
+      if (forkBtn) {
+        actions.triggerFork && actions.triggerFork(Number(forkBtn.getAttribute("data-trigger-fork")));
+        return;
+      }
+      const metricsBtn = event.target.closest("[data-toggle-card-metrics]");
+      if (metricsBtn) {
+        toggleCardMetrics(event, Number(metricsBtn.getAttribute("data-toggle-card-metrics")));
+        return;
+      }
+      const wfPreviewBtn = event.target.closest("[data-toggle-wf-preview]");
+      if (wfPreviewBtn) {
+        toggleWfPreview(wfPreviewBtn);
+        return;
+      }
+      const openFileBtn = event.target.closest("[data-open-workspace-file]");
+      if (openFileBtn) {
+        actions.openWorkspaceFile && actions.openWorkspaceFile(openFileBtn.getAttribute("data-open-workspace-file"));
+        return;
+      }
+      const stageFileBtn = event.target.closest("[data-stage-workspace-file]");
+      if (stageFileBtn) {
+        actions.stageWorkspaceFile && actions.stageWorkspaceFile(stageFileBtn.getAttribute("data-stage-workspace-file"));
+      }
+    });
   }
 
   return {
@@ -405,5 +454,6 @@ export function createChatModule({
     finalizeWorkflowTrace,
     toggleWfPreview,
     toggleCardMetrics,
+    initChatBindings,
   };
 }

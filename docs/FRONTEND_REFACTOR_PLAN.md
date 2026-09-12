@@ -238,13 +238,13 @@ The frontend no longer lives in a single inline-script page. It is now served as
 - Settings modal markup
 - fork/branch modal markup
 - inline CSS
-- a shrinking set of transitional inline handlers
+- static shell/dialog markup with JS-owned IDs and `data-*` hooks
 
-At the moment, the static Settings and Workflow Lab controls have been moved off inline HTML handlers and onto bound listeners / delegated actions. The remaining inline handlers are concentrated in the older shell/conversation/session surfaces and a few runtime-generated actions.
+The HTML no longer carries inline event handlers. Control wiring now happens through bound listeners and delegated `data-*` actions in the JS modules.
 
 ### What the JS modules now own
 
-- `app.js` — thin composition root and temporary inline-handler bridge
+- `app.js` — thin composition root that boots module bindings and startup flows
 - `state.js` — shared mutable app/session/workflow state
 - `shell.js` — shell routing, details panel, layout concessions, file/tool/deliverable panels
 - `chat.js` — transcript cards, alerts, empty hero, workflow trace cards, sub-agent cards
@@ -877,16 +877,17 @@ Split it according to the new ownership model:
 Phase 6 has crossed the important threshold: the old giant frontend script is gone, and the former `app.js` super-file has been broken into domain modules.
 
 What is true now:
-- the HTML still relies on a temporary inline-handler bridge from `app.js` to `window`, but that surface is smaller than before
-- static Settings and Workflow Lab controls now use bound listeners instead of inline HTML handlers
-- the workflow inspector now uses delegated `data-action` handling instead of generating inline handler strings
+- the HTML no longer relies on inline event handlers
+- `app.js` is no longer exporting a runtime bridge onto `window`
+- static shell, settings, workflow, composer, and fork controls are bound through module-owned listeners
+- dynamic transcript, details, queue, staged-context, workspace, provider, snapshot, MCP, and workflow-inspector actions now use delegated `data-*` hooks instead of inline handler strings
 - `settings.js` and `workflow_graph.js` are now composition roots rather than broad implementation blobs
-- the remaining bigger modules are now narrower, especially `workflow_canvas.js` and `composer.js`
+- the remaining bigger modules are now narrower, especially `workflow_canvas.js`, `sessions.js`, and `composer.js`
 
 Observed evidence after this pass:
-- inline handler resolution checks dropped from **80** to **45** in `node scripts/lint-html.js`
+- inline handler resolution checks dropped from **80** to **45**, and then to **0**, in `node scripts/lint-html.js`
 
-So the debt has moved again in the right direction: from **one unstable super-file** to **domain modules**, and then from **broad domain modules with heavy inline coupling** to **smaller modules with more local listener ownership**.
+So the debt has moved again in the right direction: from **one unstable super-file** to **domain modules**, and then from **broad domain modules with heavy inline coupling** to **smaller modules with listener/delegation ownership that actually lives in JS**.
 
 ---
 
@@ -967,6 +968,7 @@ Instead:
 | 2026-09-12 | Split transcript/composer and workflow graph/manager before further feature accretion | These were the two remaining oversized ownership blobs after the first ESM pass |
 | 2026-09-12 | Split settings and workflow graph internals again before chasing more UI features | Keeps ownership local and prevents second-generation module blobs |
 | 2026-09-12 | Start replacing inline HTML handlers with bound listeners and delegated `data-action` flows | Reduces global `window` exports and makes module ownership real, not cosmetic |
+| 2026-09-12 | Finish removing inline HTML event handlers from the current shell | Makes the ES module split operationally real instead of relying on `window` bridges |
 
 ---
 
