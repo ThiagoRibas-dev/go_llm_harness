@@ -365,59 +365,86 @@ type GeminiUsage struct {
 	TotalTokenCount      int `json:"totalTokenCount"`
 }
 
-func sendGeminiRequestWithUsage(api APIConfig, messages []Message, tools []Tool, isVertex bool) (*Message, GeminiResponse, error) {
+func buildGeminiRequest(messages []Message, tools []Tool) (GeminiRequest, []string, error) {
 	var gemReq GeminiRequest
+	roles := make([]string, 0, len(messages))
 
-	// 1. Separate System instruction
+	// 1. Separate system instruction and skip empty system stubs.
 	for _, m := range messages {
-		if m.Role == "system" {
-			if gemReq.SystemInstruction == nil {
-				gemReq.SystemInstruction = &GeminiInstruction{}
-			}
-			gemReq.SystemInstruction.Parts = append(gemReq.SystemInstruction.Parts, GeminiPart{Text: m.Content})
+		roles = append(roles, m.Role)
+		if m.Role != "system" {
+			continue
 		}
+		if strings.TrimSpace(m.Content) == "" {
+			continue
+		}
+		if gemReq.SystemInstruction == nil {
+			gemReq.SystemInstruction = &GeminiInstruction{}
+		}
+		gemReq.SystemInstruction.Parts = append(gemReq.SystemInstruction.Parts, GeminiPart{Text: m.Content})
 	}
 
-	// 2. Translate conversation contents
+	// 2. Translate conversation contents, skipping empty no-op messages.
 	for _, m := range messages {
 		if m.Role == "system" {
 			continue
 		}
 
 		var gemContent GeminiContent
-		if m.Role == "user" {
+		switch m.Role {
+		case "user":
 			gemContent.Role = "user"
-			gemContent.Parts = append(gemContent.Parts, GeminiPart{Text: m.Content})
-		} else if m.Role == "assistant" {
+			if strings.TrimSpace(m.Content) != "" {
+				gemContent.Parts = append(gemContent.Parts, GeminiPart{Text: m.Content})
+			}
+		case "assistant":
 			gemContent.Role = "model"
-			if m.Content != "" {
+			if strings.TrimSpace(m.Content) != "" {
 				gemContent.Parts = append(gemContent.Parts, GeminiPart{Text: m.Content})
 			}
 			for _, tc := range m.ToolCalls {
 				gemContent.Parts = append(gemContent.Parts, GeminiPart{
 					FunctionCall: &GeminiFunctionCall{
-						Name:             tc.Function.Name,
-						Args:             json.RawMessage(tc.Function.Arguments),
+						Name: tc.Function.Name,
+						Args: json.RawMessage(tc.Function.Arguments),
 					},
 					ThoughtSignature: tc.ThoughtSignature,
 					ThoughtSigCamel:  tc.ThoughtSignature,
 				})
 			}
-		} else if m.Role == "tool" {
+		case "tool":
 			gemContent.Role = "user"
-			gemContent.Parts = append(gemContent.Parts, GeminiPart{
-				FunctionResponse: &GeminiFunctionResponse{
-					Name: m.Name,
-					Response: map[string]interface{}{
-						"output": m.Content,
+			if m.Name != "" || m.Content != "" {
+				gemContent.Parts = append(gemContent.Parts, GeminiPart{
+					FunctionResponse: &GeminiFunctionResponse{
+						Name: m.Name,
+						Response: map[string]interface{}{
+							"output": m.Content,
+						},
 					},
-				},
-			})
+				})
+			}
+		default:
+			continue
+		}
+
+		if len(gemContent.Parts) == 0 {
+			continue
 		}
 		gemReq.Contents = append(gemReq.Contents, gemContent)
 	}
 
-	// 3. Translate Tool declarations
+	// Gemini expects a real conversation payload; older workflow bugs could
+	// leave persisted history beginning with a model turn. Trim any leading model
+	// messages until the first user turn so legacy/corrupted sessions still work.
+	for len(gemReq.Contents) > 0 && gemReq.Contents[0].Role == "model" {
+		gemReq.Contents = gemReq.Contents[1:]
+	}
+	if len(gemReq.Contents) == 0 {
+		return GeminiRequest{}, roles, fmt.Errorf("gemini request assembly produced zero conversation contents (roles=%s)", strings.Join(roles, ","))
+	}
+
+	// 3. Translate tool declarations.
 	if len(tools) > 0 {
 		var toolGroup GeminiToolGroup
 		for _, t := range tools {
@@ -430,9 +457,30 @@ func sendGeminiRequestWithUsage(api APIConfig, messages []Message, tools []Tool,
 		gemReq.Tools = append(gemReq.Tools, toolGroup)
 	}
 
+	return gemReq, roles, nil
+}
+
+func sendGeminiRequestWithUsage(api APIConfig, messages []Message, tools []Tool, isVertex bool) (*Message, GeminiResponse, error) {
+	gemReq, roles, err := buildGeminiRequest(messages, tools)
+	if err != nil {
+		return nil, GeminiResponse{}, err
+	}
+
 	payload, err := json.Marshal(gemReq)
 	if err != nil {
 		return nil, GeminiResponse{}, err
+	}
+	if activeConfig != nil && activeConfig.Debug {
+		partsPerContent := make([]string, 0, len(gemReq.Contents))
+		for _, c := range gemReq.Contents {
+			partsPerContent = append(partsPerContent, fmt.Sprintf("%s:%d", c.Role, len(c.Parts)))
+		}
+		writeDebugLog("[GEMINI REQUEST] roles=%s system_parts=%d contents=%d parts=%s tools=%d model=%s", strings.Join(roles, ","), func() int {
+			if gemReq.SystemInstruction == nil {
+				return 0
+			}
+			return len(gemReq.SystemInstruction.Parts)
+		}(), len(gemReq.Contents), strings.Join(partsPerContent, ","), len(tools), api.Model)
 	}
 
 	// 4. Construct API Endpoint URL

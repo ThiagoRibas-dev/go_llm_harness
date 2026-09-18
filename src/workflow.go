@@ -815,6 +815,9 @@ func (e *WorkflowExecutor) runNodeLogic(ctx context.Context, n *RuntimeNode, inp
 	case "assistant_response":
 		finalOutput, _ := inputs["final_output"].(string)
 		writeDebugLog("[WORKFLOW NODE %s] Rendering final terminal assistant response.", n.ID)
+		n.mu.Lock()
+		n.Outputs["final_output"] = finalOutput
+		n.mu.Unlock()
 
 		// Persist/broadcast the final answer exactly once using the session's next
 		// real turn number. Pre-broadcasting here and then calling saveMessageTurn
