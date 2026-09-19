@@ -9,6 +9,7 @@ It consolidates:
 - implementation readiness
 - dependency chains
 - known spec gaps
+- and now, a **system-oriented delivery model** instead of a flat bag of feature rows
 
 Supporting documents remain useful, but they are **reference material**, not parallel roadmap sources.
 
@@ -24,15 +25,35 @@ Supporting documents remain useful, but they are **reference material**, not par
 - **Deferred** — intentionally lower priority even if technically specifiable.
 - **Subsumed** — do not implement as a separate project; fold it into the newer item named in the notes.
 
-## Source basis key
+## Implementation role key
 
-- **Roadmap synthesis** — backlog decisions and scope definitions consolidated in this file
-- **Code** — current implementation under `src/`
-- **Mockup** — `docs/mockups/ui-mockup.html`
+This roadmap now groups rows by **implementation system** and labels each row by what kind of work it really is:
+
+- **Substrate** — storage/runtime primitives other features sit on top of.
+- **Retrieval** — search/memory/query logic.
+- **Policy** — permissions, trust, hooks, approvals, safety rules.
+- **Projection/UI** — user-facing surfaces built on other systems.
+- **Operator** — control-plane, CLI, headless, status, or maintenance surfaces.
+- **Integration** — bounded feature that depends on multiple substrates but is not itself a new platform.
+
+## Reference document key
+
+The roadmap now explicitly tracks how items relate to research/spec documents.
+
 - **Frontend plan** — `docs/FRONTEND_REFACTOR_PLAN.md`
-- **Pi / DSH / Codex / Claude** — comparative analysis consolidated into this roadmap from prior investigation
-- **Crawl4AI / tldw / Prime** — adjacent reference-app lessons consolidated into this roadmap from prior investigation
-- **Research docs** — e.g. `docs/RESEARCH.md`, `docs/COMPARISON_MATRIX.md`
+- **Mockup** — `docs/mockups/ui-mockup.html`
+- **Research ledger** — `docs/RESEARCH.md`
+- **Comparison matrix** — `docs/COMPARISON_MATRIX.md`
+- **BM25 research** — `docs/BM25_SCALING_RESEARCH.md`
+- **Infinite-context memory research** — `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md`
+- **Archived memory spec** — `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md`
+- **Subagent plan** — `docs/SUBAGENT_PARALLELISM_PLAN.md`
+- **V2 spec** — `docs/V2_SPECIFICATION.md`
+- **V2 visual editor** — `docs/V2_VISUAL_EDITOR.md`
+- **Roadmap synthesis** — backlog/architecture synthesis kept in this roadmap itself
+- **Code** — current implementation under `src/`
+
+---
 
 ## Supporting documents (reference material, not roadmap files)
 
@@ -44,6 +65,38 @@ Supporting documents remain useful, but they are **reference material**, not par
 - `docs/SUBAGENT_PARALLELISM_PLAN.md` — concurrency design notes for the shipped sub-agent runtime
 - `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md` — source-level evaluation of `Lumi-node/infinite-context` and its applicability to GoHarness memory architecture
 - `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md` — implementation spec for GoHarness cold-memory retrieval over archived turns, summaries, uploads, and deliverables
+
+---
+
+## Why the roadmap is organized this way now
+
+The older roadmap structure was useful for discovery, but too many rows were really:
+
+- one backend substrate,
+- plus one policy layer,
+- plus one UI projection,
+- plus one operator surface.
+
+If we implement those rows one-by-one as isolated features, we will repeatedly rebuild the same state models.
+
+So this roadmap now follows a **system-oriented model**.
+
+### The nine implementation systems
+
+1. **Session Event & Memory System**
+2. **Knowledge Ingress & Retrieval System**
+3. **Task & Background Work System**
+4. **Capabilities & Extensions System**
+5. **Policy & Hooks Engine**
+6. **Execution & Review System**
+7. **MCP Runtime Expansion**
+8. **Runtime, Config & Operator Control Plane**
+9. **Shell & Interaction System**
+
+This is a refinement of the earlier consolidation model: two areas that were previously implicit are now called out explicitly because they are large enough to deserve their own implementation systems:
+
+- **Knowledge Ingress & Retrieval**
+- **Runtime, Config & Operator Control Plane**
 
 ---
 
@@ -62,313 +115,543 @@ These are the most important foundations already landed and **should not be re-s
 - Parallel sub-agents with depth cap, write lock, and progress SSE
 - Comparative roadmap research for Pi / DeepSeek Harness / Codex / Claude Code
 - UI mockup in `docs/mockups/ui-mockup.html`
+- Embedded HTML partial composition + ES module web client refactor
+- No inline HTML event-handler wiring in the current web shell
 
 ### Partially landed foundations with follow-on work still open
 
-| ID | Item | Current state | Remaining work |
-|---|---|---|---|
-| 12.6 | Tool-output spill to disk | **Partial** | Web-fetch integration, richer typed viewers, broader retrieval UX |
-| 12.28.14 | Truthful block/empty states | **Partial** | Extend the same truthfulness to approvals, RAG, MCP, workflow, and terminal surfaces |
-| 12.29.12 | Theme token foundation | **Partial** | Persisted theme picker, full semantic-token pass through deeper UI surfaces |
-
----
-
-## Dependency backbone
-
-These chains explain why some items are ready and some are not.
-
-### 1. Session log / memory backbone
-`11.6 session tree` → `12.2 event log as source of truth` → `9.1/9.2 hierarchical memory` + `12.29.7 transcript semantics`
-
-### 2. Policy / hooks backbone
-`12.1 capability seams` + `12.3 hook bus` → `12.16 approval+sandbox services` → `12.17 hooks bridge` + `14.2 permission DSL` + `14.3 Claude-style matcher hooks` + `13.7 execpolicy`
-
-### 3. Long-running work backbone
-`11.2 message queue` + `11.7 durable background jobs` → `12.8 goals` + `12.21 schedules` + `14.8 background task roster` + `10.2C async fire-and-forget`
-
-### 4. Frontend shell backbone
-`11.20 editor modal / slash palette` + `12.28.1 slot model` → `12.29.1 three-column shell` + `12.29.10 persistent shell identity` → higher-order views like trajectory, fleet, staged context, settings sidebars
-
-### 5. PTY / terminal backbone
-`12.4 persistent terminals` → `13.9 validation workflow` and supersedes the older rougher `11.22` shell-session idea
-
-### 6. Skills / extension backbone
-`11.13 prompt templates + skills` → `14.4 lazy dynamic context skills` → `13.4 / 12.24 full plugin packaging`
-
----
-
-## Recommended implementation waves
-
-### Wave 1 — highest leverage, ready now
-1. **11.1** web search & fetch
-2. **11.2** message queue while agent is running
-3. **11.3** cancel vs abort distinction
-4. **11.4** `@file` mentions
-5. **11.10** automatic build/lint/typecheck feedback
-6. **11.11** model-initiated Q&A (`ask_user`)
-7. **11.17** richer status row / status chips
-8. **11.20** editor modal + slash palette
-9. **11.21** in-chat slash commands
-10. **13.1** headless runner with JSONL events
-11. **13.5** dedicated review mode
-12. **13.10 / 14.10** doctor, init, status, permissions/tasks operator polish
-
-### Wave 2 — ready, but best after Wave 1 foundations
-1. **11.7** durable background jobs
-2. **11.8 / 14.5** named agent roles / declarative subagent files
-3. **12.4** persistent terminals
-4. **12.11** structured sub-agent output
-5. **12.19** content-addressed attachments
-6. **12.22** guard / secret scanning
-7. **12.23** human feedback sidecar
-8. **12.25** telemetry contracts
-9. **13.7 / 14.2** unified permission DSL + execpolicy
-10. **13.8 / 14.9** richer MCP transports/resources
-
-### Wave 3 — implementation-ready but blocked on shared architecture
-1. **12.3 / 13.3 / 14.3 / 12.17** hook bus and trusted hooks
-2. **12.8 / 13.6 / 14.8 / 12.21** long-running goal/schedule/task system
-3. **12.28.1 / 12.29.1 / 12.29.10** frontend shell refactor backbone
-4. **12.18** session query after event-log work
-
-### Wave 4 — requires design work first
-1. **11.6 / 12.2** canonical event log + session tree
-2. **9.1 / 9.2** hierarchical memory subsystem
-3. **12.15** layered patchable config
-4. **12.20** code mode / model-written programs
-5. **14.6** worktree-aware isolation
-6. **13.4 / 11.13 / 12.24** full plugin packaging/distribution model
-
-### Immediate UI next step
-
-Before landing more **UI-facing** capability work, execute the shell-maturity pass in [`docs/FRONTEND_REFACTOR_PLAN.md`](./FRONTEND_REFACTOR_PLAN.md).
-
-That document is now the operational plan for:
-- consolidating redundant interactions,
-- promoting Workflow Lab out of Settings,
-- restructuring the app around a DSH-style left/center/right ownership model,
-- maturing the composer into the main interaction hub,
-- and only then splitting the frontend into ES modules along the new boundaries.
-
-The intent is to stop accreting visible features onto a modal-heavy, duplicated interaction model.
-
----
-
-# 1) Session, persistence, memory, and export
-
-| ID | Item | Status | Source basis | Depends on | Missing decisions / notes |
+| ID | Item | Role | Status | Related docs | Notes |
 |---|---|---|---|---|---|
-| 9.1 | O(1) range loader + hierarchical memory decay | **Spec needed** | Roadmap synthesis, OptMem references in `docs/RESEARCH.md`, `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md` | 11.6, 12.2 | Need storage model, hierarchy geometry, invalidation rules, prompt reconstruction budgets. New research input reinforces a hierarchy-first cold-memory design, but argues for BM25-first retrieval before any embedding dependency. |
-| 9.2 | Visual memory map dashboard | **Spec needed** | Roadmap synthesis, newer UI direction in 12.28/12.29, `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md` | 9.1, 12.2, shell placement | Need backing API, UI placement, semantics for forget/regenerate/branch-from-summary, and truthful provenance display for retrieved archived memory. |
-| 9.3 | Hierarchical archived-memory retrieval (BM25-first, optional embeddings later) | **Ready** | `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md`, `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md`, Research docs, Roadmap synthesis | 9.1 strongly related; 11.6 and 12.2 improve it later but are not required for a file-backed v1 | Build a cold-memory retrieval layer over archived turns, compaction epochs, uploads, and deliverables. Lexical/metadata routing is the intended v1. Embeddings/reranking remain optional follow-on work. |
-| 11.6 | Session tree / time-travel navigator | **Spec needed** | Roadmap synthesis, Pi references, DSH event-log pressure | 12.2 strongly related | Need canonical event schema, branch semantics, dual-write migration plan |
-| 11.9 | Cross-session memory | **Ready** | Roadmap synthesis, Pi memory refs, Code/BM25, `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md` | — | Good v1 path: BM25-backed dated memory notes and archived-memory retrieval. Embedding/rerank can remain optional; do not market this as “infinite context”. |
-| 12.2 | Session event log as source of truth | **Spec needed** | DSH, Codex/Prime event-stream references, Roadmap synthesis | 11.6 strongly related | Need exact event schema, projections, migration from per-turn JSON files |
-| 12.18 | Session query with FTS | **Blocked** | DSH, Roadmap synthesis, current BM25 engine | 11.6, 12.2 | Straightforward after canonical event log exists |
-| 12.29.7 | Full step-grouped transcript / compaction placement / streaming-tail isolation | **Spec needed** | DSH, Roadmap synthesis | 12.2 | Partial transcript cleanup is possible now, but the full model needs a typed event stream |
-| 12.28.12 | Deliverables, references, message feedback | **Ready** | DSH, tldw, Roadmap synthesis | 11.4 helps | Deliverables row is implementable now; exportable artifact bundles come later |
+| 12.6 | Tool-output spill to disk | Substrate | **Partial** | Frontend plan, Roadmap synthesis, Code | Storage exists; richer viewers and retrieval integration remain open. |
+| 12.28.14 | Truthful block/empty states | Projection/UI | **Partial** | Frontend plan, Mockup, Roadmap synthesis | Truthful UI pattern shipped in parts; needs broader coverage. |
+| 12.29.12 | Theme token foundation | Projection/UI | **Partial** | Frontend plan, Mockup | Token groundwork exists; full theme/operator story remains open. |
 
 ---
 
-# 2) Search, web fetching, ingestion, and local knowledge surfaces
+## System dependency backbone
 
-| ID | Item | Status | Source basis | Depends on | Missing decisions / notes |
-|---|---|---|---|---|---|
-| 11.1 | Web search & fetch | **Ready** | Pi, Crawl4AI, tldw, Roadmap synthesis | Spill foundation already landed | One of the best-specified items; default pure-Go fetch, optional JS-heavy fallback later |
-| 11.4 | `@file` mentions in composer | **Ready** | Pi, Code, Roadmap synthesis | — | UI typeahead + backend file query |
-| 11.16 | Parent-directory context walking + overrides | **Ready** | Pi, current `LoadLocalInstructions()`, Roadmap synthesis | — | Small, clear extension |
-| 11.19 | Image paste/drag into composer | **Ready** | Pi, current uploads plumbing, Roadmap synthesis | 12.19 improves storage | Ready even before content-addressing, though 12.19 gives the cleaner backend |
-| 12.5 | LSP seam | **Ready** | DSH, Roadmap synthesis | — | Clear four-op seam; just medium effort |
-| 12.19 | Content-addressed attachments | **Ready** | DSH, current uploads path, Roadmap synthesis | — | Good bounded v1 |
-| 14.9 | MCP prompts, resources, remote transports, OAuth, elicitation | **Blocked / staged** | Claude MCP docs, Roadmap synthesis | 11.11 for elicitation; 13.8 for transport breadth | Prompt/resource surfacing is ready sooner than full OAuth+elicitation stack |
-| 13.8 | MCP breadth: streamable HTTP, OAuth, richer management | **Ready** | Codex + Claude MCP docs, Roadmap synthesis | — | Staged implementation strongly recommended |
+These are the major cross-system truths that should shape implementation order.
 
----
+### A. Event/memory first for durable introspection
+The **Session Event & Memory System** is the long-term substrate for:
+- archived-memory retrieval,
+- session tree/time travel,
+- transcript grouping,
+- history query,
+- memory dashboards.
 
-# 3) Agent loop, sub-agents, long-running work, and orchestration
+### B. Task state first for goals/schedules/background work
+The **Task & Background Work System** must exist before:
+- goal mode,
+- schedule/mission runs,
+- durable background workers,
+- roster/progress UI can become truthful.
 
-| ID | Item | Status | Source basis | Depends on | Missing decisions / notes |
-|---|---|---|---|---|---|
-| 10.2B | Wait First / Race | **Ready** | Roadmap synthesis, current subagent runtime, Prime references | — | Implement through current subagent engine; define cancellation and winner semantics clearly |
-| 10.2C | Async / Fire-and-Forget | **Subsumed** | Roadmap synthesis, Prime, 11.7 | 11.7 | Do not build separately; fold into durable background jobs |
-| 11.2 | Message queue while agent is running | **Ready** | Pi, Code, Roadmap synthesis | — | Good v1 spec already exists |
-| 11.3 | Cancel vs abort distinction | **Ready** | Pi, Code, Roadmap synthesis | — | Small and clear |
-| 11.5 | `!command` shell injection | **Ready** | Pi, Code, Roadmap synthesis | — | Small, careful UX needed |
-| 11.7 | Durable/background sub-agent jobs | **Ready** | Pi, Prime, current subagent runtime, Roadmap synthesis | 11.2 helpful | Prefer explicit mailboxes / receipts / artifact exchange, not magical shared mutable context |
-| 11.8 | Named sub-agent roles & packaged workflows | **Ready** | Pi, Claude 14.5 references, current subagent runtime | — | File format choice is open but not blocker-level |
-| 11.10 | Automatic build/lint/typecheck feedback loop | **Ready** | Pi, Code, Roadmap synthesis | — | Heuristic per-language v1 is good enough |
-| 11.11 | Model-initiated Q&A interludes | **Ready** | Pi ask-user ref, DSH/Codex/Claude approval patterns | — | Async wait and resume behavior are understood well enough |
-| 11.12 | Persistent TODO/plan overlay | **Ready** | Pi, DSH composer references, Roadmap synthesis | — | Straightforward first pass |
-| 12.4 | First-class persistent terminals (PTY) | **Ready** | DSH, tldw, Roadmap synthesis | 12.1 helpful but not required | Important distinction between model-invoked PTY tools and any explicitly user-owned persistent terminal surface |
-| 12.7 | Plan mode as logged collaboration state | **Blocked** | DSH, Codex, Claude, Roadmap synthesis | 12.3, 11.11, UI takeover plumbing | Behavior is clear; interception and UI surfaces should exist first |
-| 12.8 | Goals with autonomous round-driving | **Blocked** | DSH, Prime, Codex, Roadmap synthesis | 11.2, 11.7 | Enough info exists, but it wants durable continuation machinery |
-| 12.9 | Dynamic workflows over sub-agents | **Blocked** | DSH, current subagents, Roadmap synthesis | 11.7, 12.10, 12.11 | Better after background jobs and structured output land |
-| 12.10 | Multiple sub-agent providers | **Ready** | DSH, Codex/Claude command/runtime references | — | Interface-first implementation is ready |
-| 12.11 | Structured sub-agent output | **Ready** | DSH, current subagent schema | — | Tight, bounded item |
-| 12.12 | Per-agent tool scoping & personas | **Ready** | DSH, 11.8, 14.5 | — | Enforced filtering, not just hidden prompt text |
-| 12.13 | Per-session agent presets | **Ready** | DSH, current `Agent` runtime | — | Good config + UI task |
-| 12.14 | Scope primitive | **Blocked** | DSH, Roadmap synthesis | 12.3, 12.13 | Small internal spec still needed once scoped registrations exist |
-| 12.20 | Code Mode / model-written programs | **Spec needed** | DSH, Roadmap synthesis | 12.1 | Need runtime choice, security model, SDK/binding surface |
-| 12.21 | Scheduled / mission runs | **Blocked** | DSH, Prime, Roadmap synthesis | 11.7, 12.8 | Good once jobs exist |
-| 13.5 | Dedicated code-review mode | **Ready** | Codex, Claude, Roadmap synthesis | — | Strongly spec'd and high value |
-| 13.6 | Plan mode + goal mode + progress rows | **Blocked** | Codex, DSH, Mockup | 12.7, 12.8, 12.29.6 | Use as integration item, not as the first implementation entry |
-| 13.9 | Persistent terminal sessions + integrated validation workflow | **Blocked** | Codex, tldw, 12.4, 11.10 | 12.4 first | Good second-wave PTY feature |
-| 14.5 | Subagents as data files | **Ready** | Claude docs, current runtime, Roadmap synthesis | — | Strong improvement path over ad hoc role config |
-| 14.6 | Worktree-aware isolation | **Spec needed** | Claude docs, Roadmap synthesis | Review/branch/job semantics | Need interaction with current rollback model, worktree cleanup and collision policy |
-| 14.7 | Review + security-review as first-class flows | **Ready** | Claude + Codex, Roadmap synthesis | — | Very implementable |
-| 14.8 | Background agents, task roster, queued command semantics | **Blocked** | Claude, Pi, Prime, Roadmap synthesis | 11.2, 11.7 | Clear destination; durable task machinery first |
+### C. Policy engine first for approvals/hooks/permissions
+The **Policy & Hooks Engine** is the clean backbone for:
+- approvals,
+- execpolicy,
+- trust review,
+- matcher hooks,
+- capability restrictions.
+
+### D. Execution substrate first for review/isolation flows
+The **Execution & Review System** should own:
+- persistent terminals,
+- validation loops,
+- code/review modes,
+- worktree-aware isolation.
+
+### E. Shell/UI is mostly projection, not backend truth
+The **Shell & Interaction System** should consume stable projections from the other systems instead of inventing its own state models.
 
 ---
 
-# 4) Runtime architecture, hooks, policy, permissions, and config
+# 1) Session Event & Memory System
 
-| ID | Item | Status | Source basis | Depends on | Missing decisions / notes |
-|---|---|---|---|---|---|
-| 11.13A | Prompt templates | **Ready** | Pi, Codex, Claude, Roadmap synthesis | — | Tiny first slice |
-| 11.13B | Skills (description + lazy load) | **Ready** | Pi, Codex, Claude, Roadmap synthesis | — | Enough for a bounded first pass |
-| 11.13C | Full extension protocol / install surface | **Spec needed** | Pi, DSH, Codex, Claude | 12.3, 12.14, trust model | Need wire contract, registration lifecycle, install/update/trust model |
-| 11.14 | Provider/model catalog as data | **Ready** | Roadmap synthesis, current provider/profile code | — | Medium, straightforward |
-| 11.15 | Project trust & local config policy | **Ready** | Pi, Claude trust docs, Roadmap synthesis | — | Enough for a basic trust gate |
-| 12.1 | Capability seams (FS / Runner / Terminals / LSP) | **Blocked** | DSH, Code, Roadmap synthesis | Refactor bandwidth | Concept and interfaces are clear; implement incrementally |
-| 12.3 | Waterfall event hooks | **Blocked** | DSH, Codex, Claude, Roadmap synthesis | 12.2 ideal, but narrow v1 can precede it | Enough for a v1 bus; full fidelity wants better logging semantics |
-| 12.15 | Profiles & bundles as layered patchable config | **Spec needed** | DSH, Roadmap synthesis | 14.1 helps | Need merge/patch semantics, precedence rules, file format |
-| 12.16 | Approval policy & sandbox as services | **Blocked** | DSH, current sandbox code, Claude/Codex policy docs | 12.1, 12.3, 14.2 | Strong direction; wants unified services underneath |
-| 12.17 | Hooks bridge (`hooks.json`) | **Blocked** | DSH, Codex, Claude | 12.3 | High value once hook bus exists |
-| 12.22 | Guard / secret scanning | **Ready** | DSH, current guardrails, Roadmap synthesis | — | Easy high-value guard item |
-| 12.23 | Human feedback out of model context | **Ready** | DSH, Roadmap synthesis | — | Clean sidecar feature |
-| 12.24 | Skills as on-demand capability packages | **Subsumed** | DSH, Pi, Roadmap synthesis | 11.13, 13.4 | Do not spec separately; implement through the unified skills/plugin track |
-| 12.25 | Telemetry / observability contracts | **Ready** | DSH, current trace logging, Roadmap synthesis | — | Good medium-scope cleanup |
-| 12.26 | Headless / RPC / SDK modes | **Subsumed** | DSH, current `Agent` runtime | 13.1, 13.2 | Implement via the newer Codex/Prime-informed items |
-| 13.1 | Headless non-interactive runner + JSONL + schema output | **Ready** | Codex, Prime, current `Agent` runtime | — | Very ready and strategically important |
-| 13.2 | App-server / RPC seam | **Blocked** | Codex, Prime, Roadmap synthesis | 12.2 recommended | A narrow v1 is possible sooner; clean long-term version wants a better event/log substrate |
-| 13.3 | Lifecycle hooks with trust review | **Blocked** | Codex, Claude, DSH | 12.3 | Clear once hook bus exists |
-| 13.4A | Skills with progressive disclosure | **Ready** | Codex, Claude, Pi | 11.13B | Strong v1 available |
-| 13.4B | Full plugin packaging/distribution | **Spec needed** | Codex, Claude, Pi | 11.13C, 11.15 | Needs install/update/trust/marketplace semantics |
-| 13.7 | Approval policy + sandbox presets + execpolicy | **Ready** | Codex, Claude, current sandbox code | — | One of the clearest policy items now |
-| 13.8 | MCP breadth: HTTP, OAuth, richer management | **Ready** | Codex + Claude MCP docs | — | Stage it; do not try to ship every transport/auth mode at once |
-| 13.10 | Operator polish: doctor, completions, theme, status, init | **Ready** | Codex, Claude, current app state | — | Very implementable and high-frequency UX |
-| 14.1 | Repo-scoped configuration hierarchy | **Ready** | Claude docs, Roadmap synthesis | — | Good structural cleanup item |
-| 14.2 | Permission rules as first-class user contract | **Ready** | Claude docs, Codex, current guard/sandbox code | — | Strong spec now exists |
-| 14.3 | Claude-style matcher hooks + trust | **Blocked** | Claude, Codex, DSH | 12.3 | Hook bus first |
-| 14.4 | Skills / commands / dynamic context injection | **Ready** | Claude, Codex, Roadmap synthesis | 11.13B helpful | Very good v1 spec |
-| 14.10 | Operator polish: init / doctor / status / memory / permissions / tasks | **Ready** | Claude docs, Codex | — | Overlaps with 13.10; implement as one operator-surface program |
+## System intent
+
+This system owns:
+- canonical session persistence semantics,
+- time-travel and branch graph structure,
+- compaction/archive boundaries,
+- archived-memory retrieval,
+- cross-session recall,
+- transcript/event projections.
+
+## Why these items belong together
+
+The archived-memory work is now informed by:
+- **OptMem-style range and hierarchy ideas** in the older research ledger,
+- **BM25-first retrieval evidence** in `docs/BM25_SCALING_RESEARCH.md`,
+- the source-level cautionary evaluation in `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md`,
+- and the concrete GoHarness design in `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md`.
+
+That means these rows are no longer isolated “memory ideas”; they are one implementation system with staged substrates and projections.
+
+## Items
+
+| ID | Item | Role | Status | Related docs | Depends on | Missing decisions / notes |
+|---|---|---|---|---|---|---|
+| 9.1 | O(1) range loader + hierarchical memory decay | Substrate | **Spec needed** | Research ledger, Infinite-context memory research, Archived memory spec | 11.6, 12.2 improve it later | Needs canonical storage/projection contract and prompt reconstruction rules. Archived-memory spec now defines the cold-memory direction, but the exact substrate still needs design if done on top of an event log instead of files. |
+| 9.2 | Visual memory map dashboard | Projection/UI | **Spec needed** | Archived memory spec, Frontend plan, Mockup | 9.1, 12.2, shell placement | Needs backing API, retrieval provenance model, and user actions like inspect/forget/branch. |
+| 9.3 | Hierarchical archived-memory retrieval (BM25-first, optional embeddings later) | Retrieval | **Ready** | Infinite-context memory research, Archived memory spec, BM25 research | 9.1 strongly related; 11.6 and 12.2 improve it later but are not required for a file-backed v1 | Implement as a file-backed derived projection first. Embeddings are optional follow-on work. |
+| 11.6 | Session tree / time-travel navigator | Projection/UI | **Spec needed** | Roadmap synthesis, Frontend plan | 12.2 strongly related | Needs canonical branch/session graph semantics, projection format, and migration path from plain turn files. |
+| 11.9 | Cross-session memory | Retrieval | **Ready** | Archived memory spec, BM25 research, Infinite-context memory research | — | Good v1 path: workspace-scoped BM25/metadata retrieval over archived memory units. Do not overclaim this as infinite context. |
+| 12.2 | Session event log as source of truth | Substrate | **Spec needed** | Archived memory spec, Frontend plan, Roadmap synthesis | 11.6 strongly related | Needs exact event schema, projections, migration/dual-write plan. This is the long-term substrate for the rest of the system. |
+| 12.18 | Session query with FTS | Retrieval | **Blocked** | Archived memory spec, Frontend plan | 11.6, 12.2 | Easy once event/query projections exist. |
+| 12.23 | Human feedback out of model context | Operator | **Ready** | Roadmap synthesis, Archived memory spec | — | Best treated as a sidecar/projection on session state rather than model-visible conversation text. |
+| 12.25 | Telemetry / observability contracts | Operator | **Ready** | Research ledger, Comparison matrix, Code | — | Strongly related to future event schema and session projections; should align with 12.2 instead of becoming a parallel logging world. |
+| 12.29.7 | Full step-grouped transcript / compaction placement / streaming-tail isolation | Projection/UI | **Spec needed** | Frontend plan, Archived memory spec | 12.2 | Wants a typed event/transcript model instead of ad hoc chat card stacking. |
 
 ---
 
-# 5) Web UI shell, transcript, and interaction surfaces
+# 2) Knowledge Ingress & Retrieval System
 
-| ID | Item | Status | Source basis | Depends on | Missing decisions / notes |
-|---|---|---|---|---|---|
-| 11.17 | Richer live status & cost footer / status chips | **Ready** | Pi, tldw, Code, Roadmap synthesis | — | Strong first pass exists; later can graduate from footer to clickable chips |
-| 11.18 | Collapsible thinking blocks | **Ready** | Pi, current provider translation code | — | Provider plumbing is messy; feature intent is clear |
-| 11.20 | Editor modal & slash command palette | **Ready** | Pi, Frontend plan, Roadmap synthesis | — | Good shell-level enhancement |
-| 11.21 | In-chat slash commands | **Ready** | Pi, current workflow command handling | 11.20 helps | Implementation path is clear |
-| 11.22 | Persistent shell sessions / background shells | **Subsumed** | Pi, DSH 12.4, tldw | 12.4 | Keep as historical note; implement through 12.4 and 13.9 instead |
-| 12.28.1 | Slot / region model for web client | **Blocked** | DSH UI docs, Mockup, Frontend plan | Frontend refactor start | Clear direction; wants shell modularization first |
-| 12.28.2 | Step-grouped conversation + sticky composer | **Blocked** | DSH, Mockup | 12.28.1, 12.29.7 ideally | First cut possible, full version wants better event model |
-| 12.28.3 | Composer takeover for approvals/questions | **Blocked** | DSH, Mockup | 11.11, 12.3 | UI is clear; backend wait logic first |
-| 12.28.4 | Trajectory / inspector view | **Blocked** | DSH, Mockup | 12.2 | Needs reliable event substrate |
-| 12.28.5 | `@` and `/` trigger system | **Ready** | Pi, DSH, Mockup | — | One of the clearest UI items |
-| 12.28.6 | Tool call tree with nested sub-calls | **Blocked** | DSH, Mockup | Richer event structure | Full nested tree wants better tool/event lineage than we store today |
-| 12.28.7 | Sub-agent navigation and fleet UI | **Blocked** | DSH, Mockup, 11.7 | 11.7 | Needs durable task/session metadata |
-| 12.28.8 | Plan chip / todo / goals / jobs badge | **Blocked** | DSH, Mockup | 11.12, 12.7, 12.8, 11.7 | Pure UI is clear; data sources are not all present yet |
-| 12.28.9 | Workspace/session sidebar with grouped searchable rows | **Ready** | DSH, Mockup, tldw | 12.18 for full content search | Good first pass now; later full-text content search can layer in |
-| 12.28.10 | Settings as plugin cards with live model testing | **Ready** | DSH, current provider UI | Revisioned settings write contract later | Good incremental item |
-| 12.28.11 | First-class theme system | **Ready** | DSH, current theme-token foundation | — | Foundation already in place |
-| 12.28.12 | Message feedback / deliverables / references | **Ready** | DSH, tldw | 11.4 helps | Strong item, bounded v1 |
-| 12.28.13 | Drag-and-drop attachments | **Ready** | DSH, current upload plumbing | 12.19 improves backend | Clear v1 |
-| 12.28.14 | Empty/hero state and block reasons | **Partial** | DSH, tldw, Code | — | Continue broadening this truthfulness across other surfaces |
-| 12.28.15 | Reliability details worth copying | **Ready as checklist** | DSH | Attach to related items | Not a standalone feature; use as acceptance criteria |
-| 12.29.1 | Three-column shell with concession chain | **Ready** | DSH, Mockup | 12.28.1 recommended | Strong spec |
-| 12.29.2 | Slot ownership of chrome | **Blocked** | DSH, Mockup | 12.28.1 | Straight dependency |
-| 12.29.3 | Conversation view tabs | **Blocked** | DSH, Mockup | 12.28.1, 12.29.1 | Clear once shell exists |
-| 12.29.4 | Sidebar anatomy and collapse motion | **Ready** | DSH, Mockup | — | Strongly spec'd |
-| 12.29.5 | Settings as sidebar surface | **Blocked** | DSH, current settings UI | 12.29.1, 12.28.10 | Shell refactor first |
-| 12.29.6 | Composer regions and in-place takeover | **Ready** | DSH, Mockup, tldw | Backend features vary | UI structure is clear even if some regions remain empty initially |
-| 12.29.8 | Layer / z-index contract | **Ready** | DSH | — | Good low-risk cleanup |
-| 12.29.9 | Typed blocks (Terminal, Diff, Read, Search, Web) | **Ready** | DSH, Mockup | — | Implement incrementally per block type |
-| 12.29.10 | Persistent shell identity across session switches | **Blocked** | DSH, Frontend plan | shell refactor | Hoist shell state first |
-| 12.29.11 | Workspace/session browser details | **Ready as checklist** | DSH | 12.28.9 | Acceptance criteria, not a standalone initiative |
-| 12.29.12 | Branding and theming mechanics | **Partial** | DSH, Code | — | Token foundation shipped; full system remains open |
-| 12.29.13 | Boot/rendering lifecycle | **Blocked** | DSH, Frontend plan | ESM frontend refactor | Wait for the frontend split |
+## System intent
+
+This system owns:
+- getting external knowledge into GoHarness,
+- making local knowledge surfaces queryable,
+- staging evidence for prompts,
+- keeping retrieval truthful and inspectable.
+
+## Why these items belong together
+
+The research story here is consistent:
+- `docs/BM25_SCALING_RESEARCH.md` argues strongly for lexical-first retrieval at scale,
+- the frontend plan explains why staged evidence and typed search/read blocks belong near the composer and details surfaces,
+- the current code already has uploads, BM25, pinned context, and workspace tree interaction.
+
+These rows are different ingest/retrieval surfaces over the same knowledge system.
+
+## Items
+
+| ID | Item | Role | Status | Related docs | Depends on | Missing decisions / notes |
+|---|---|---|---|---|---|---|
+| 11.1 | Web search & fetch | Retrieval | **Ready** | Research ledger, Frontend plan, Roadmap synthesis | Spill foundation already landed | One of the most ready items. Should feed the same evidence staging and typed renderer system as other sources. |
+| 11.4 | `@file` mentions in composer | Projection/UI | **Ready** | Frontend plan, Mockup | — | UI typeahead + file resolver + staging contract. |
+| 11.16 | Parent-directory context walking + overrides | Retrieval | **Ready** | Research ledger, current instruction loader, Roadmap synthesis | — | Natural extension of scoped instructions and workspace context discovery. |
+| 11.19 | Image paste/drag into composer | Integration | **Ready** | Frontend plan, current upload plumbing | 12.19 improves backend | Can ship before content-addressing, but 12.19 cleans it up. |
+| 12.5 | LSP seam | Substrate | **Ready** | Roadmap synthesis, Comparison matrix | — | Fits here because it is a knowledge/analysis source as much as an execution aid. |
+| 12.6 | Tool-output spill to disk | Substrate | **Partial** | Frontend plan, Code | — | Should become one of the standard ingestable evidence forms. |
+| 12.19 | Content-addressed attachments | Substrate | **Ready** | Roadmap synthesis, Frontend plan | — | Strong backend cleanup for uploads, images, and future evidence references. |
+| 12.28.12 | Deliverables, references, message feedback | Projection/UI | **Ready** | Frontend plan, Mockup | 11.4 helps | This belongs here because deliverables and references are evidence surfaces, even though their UI sits in the shell system. |
+
+---
+
+# 3) Task & Background Work System
+
+## System intent
+
+This system owns:
+- queued user work,
+- agent/sub-agent task execution,
+- durable/background jobs,
+- blocked/waiting states,
+- plans/goals/schedules as actual runtime state.
+
+## Why these items belong together
+
+The current sub-agent runtime already gave us the first slice of this system.
+The next rows all depend on having one truthful model of:
+
+- queued work,
+- running work,
+- waiting-user work,
+- resumed work,
+- cancelled/aborted work,
+- and outputs/receipts.
+
+That makes this one of the strongest consolidation candidates in the roadmap.
+
+## Items
+
+| ID | Item | Role | Status | Related docs | Depends on | Missing decisions / notes |
+|---|---|---|---|---|---|---|
+| 10.2B | Wait First / Race | Integration | **Ready** | Subagent plan, Roadmap synthesis | — | Implement through current sub-agent/task runtime. |
+| 10.2C | Async / Fire-and-Forget | Integration | **Subsumed** | Roadmap synthesis | 11.7 | Do not build separately; fold into durable background jobs. |
+| 11.2 | Message queue while agent is running | Substrate | **Ready** | Frontend plan, Roadmap synthesis | — | This is one of the first visible faces of the task system. |
+| 11.3 | Cancel vs abort distinction | Policy | **Ready** | Roadmap synthesis | — | Part of the task/job state model, not a standalone hack. |
+| 11.7 | Durable/background sub-agent jobs | Substrate | **Ready** | Subagent plan, Roadmap synthesis, Prime references consolidated in roadmap | 11.2 helpful | Central substrate for async agent work. |
+| 11.8 | Named sub-agent roles & packaged workflows | Integration | **Ready** | Subagent plan, Roadmap synthesis | — | Better once task metadata and role files are unified. |
+| 11.10 | Automatic build/lint/typecheck feedback loop | Integration | **Ready** | Comparison matrix, Roadmap synthesis | — | Sits here because it is a recurring job/validation loop, not just a one-shot command. |
+| 11.11 | Model-initiated Q&A interludes | Policy | **Ready** | Frontend plan, Roadmap synthesis | — | Should enter the same waiting-user task state used by approvals and blocked work. |
+| 11.12 | Persistent TODO/plan overlay | Projection/UI | **Ready** | Frontend plan, Mockup | — | UI projection of task/plan state. |
+| 12.7 | Plan mode as logged collaboration state | Integration | **Blocked** | Frontend plan, Mockup, Roadmap synthesis | 12.3, 11.11, waiting-state substrate | Behavior is clear, but it wants task and policy substrate first. |
+| 12.8 | Goals with autonomous round-driving | Integration | **Blocked** | Roadmap synthesis, Prime references consolidated in roadmap | 11.2, 11.7 | Best built on a truthful durable job model. |
+| 12.9 | Dynamic workflows over sub-agents | Integration | **Blocked** | Roadmap synthesis, current workflow runtime | 11.7, 12.10, 12.11 | Wants the durable sub-agent/task substrate first. |
+| 12.10 | Multiple sub-agent providers | Integration | **Ready** | Roadmap synthesis, current provider/profile work | — | A task-system extension: job execution over different connection profiles/providers. |
+| 12.11 | Structured sub-agent output | Integration | **Ready** | Subagent plan, Roadmap synthesis | — | Makes task receipts and downstream composition more reliable. |
+| 12.12 | Per-agent tool scoping & personas | Policy | **Ready** | Roadmap synthesis, current agent runtime | — | Most truthful once roles and task contexts are unified. |
+| 12.13 | Per-session agent presets | Operator | **Ready** | Roadmap synthesis | — | Better seen as session-scoped task runtime configuration. |
+| 13.6 | Plan mode + goal mode + progress rows | Projection/UI | **Blocked** | Frontend plan, Mockup | 12.7, 12.8, 11.7 | Integration layer over task state, not a separate substrate. |
+| 14.5 | Subagents as data files | Substrate | **Ready** | Subagent plan, Roadmap synthesis | — | Strong fit for unifying named sub-agent roles and packaged definitions. |
+| 14.8 | Background agents, task roster, queued command semantics | Projection/UI | **Blocked** | Frontend plan, Roadmap synthesis | 11.2, 11.7 | UI/operator surface over the same task substrate. |
+
+---
+
+# 4) Capabilities & Extensions System
+
+## System intent
+
+This system owns:
+- prompt templates,
+- skills,
+- commands,
+- lazy dynamic context injection,
+- extension packaging,
+- provider/model catalogs as data,
+- scope/lifetime semantics for capabilities.
+
+## Why these items belong together
+
+These rows all want one coherent answer to:
+
+- what a capability is,
+- how it is declared,
+- where it can be loaded,
+- how it injects context,
+- how it is trusted/installed,
+- and how users discover it.
+
+This should not become three separate mini-platforms for templates, skills, and plugins.
+
+## Items
+
+| ID | Item | Role | Status | Related docs | Depends on | Missing decisions / notes |
+|---|---|---|---|---|---|---|
+| 11.13A | Prompt templates | Substrate | **Ready** | Roadmap synthesis, Research ledger | — | Smallest viable slice of the broader capability system. |
+| 11.13B | Skills (description + lazy load) | Substrate | **Ready** | Roadmap synthesis, Research ledger | — | Good first real capability abstraction. |
+| 11.13C | Full extension protocol / install surface | Substrate | **Spec needed** | Roadmap synthesis, Comparison matrix | 12.3, 12.14, trust model | Needs registration, trust, install/update semantics. |
+| 11.14 | Provider/model catalog as data | Operator | **Ready** | Roadmap synthesis, current provider code | — | This is capability metadata and discovery, not just settings UI. |
+| 12.14 | Scope primitive | Substrate | **Blocked** | Roadmap synthesis | 12.3, capability registry | Needed so capabilities have truthful lifetimes and visibility rules. |
+| 12.24 | Skills as on-demand capability packages | Integration | **Subsumed** | Roadmap synthesis | 11.13, 13.4 | Implement through the unified skills/plugin track. |
+| 13.4A | Skills with progressive disclosure | Projection/UI | **Ready** | Frontend plan, Roadmap synthesis | 11.13B helpful | UI/UX projection of the same capability substrate. |
+| 13.4B | Full plugin packaging/distribution | Operator | **Spec needed** | Roadmap synthesis, Comparison matrix | 11.13C, 11.15 | Needs install/update/trust/marketplace semantics. |
+| 14.4 | Skills / commands / dynamic context injection | Integration | **Ready** | Roadmap synthesis, Research ledger | 11.13B helpful | High-value implementation path once capabilities are first-class. |
+
+---
+
+# 5) Policy & Hooks Engine
+
+## System intent
+
+This system owns:
+- host-owned policy decisions,
+- hook bus semantics,
+- approvals,
+- trust review,
+- execpolicy,
+- permission rules,
+- guard/secret scanning.
+
+## Why these items belong together
+
+All of these rows answer one question:
+
+> what is allowed, when, by whom, and under what user-visible rules?
+
+If hooks, permissions, approvals, and guards become separate one-off systems, GoHarness will end up with multiple competing sources of authority.
+
+They should instead form one **host policy engine**.
+
+## Items
+
+| ID | Item | Role | Status | Related docs | Depends on | Missing decisions / notes |
+|---|---|---|---|---|---|---|
+| 11.15 | Project trust & local config policy | Policy | **Ready** | Roadmap synthesis, Research ledger | — | Best treated as an early surface of the unified policy engine. |
+| 12.1 | Capability seams (FS / Runner / Terminals / LSP) | Substrate | **Blocked** | Roadmap synthesis | Refactor bandwidth | Foundational for consistent enforcement. |
+| 12.3 | Waterfall event hooks | Substrate | **Blocked** | Roadmap synthesis, Comparison matrix | 12.2 ideal but narrow v1 can precede it | Core hook/event substrate. |
+| 12.16 | Approval policy & sandbox as services | Policy | **Blocked** | Roadmap synthesis, current sandbox code | 12.1, 12.3, 14.2 | Should not be built as isolated modal logic. |
+| 12.17 | Hooks bridge (`hooks.json`) | Operator | **Blocked** | Roadmap synthesis | 12.3 | Bridge surface over the hook bus. |
+| 12.22 | Guard / secret scanning | Policy | **Ready** | Roadmap synthesis, current guardrails | — | Good near-term policy interceptor. |
+| 13.3 | Lifecycle hooks with trust review | Policy | **Blocked** | Roadmap synthesis, Comparison matrix | 12.3 | Hook trust/approval is the same engine, not a separate feature. |
+| 13.7 | Approval policy + sandbox presets + execpolicy | Policy | **Ready** | Roadmap synthesis, current sandbox code | — | One of the clearest policy/control-plane rows right now. |
+| 14.2 | Permission rules as first-class user contract | Policy | **Ready** | Roadmap synthesis, Comparison matrix | — | Strongly related to execpolicy and approvals. |
+| 14.3 | Claude-style matcher hooks + trust | Policy | **Blocked** | Roadmap synthesis | 12.3 | Same engine, more advanced matcher surface. |
+
+---
+
+# 6) Execution & Review System
+
+## System intent
+
+This system owns:
+- agent and user execution surfaces,
+- persistent terminals,
+- validation loops,
+- code mode,
+- review/security review,
+- and worktree-aware isolation.
+
+## Why these items belong together
+
+These rows all depend on the same runtime substrate:
+
+- persistent execution identity,
+- durable process/PTY ownership,
+- validation and recheck loops,
+- isolated execution target selection,
+- operator-visible results.
+
+They are different faces of one execution system, not isolated features.
+
+## Items
+
+| ID | Item | Role | Status | Related docs | Depends on | Missing decisions / notes |
+|---|---|---|---|---|---|---|
+| 11.5 | `!command` shell injection | Integration | **Ready** | Frontend plan, Roadmap synthesis | — | Useful immediately, but conceptually part of the execution surface. |
+| 12.4 | First-class persistent terminals (PTY) | Substrate | **Ready** | Frontend plan, Comparison matrix | 12.1 helpful but not required | This is the real substrate replacing older rough shell-session ideas. |
+| 12.20 | Code Mode / model-written programs | Integration | **Spec needed** | Roadmap synthesis | 12.1 | Needs runtime choice, safety model, and output contract. |
+| 13.5 | Dedicated code-review mode | Integration | **Ready** | Roadmap synthesis, Comparison matrix | — | One of the clearest review-mode opportunities now. |
+| 13.9 | Persistent terminal sessions + integrated validation workflow | Integration | **Blocked** | Roadmap synthesis | 12.4 first | Strong second-wave PTY feature. |
+| 14.6 | Worktree-aware isolation | Substrate | **Spec needed** | Roadmap synthesis | review/branch/job semantics | Must be designed with rollback/branch/task systems, not bolted on. |
+| 14.7 | Review + security-review as first-class flows | Integration | **Ready** | Roadmap synthesis | — | Best built on top of the same execution/review substrate as 13.5. |
+
+---
+
+# 7) MCP Runtime Expansion
+
+## System intent
+
+This system owns:
+- MCP transport breadth,
+- auth/OAuth,
+- prompts/resources surfaces,
+- remote server management,
+- elicitation support.
+
+## Why these items belong together
+
+The current MCP client already proves the core idea.
+The next two rows are just a staged runtime expansion of the same subsystem.
+
+## Items
+
+| ID | Item | Role | Status | Related docs | Depends on | Missing decisions / notes |
+|---|---|---|---|---|---|---|
+| 13.8 | MCP breadth: HTTP, OAuth, richer management | Substrate | **Ready** | Roadmap synthesis, Research ledger | — | Stage it carefully; no need to ship every transport/auth mode at once. |
+| 14.9 | MCP prompts, resources, remote transports, OAuth, elicitation | Integration | **Blocked / staged** | Roadmap synthesis | 11.11 for elicitation; 13.8 for transport breadth | Prompt/resource surfacing can land earlier than full OAuth+elicitation stack, but it is one runtime family. |
+
+---
+
+# 8) Runtime, Config & Operator Control Plane
+
+## System intent
+
+This system owns:
+- repo/local config layering,
+- operator commands and diagnostics,
+- headless runner surfaces,
+- RPC/server seam,
+- telemetry contracts,
+- config/profile bundles.
+
+## Why these items belong together
+
+These are all control-plane features over the rest of GoHarness.
+They should be treated as one operator/runtime program instead of miscellaneous polish rows.
+
+## Items
+
+| ID | Item | Role | Status | Related docs | Depends on | Missing decisions / notes |
+|---|---|---|---|---|---|---|
+| 12.15 | Profiles & bundles as layered patchable config | Substrate | **Spec needed** | Roadmap synthesis | 14.1 helps | Needs merge semantics, precedence, and file format rules. |
+| 12.25 | Telemetry / observability contracts | Operator | **Ready** | Research ledger, Comparison matrix, Code | — | Also linked to the event/memory system, but operationally belongs here. |
+| 12.26 | Headless / RPC / SDK modes | Integration | **Subsumed** | Roadmap synthesis | 13.1, 13.2 | Do not implement separately. |
+| 13.1 | Headless non-interactive runner + JSONL + schema output | Operator | **Ready** | Roadmap synthesis, Comparison matrix | — | Strategically important and cleanly scoped. |
+| 13.2 | App-server / RPC seam | Substrate | **Blocked** | Roadmap synthesis, Comparison matrix | 12.2 recommended | Narrow v1 possible sooner, but the clean version wants better event/log substrate. |
+| 13.10 | Operator polish: doctor, completions, theme, status, init | Operator | **Ready** | Roadmap synthesis | — | High-value control-plane polish cluster. |
+| 14.1 | Repo-scoped configuration hierarchy | Substrate | **Ready** | Roadmap synthesis | — | Strong structural cleanup item. |
+| 14.10 | Operator polish: init / doctor / status / memory / permissions / tasks | Operator | **Ready** | Roadmap synthesis | — | Overlaps with 13.10; implement as one operator surface. |
+
+---
+
+# 9) Shell & Interaction System
+
+## System intent
+
+This system owns:
+- shell frame,
+- sidebar/browser/settings surfaces,
+- transcript model,
+- composer behavior,
+- trajectory/details panes,
+- typed renderers,
+- theme and attachment UX.
+
+## Why these items belong together
+
+The frontend refactor already proved the right direction:
+- the shell is spatially stable,
+- the composer is the interaction hub,
+- transcript, details, settings, and browser are different projections of one UI architecture.
+
+These rows should not be treated as dozens of unrelated frontend tasks.
+They are one shell/interactions program with shared DOM/state contracts.
+
+## Items
+
+| ID | Item | Role | Status | Related docs | Depends on | Missing decisions / notes |
+|---|---|---|---|---|---|---|
+| 11.17 | Richer live status & cost footer / status chips | Projection/UI | **Ready** | Frontend plan, Mockup | — | First pass exists; future shell polish can evolve the placement. |
+| 11.18 | Collapsible thinking blocks | Projection/UI | **Ready** | Frontend plan, Roadmap synthesis | — | Provider plumbing can be messy, but UI intent is clear. |
+| 11.20 | Editor modal & slash command palette | Projection/UI | **Ready** | Frontend plan, Mockup | — | Clear shell enhancement. |
+| 11.21 | In-chat slash commands | Projection/UI | **Ready** | Frontend plan | 11.20 helps | Implementation path is straightforward. |
+| 11.22 | Persistent shell sessions / background shells | Integration | **Subsumed** | Frontend plan, Roadmap synthesis | 12.4 | Historical note only; implement via PTY/runtime work. |
+| 12.28.1 | Slot / region model for web client | Substrate | **Blocked** | Frontend plan, Mockup | shell refactor start | Clear direction; still the conceptual shell spine. |
+| 12.28.2 | Step-grouped conversation + sticky composer | Projection/UI | **Blocked** | Frontend plan, Mockup | 12.28.1, 12.29.7 ideally | Wants a better transcript/event model. |
+| 12.28.3 | Composer takeover for approvals/questions | Projection/UI | **Blocked** | Frontend plan, Mockup | 11.11, 12.3 | UI is clear; backend waiting semantics first. |
+| 12.28.4 | Trajectory / inspector view | Projection/UI | **Blocked** | Frontend plan, Mockup | 12.2 | Wants reliable event substrate. |
+| 12.28.5 | `@` and `/` trigger system | Projection/UI | **Ready** | Frontend plan, Mockup | — | One of the most direct UI items. |
+| 12.28.6 | Tool call tree with nested sub-calls | Projection/UI | **Blocked** | Frontend plan, Mockup | richer event lineage | Wants deeper event/tool lineage than we persist today. |
+| 12.28.7 | Sub-agent navigation and fleet UI | Projection/UI | **Blocked** | Frontend plan, Mockup, Subagent plan | 11.7 | Needs durable task/session metadata first. |
+| 12.28.8 | Plan chip / todo / goals / jobs badge | Projection/UI | **Blocked** | Frontend plan, Mockup | 11.12, 12.7, 12.8, 11.7 | Projection over task system, not a separate substrate. |
+| 12.28.9 | Workspace/session sidebar with grouped searchable rows | Projection/UI | **Ready** | Frontend plan, Mockup | 12.18 for full content search | Strong first pass now; full-text search can layer in later. |
+| 12.28.10 | Settings as plugin cards with live model testing | Projection/UI | **Ready** | Frontend plan, current provider UI | revisioned settings write contract later | Good incremental UI/control-plane improvement. |
+| 12.28.11 | First-class theme system | Projection/UI | **Ready** | Frontend plan, Mockup | — | Foundation exists. |
+| 12.28.12 | Message feedback / deliverables / references | Projection/UI | **Ready** | Frontend plan, Mockup | 11.4 helps | Also linked to Knowledge Ingress & Retrieval. |
+| 12.28.13 | Drag-and-drop attachments | Projection/UI | **Ready** | Frontend plan | 12.19 improves backend | Strong v1 UI. |
+| 12.28.14 | Empty/hero state and block reasons | Projection/UI | **Partial** | Frontend plan, Mockup | — | Truthfulness pattern exists; keep broadening it. |
+| 12.28.15 | Reliability details worth copying | Projection/UI | **Ready as checklist** | Frontend plan | attach to related rows | Not a standalone milestone; use as acceptance criteria. |
+| 12.29.1 | Three-column shell with concession chain | Substrate | **Ready** | Frontend plan, Mockup | 12.28.1 recommended | Strong spec and partially landed direction. |
+| 12.29.2 | Slot ownership of chrome | Substrate | **Blocked** | Frontend plan, Mockup | 12.28.1 | Straight dependency. |
+| 12.29.3 | Conversation view tabs | Projection/UI | **Blocked** | Frontend plan, Mockup | 12.28.1, 12.29.1 | Shell projection once slot model is firm. |
+| 12.29.4 | Sidebar anatomy and collapse motion | Projection/UI | **Ready** | Frontend plan, Mockup | — | Strongly spec'd. |
+| 12.29.5 | Settings as sidebar surface | Projection/UI | **Blocked** | Frontend plan | 12.29.1, 12.28.10 | Shell refactor first. |
+| 12.29.6 | Composer regions and in-place takeover | Substrate | **Ready** | Frontend plan, Mockup | backend features vary | UI structure is already clear. |
+| 12.29.8 | Layer / z-index contract | Substrate | **Ready** | Frontend plan | — | Good low-risk cleanup. |
+| 12.29.9 | Typed blocks (Terminal, Diff, Read, Search, Web) | Projection/UI | **Ready** | Frontend plan, Mockup | — | Implement incrementally per block type. |
+| 12.29.10 | Persistent shell identity across session switches | Projection/UI | **Blocked** | Frontend plan | shell refactor | Wants shell state hoisting. |
+| 12.29.11 | Workspace/session browser details | Projection/UI | **Ready as checklist** | Frontend plan | 12.28.9 | Acceptance criteria, not a standalone initiative. |
+| 12.29.12 | Branding and theming mechanics | Projection/UI | **Partial** | Frontend plan, Mockup | — | Token foundation shipped; broader system still open. |
+| 12.29.13 | Boot/rendering lifecycle | Substrate | **Blocked** | Frontend plan | ESM/frontend split | Wait for further shell modularization maturity. |
 
 ---
 
 ## Consolidations and “don’t duplicate this work” notes
 
-These older roadmap items should now be treated as **implementation inputs to newer items**, not independent parallel projects:
+These items should be treated as **implementation inputs to newer systems**, not separate parallel projects:
 
 | Older item | Implement through | Reason |
 |---|---|---|
-| 10.2C Async / Fire-and-Forget | 11.7 durable background jobs | Same capability, stronger spec |
-| 11.22 Persistent shell sessions | 12.4 + 13.9 | Newer PTY references are better |
-| 12.24 Skills as packages | 11.13 + 13.4 + 14.4 | Unified skill/plugin track is clearer |
-| 12.26 Headless / RPC / SDK modes | 13.1 + 13.2 | Newer Codex/Prime framing is stronger |
-| 13.6 Plan/goal/progress rows | 12.7 + 12.8 + 12.29.6 | Integration layer, not first implementation target |
+| 10.2C Async / Fire-and-Forget | 11.7 durable background jobs | Same capability, stronger task-system spec |
+| 11.22 Persistent shell sessions | 12.4 + 13.9 | PTY/runtime substrate is the real system |
+| 12.24 Skills as packages | 11.13 + 13.4 + 14.4 | Unified capability system is clearer |
+| 12.26 Headless / RPC / SDK modes | 13.1 + 13.2 | Control-plane framing is stronger |
+| 13.6 Plan/goal/progress rows | 12.7 + 12.8 + 14.8 + 12.29.6 | Projection over task state, not first substrate |
 | 12.28.15 Reliability details | related feature acceptance criteria | Not a standalone milestone |
 | 12.29.11 Browser details | 12.28.9 acceptance criteria | Same surface |
 
 ---
 
-## The biggest known design gaps
+## Recommended delivery waves (system-first)
 
-These are the places where the roadmap still needs real engineering specs before implementation starts.
+## Wave 1 — highest leverage systems with ready slices
 
-### Gap A — canonical session/event storage
-Needed by:
-- 11.6
-- 12.2
-- 9.1
-- 9.2
-- 12.18
-- 12.29.7
-- cleaner 13.2
+1. **Knowledge Ingress & Retrieval System**
+   - `11.1`, `11.4`, `11.16`, `11.19`, `12.19`
+2. **Task & Background Work System**
+   - `11.2`, `11.3`, `11.7`, `11.11`, `11.12`
+3. **Execution & Review System**
+   - `11.5`, `11.10`, `13.5`, `14.7`
+4. **Runtime, Config & Operator Control Plane**
+   - `13.1`, `13.10`, `14.1`, `14.10`
+5. **Shell & Interaction System**
+   - continue implementing the already-specified shell/composer/browser work from the frontend plan
 
-### Gap B — unified policy model
-Needed by:
-- 12.16
-- 12.17
-- 13.7
-- 14.2
-- 14.3
-- 12.7 approvals
-- 14.9 elicitation / MCP interaction
+## Wave 2 — file-backed archived memory v1
 
-### Gap C — worktree semantics for git-backed isolation
-Needed by:
-- 14.6
-- future review/fix flows
-- background experimental subagents on repos
-- any “branch from summary” concept in 9.2
+1. **Session Event & Memory System**
+   - implement `9.3` first as the file-backed v1 defined in `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md`
+   - do not wait for full event-log migration before landing useful cold-memory retrieval
+2. Cross-link that retrieval into the Knowledge and Shell systems
 
-### Gap D — plugin / extension packaging lifecycle
-Needed by:
-- 11.13C
-- 12.24
-- 13.4B
-- 11.15 trust model
-- 12.14 scoped lifetime handling
+## Wave 3 — policy backbone and richer execution
+
+1. **Policy & Hooks Engine**
+   - `12.1`, `12.3`, `13.7`, `14.2`
+2. **Execution & Review System**
+   - `12.4`, `13.9`, `14.6`
+3. **MCP Runtime Expansion**
+   - `13.8` staged transport/auth expansion
+
+## Wave 4 — long-term canonical substrate work
+
+1. **Session Event & Memory System**
+   - `11.6`, `12.2`, `12.18`, `12.29.7`, `9.1`, `9.2`
+2. **Capabilities & Extensions System**
+   - `11.13C`, `13.4B`
+3. **Policy & Hooks Engine**
+   - `12.16`, `12.17`, `13.3`, `14.3`
 
 ---
 
-## Practical reading of this roadmap
+## The biggest remaining design gaps
 
-If you want the roadmap to stay honest, apply these rules while implementing:
+### Gap A — canonical session/event storage
+Needed primarily by:
+- Session Event & Memory System
+- advanced Shell transcript projections
+- clean RPC/control-plane seams
 
-1. **Do not start spec-needed items straight from high-level prose.** Write a small design spec first.
-2. **Do not implement blocked items as isolated hacks** just because they are tempting UI work; land the shared foundation once.
-3. **Prefer consolidation over parallel tracks.** The newer comparative work often superseded older vague items.
-4. **Keep explicitness as a product rule.** If runtime cannot honor a setting, mode, or permission, the UI must say so directly.
-5. **Prefer host-owned state transitions over model-declared success.** This especially applies to approvals, goals, schedules, and quality gates.
+### Gap B — unified host policy engine
+Needed by:
+- approvals
+- execpolicy
+- hooks bridge
+- matcher hooks
+- trust review
+- capability restrictions
+
+### Gap C — execution isolation semantics
+Needed by:
+- worktree-aware isolation
+- review/fix flows
+- persistent validation workflows
+- background experimental execution
+
+### Gap D — extension packaging lifecycle
+Needed by:
+- install/update/trust model for skills/plugins
+- scope/lifetime semantics
+- dynamic context/capability loading
+
+---
+
+## Practical rules for implementation
+
+1. **Build substrates once.**
+   If multiple rows want the same state machine or storage model, that means there is one system, not many features.
+
+2. **Keep UI rows subordinate to backend truth.**
+   Shell features should project real state from the task/memory/policy systems, not invent their own parallel representations.
+
+3. **Keep research/spec traceability explicit.**
+   Every major implementation should cite the research/spec document that defines or justifies it.
+
+4. **Do not surface fake controls.**
+   If a runtime knob or mode is not truly honored, keep it out of the UI/config surface.
+
+5. **Prefer truthful local-first retrieval over magical memory claims.**
+   This is especially important for the archived-memory roadmap now that hierarchical retrieval is entering the plan.
 
 ---
 
 ## Suggested immediate next document work
 
-Before attempting Phase 9 or the event-log-heavy UI items, write focused specs for:
+The biggest roadmap ambiguity now sits in system-substrate specs. The next document work should therefore be:
 
-1. **Session event log + migration** (`11.6` + `12.2`) — this remains the ideal long-term substrate for archived memory, but `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md` defines a file-backed v1 that can land earlier.
-2. **Hook bus + policy DSL** (`12.3` + `14.2` + `13.7`)
-3. **Worktree isolation semantics** (`14.6`)
+1. **Session event log + migration spec**
+   - to support the long-term Session Event & Memory System
+2. **Policy & hooks spec**
+   - to unify approvals, hooks, trust, and execpolicy
+3. **Execution isolation / worktree spec**
+   - to unblock the stronger review/runtime model
 
-Those three specs would eliminate most of the roadmap ambiguity that still remains.
+The archived-memory side now has both:
+- research grounding (`docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md`)
+- and an implementation spec (`docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md`)
+
+So it is no longer the most ambiguous area in the roadmap.
