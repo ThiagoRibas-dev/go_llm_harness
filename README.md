@@ -373,6 +373,7 @@ Inspired by progressive memory layering, GoHarness maximizes recall while minimi
 | [`COMPARISON_MATRIX.md`](docs/COMPARISON_MATRIX.md) | GoHarness vs. state-of-the-art agent frameworks. |
 | [`RESEARCH.md`](docs/RESEARCH.md) | Bibliography and project inspirations. |
 | [`INFINITE_CONTEXT_MEMORY_RESEARCH.md`](docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md) | Source-level evaluation of `Lumi-node/infinite-context`, beam-search routing, and a GoHarness-native path toward hierarchical archived-memory retrieval. |
+| [`HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md`](docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md) | Implementation spec for GoHarness cold-memory retrieval: storage layout, memory-unit schema, retrieval pipeline, prompt budgeting, and migration path. |
 | [`ROADMAP.md`](docs/ROADMAP.md) | Multi-phase engineering plan. |
 
 ---

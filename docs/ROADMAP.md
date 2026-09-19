@@ -43,6 +43,7 @@ Supporting documents remain useful, but they are **reference material**, not par
 - `docs/GIT_HISTORY.md` — implementation and documentation chronology
 - `docs/SUBAGENT_PARALLELISM_PLAN.md` — concurrency design notes for the shipped sub-agent runtime
 - `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md` — source-level evaluation of `Lumi-node/infinite-context` and its applicability to GoHarness memory architecture
+- `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md` — implementation spec for GoHarness cold-memory retrieval over archived turns, summaries, uploads, and deliverables
 
 ---
 
@@ -159,7 +160,7 @@ The intent is to stop accreting visible features onto a modal-heavy, duplicated 
 |---|---|---|---|---|---|
 | 9.1 | O(1) range loader + hierarchical memory decay | **Spec needed** | Roadmap synthesis, OptMem references in `docs/RESEARCH.md`, `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md` | 11.6, 12.2 | Need storage model, hierarchy geometry, invalidation rules, prompt reconstruction budgets. New research input reinforces a hierarchy-first cold-memory design, but argues for BM25-first retrieval before any embedding dependency. |
 | 9.2 | Visual memory map dashboard | **Spec needed** | Roadmap synthesis, newer UI direction in 12.28/12.29, `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md` | 9.1, 12.2, shell placement | Need backing API, UI placement, semantics for forget/regenerate/branch-from-summary, and truthful provenance display for retrieved archived memory. |
-| 9.3 | Hierarchical archived-memory retrieval (BM25-first, optional embeddings later) | **Spec needed** | `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md`, Research docs, Roadmap synthesis | 11.6, 12.2, 9.1 | Build a cold-memory retrieval layer over archived turns, compaction epochs, uploads, and deliverables. Prefer lexical/metadata routing first; embeddings/reranking should remain optional follow-on work. |
+| 9.3 | Hierarchical archived-memory retrieval (BM25-first, optional embeddings later) | **Ready** | `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md`, `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md`, Research docs, Roadmap synthesis | 9.1 strongly related; 11.6 and 12.2 improve it later but are not required for a file-backed v1 | Build a cold-memory retrieval layer over archived turns, compaction epochs, uploads, and deliverables. Lexical/metadata routing is the intended v1. Embeddings/reranking remain optional follow-on work. |
 | 11.6 | Session tree / time-travel navigator | **Spec needed** | Roadmap synthesis, Pi references, DSH event-log pressure | 12.2 strongly related | Need canonical event schema, branch semantics, dual-write migration plan |
 | 11.9 | Cross-session memory | **Ready** | Roadmap synthesis, Pi memory refs, Code/BM25, `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md` | — | Good v1 path: BM25-backed dated memory notes and archived-memory retrieval. Embedding/rerank can remain optional; do not market this as “infinite context”. |
 | 12.2 | Session event log as source of truth | **Spec needed** | DSH, Codex/Prime event-stream references, Roadmap synthesis | 11.6 strongly related | Need exact event schema, projections, migration from per-turn JSON files |
@@ -366,7 +367,7 @@ If you want the roadmap to stay honest, apply these rules while implementing:
 
 Before attempting Phase 9 or the event-log-heavy UI items, write focused specs for:
 
-1. **Session event log + migration** (`11.6` + `12.2`) — this is the prerequisite substrate for the archived-memory design sketched in `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md`
+1. **Session event log + migration** (`11.6` + `12.2`) — this remains the ideal long-term substrate for archived memory, but `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md` defines a file-backed v1 that can land earlier.
 2. **Hook bus + policy DSL** (`12.3` + `14.2` + `13.7`)
 3. **Worktree isolation semantics** (`14.6`)
 
