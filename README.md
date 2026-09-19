@@ -372,6 +372,7 @@ Inspired by progressive memory layering, GoHarness maximizes recall while minimi
 | [`BM25_SCALING_RESEARCH.md`](docs/BM25_SCALING_RESEARCH.md) | BM25 and memory-scaling research. |
 | [`COMPARISON_MATRIX.md`](docs/COMPARISON_MATRIX.md) | GoHarness vs. state-of-the-art agent frameworks. |
 | [`RESEARCH.md`](docs/RESEARCH.md) | Bibliography and project inspirations. |
+| [`INFINITE_CONTEXT_MEMORY_RESEARCH.md`](docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md) | Source-level evaluation of `Lumi-node/infinite-context`, beam-search routing, and a GoHarness-native path toward hierarchical archived-memory retrieval. |
 | [`ROADMAP.md`](docs/ROADMAP.md) | Multi-phase engineering plan. |
 
 ---
