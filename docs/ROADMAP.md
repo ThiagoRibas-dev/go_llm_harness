@@ -113,7 +113,7 @@ Each of the nine systems gets **exactly one** execution plan. The split of respo
 | # | System | Execution plan | Plan status | Plan shape |
 |---|---|---|---|---|
 | 1 | Session Event & Memory | [`docs/SESSION_EVENT_MEMORY_EXECUTION_PLAN.md`](./SESSION_EVENT_MEMORY_EXECUTION_PLAN.md) | **Written** | 6 phases (A–F) · 6 slices |
-| 2 | Knowledge Ingress & Retrieval | _pending_ | **Next up** (Wave 1) | — |
+| 2 | Knowledge Ingress & Retrieval | [`docs/KNOWLEDGE_INGRESS_RETRIEVAL_EXECUTION_PLAN.md`](./KNOWLEDGE_INGRESS_RETRIEVAL_EXECUTION_PLAN.md) | **Written** | 9 phases (A–I) · 8 slices |
 | 3 | Task & Background Work | [`docs/TASK_BACKGROUND_WORK_EXECUTION_PLAN.md`](./TASK_BACKGROUND_WORK_EXECUTION_PLAN.md) | **Written** | 8 phases (A–H) · 7 slices |
 | 4 | Capabilities & Extensions | _pending_ | Wave 4 | — |
 | 5 | Policy & Hooks Engine | _pending_ | Wave 3 | — |
@@ -267,8 +267,10 @@ projection per `12.23` — not model-visible conversation text.
 
 # 2) Knowledge Ingress & Retrieval System
 
-> **Execution plan:** _pending._
-> **What the plan must decide:** the evidence-staging contract shared by web/read/search/upload/spill sources (`11.1`, `11.4`, `12.6`); how LSP results enter that same path (`12.5`); the content-addressing migration for attachments (`12.19`) that `11.19` and `12.28.13` depend on.
+> **Execution plan:** [`docs/KNOWLEDGE_INGRESS_RETRIEVAL_EXECUTION_PLAN.md`](./KNOWLEDGE_INGRESS_RETRIEVAL_EXECUTION_PLAN.md) · 9 phases (A–I) · 8 slices
+> **Decisions already made by the plan:** one `EvidenceRecord` (provenance + content address + `trust`) backs every source, so ingress surfaces differ but the substrate does not; `12.19` **generalizes the sha256 addressing `src/spill.go` already ships** rather than introducing a new storage era; staged ≠ injected — nothing enters the prompt implicitly, and injected evidence is delimited and attributed; `untrusted_external` content (fetched pages) can never take instruction position; retrieval returns provenance, offsets and trust instead of `{path, score}`, with mtime-invalidated index caching (Aider's lesson) replacing today's full re-walk per call; `11.16` ports Codex's `agents_md` semantics (walk to a project-root marker, concatenate root→cwd, override file, byte budget, never past the root); images are addressed by path and delivered as renderings with an explicit detail budget, with per-profile transport honesty.
+> **Honest coverage:** `11.1`, `11.4`, `11.16`, `12.19`, `12.6` are core phases; `12.5` is core but **staged** (largest item in the system, sequenced last so nothing waits on it); `11.19` is core for ingress with model visibility gated per provider; `12.28.12` is partial — this plan owns the structured record, the shell owns rendering.
+> **Open decisions recorded in the plan:** web-search backend choice (`11.1`), PDF/office extraction scope for uploads, and where injected instructions are surfaced in the shell.
 
 ## System intent
 
