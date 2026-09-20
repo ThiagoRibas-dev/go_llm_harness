@@ -1,5 +1,22 @@
 # 🧠 Session Event & Memory System — Execution Plan
 
+**Row coverage map** — for each roadmap row this plan claims, which phase owns it and how deep that
+coverage actually is. `gap` means the row is claimed but not yet written into the plan body.
+
+| Roadmap row | Phase | Coverage |
+|---|---|---|
+| `9.1` O(1) range loader + hierarchical memory decay | Phase A (identity/epoch substrate), Phase B (epoch manifests) | **partial** — specifies the substrate the loader needs; the loader itself is not designed here |
+| `9.2` Visual memory map dashboard | Slice 4 (provenance API) | **partial** — API only; the dashboard surface is out of scope |
+| `9.3` Hierarchical archived-memory retrieval | Phases B–D | **core** |
+| `11.6` Session tree / time-travel navigator | Phase E | **core** (projection over current storage) |
+| `11.9` Cross-session memory | Phase C stage 1, Slice 3 | **core** |
+| `12.2` Session event log as source of truth | Phase F, Slice 5 | **partial** — draft substrate only; no migration spec yet |
+| `12.18` Session query with FTS | — | **gap** — not addressed in the plan body |
+| `12.29.7` Step-grouped transcript / compaction placement / streaming-tail isolation | Phase E | **partial** — transcript projection only |
+
+Open decision carried from the roadmap: whether Phase F / Slice 5 satisfies the roadmap's requested
+*session event log + migration spec*, or whether a separate spec is still owed.
+
 > **Status:** Execution plan
 > **System:** Session Event & Memory System
 > **Primary roadmap rows:** `9.1`, `9.2`, `9.3`, `11.6`, `11.9`, `12.2`, `12.18`, `12.29.7`

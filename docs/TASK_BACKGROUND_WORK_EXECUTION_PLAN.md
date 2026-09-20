@@ -1,8 +1,37 @@
 # ⚙️ Task & Background Work System — Execution Plan
 
+**Row coverage map** — for each roadmap row this plan claims, which phase owns it and how deep that
+coverage actually is. `gap` means the row is claimed but not yet written into the plan body.
+
+| Roadmap row | Phase | Coverage |
+|---|---|---|
+| `10.2B` Wait First / Race | Phase E | **gap** — no body text yet |
+| `11.2` Message queue while agent is running | Phase A | **core** |
+| `11.3` Cancel vs abort distinction | Phase B (+ §5.3 state semantics) | **core** |
+| `11.7` Durable / background sub-agent jobs | Phase C | **core** |
+| `11.8` Named sub-agent roles & packaged workflows | Phase E | **reference** |
+| `11.10` Automatic build/lint/typecheck feedback loop | Phase C | **gap** — the recurring validation loop is not yet written into the body |
+| `11.11` Model-initiated Q&A interludes | Phase D | **core** |
+| `11.12` Persistent TODO/plan overlay | Phase H | **partial** — projection only |
+| `12.7` Plan mode as logged collaboration state | Phase F / Phase H boundary | **partial** — the logged collaboration state is not specified beyond its projection |
+| `12.8` Goals with autonomous round-driving | Phase F | **core** |
+| `12.9` Dynamic workflows over sub-agents | Phase E | **reference** |
+| `12.10` Multiple sub-agent providers | Phase A / Phase C | **gap** — no body text yet |
+| `12.11` Structured sub-agent output | Phase E (receipts) | **reference** |
+| `12.12` Per-agent tool scoping & personas | Phase E | **gap** — no body text yet |
+| `12.13` Per-session agent presets | Phase A | **gap** — no body text yet |
+| `12.21` Scheduled / mission runs | Phase G | **core** |
+| `13.6` Plan mode + goal mode + progress rows | Phase H | **partial** — projection only |
+| `14.5` Subagents as data files | Phase E | **reference** |
+| `14.8` Background agents, task roster, queued command semantics | Phase H | **reference** |
+
+The next revision of this plan should fold the five `gap` rows into their phases: `12.10` and `12.13`
+into Phase A (per-provider and per-session job configuration), `10.2B`, `11.10` and `12.12` into
+Phase E (sub-agent work as a job family).
+
 > **Status:** Execution plan
 > **System:** Task & Background Work System
-> **Primary roadmap rows:** `10.2B`, `11.2`, `11.3`, `11.7`, `11.8`, `11.10`, `11.11`, `11.12`, `12.7`, `12.8`, `12.9`, `13.6`, `14.5`, `14.8`
+> **Primary roadmap rows:** `10.2B`, `11.2`, `11.3`, `11.7`, `11.8`, `11.10`, `11.11`, `11.12`, `12.7`, `12.8`, `12.9`, `12.10`, `12.11`, `12.12`, `12.13`, `12.21`, `13.6`, `14.5`, `14.8`
 
 This document defines the implementation program for GoHarness's **queued work, background work, waiting states, and long-running autonomous task model**.
 
@@ -572,6 +601,20 @@ Goal mode becomes host-owned and resumable instead of purely prompt-shaped behav
 
 ### Success criterion
 Scheduled prompts/jobs are durable and do not replay uncertain actions after interruption.
+
+---
+
+## Slice 6 — Task roster and progress projections
+
+### Add
+- task roster endpoint
+- active / pending counts
+- progress rows and chips consumed by the shell
+- goal / plan / schedule badges
+
+### Success criterion
+The shell can render queued, running, waiting and finished work directly from task-system state,
+without inventing its own representation.
 
 ---
 

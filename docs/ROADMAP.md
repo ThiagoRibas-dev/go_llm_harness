@@ -50,6 +50,7 @@ The roadmap now explicitly tracks how items relate to research/spec documents.
 - **Subagent plan** — `docs/SUBAGENT_PARALLELISM_PLAN.md`
 - **V2 spec** — `docs/V2_SPECIFICATION.md`
 - **V2 visual editor** — `docs/V2_VISUAL_EDITOR.md`
+- **Execution plans** — `docs/<SYSTEM_NAME>_EXECUTION_PLAN.md` (indexed under [System execution plans](#system-execution-plans))
 - **Roadmap synthesis** — backlog/architecture synthesis kept in this roadmap itself
 - **Code** — current implementation under `src/`
 
@@ -97,6 +98,56 @@ This is a refinement of the earlier consolidation model: two areas that were pre
 
 - **Knowledge Ingress & Retrieval**
 - **Runtime, Config & Operator Control Plane**
+
+---
+
+## System execution plans
+
+Each of the nine systems gets **exactly one** execution plan. The split of responsibilities is:
+
+- this roadmap is the **map** — what a system owns, which rows belong to it, what blocks what, and which
+  research/spec document justifies each row;
+- the execution plan is the **program** — source inputs (including reference-project source inspection),
+  phases, concrete slices, testing, risks, and the success definition.
+
+| # | System | Execution plan | Plan status | Plan shape |
+|---|---|---|---|---|
+| 1 | Session Event & Memory | [`docs/SESSION_EVENT_MEMORY_EXECUTION_PLAN.md`](./SESSION_EVENT_MEMORY_EXECUTION_PLAN.md) | **Written** | 6 phases (A–F) · 5 slices |
+| 2 | Knowledge Ingress & Retrieval | _pending_ | **Next up** (Wave 1) | — |
+| 3 | Task & Background Work | [`docs/TASK_BACKGROUND_WORK_EXECUTION_PLAN.md`](./TASK_BACKGROUND_WORK_EXECUTION_PLAN.md) | **Written** | 8 phases (A–H) · 6 slices |
+| 4 | Capabilities & Extensions | _pending_ | Wave 4 | — |
+| 5 | Policy & Hooks Engine | _pending_ | Wave 3 | — |
+| 6 | Execution & Review | _pending_ | Wave 1 + Wave 3 | — |
+| 7 | MCP Runtime Expansion | _pending_ | Wave 3 | — |
+| 8 | Runtime, Config & Operator Control Plane | _pending_ | Wave 1 | — |
+| 9 | Shell & Interaction | _pending_ | Wave 1 (largest system) | — |
+
+**Plan status** is `Written` or `Pending`. A pending plan is not a roadmap gap: it means the system has
+enough specification to keep its `Ready` rows actionable, but the program document (phases, slices,
+tests) has not been produced yet.
+
+**Row coverage.** Every plan carries a **row coverage map** near its header stating, for each roadmap row
+it claims, which phase owns it and how deep that coverage is (`core` / `partial` / `reference` / `gap`).
+That map is the authoritative trace from a roadmap row to a phase, and it is deliberately allowed to say
+`gap` — a claimed-but-unwritten row is more useful to know about than a silently implied one.
+
+**Deliberate cross-listings.** One row is intentionally shared, because it spans two systems and
+splitting it would lose information:
+
+- `12.28.12` (deliverables / references / message feedback) — **Knowledge Ingress & Retrieval** owns the
+  staged evidence (what a deliverable or reference *is* once ingested) and **Shell & Interaction** owns
+  its rendering surface. Both table entries say so explicitly.
+
+Every other row appears in exactly one system. If a row turns up in two systems without a note like the
+above, that is a defect in this roadmap, not a deliberate overlap.
+
+**How to read a system section below**
+
+- The **Items** table is the master backlog for that system: row, role, status, related docs, dependencies.
+- The **Execution plan** blockquote is the program document, the decisions the plan has already made, and
+  the honest notes about what it does not yet cover.
+- Rows marked **Subsumed** are historical: they are implemented through the newer item named in the table,
+  never as a parallel project.
 
 ---
 
@@ -169,6 +220,11 @@ The **Shell & Interaction System** should consume stable projections from the ot
 
 # 1) Session Event & Memory System
 
+> **Execution plan:** [`docs/SESSION_EVENT_MEMORY_EXECUTION_PLAN.md`](./SESSION_EVENT_MEMORY_EXECUTION_PLAN.md) · 6 phases (A–F) · 5 slices
+> **Decisions already made by the plan:** the file-backed derived projection ships first (`9.3` via phases B–D) instead of waiting on the canonical event log; compaction writes epoch manifests; recall is always provenance-labelled; the plan explicitly refuses "infinite context" framing and markets bounded frontier retrieval instead.
+> **Honest coverage:** `11.9`, `11.6`, `9.3` are core to the plan; `9.1`, `9.2`, `12.2` and `12.29.7` are partial (substrate, API, or projection only); `12.18` is not yet addressed in the plan body.
+> **Open decision:** whether Phase F / Slice 5 also satisfies this roadmap's requested *session event log + migration spec*, or whether a separate spec is still owed.
+
 ## System intent
 
 This system owns:
@@ -200,13 +256,19 @@ That means these rows are no longer isolated “memory ideas”; they are one im
 | 11.9 | Cross-session memory | Retrieval | **Ready** | Archived memory spec, BM25 research, Infinite-context memory research | — | Good v1 path: workspace-scoped BM25/metadata retrieval over archived memory units. Do not overclaim this as infinite context. |
 | 12.2 | Session event log as source of truth | Substrate | **Spec needed** | Archived memory spec, Frontend plan, Roadmap synthesis | 11.6 strongly related | Needs exact event schema, projections, migration/dual-write plan. This is the long-term substrate for the rest of the system. |
 | 12.18 | Session query with FTS | Retrieval | **Blocked** | Archived memory spec, Frontend plan | 11.6, 12.2 | Easy once event/query projections exist. |
-| 12.23 | Human feedback out of model context | Operator | **Ready** | Roadmap synthesis, Archived memory spec | — | Best treated as a sidecar/projection on session state rather than model-visible conversation text. |
-| 12.25 | Telemetry / observability contracts | Operator | **Ready** | Research ledger, Comparison matrix, Code | — | Strongly related to future event schema and session projections; should align with 12.2 instead of becoming a parallel logging world. |
 | 12.29.7 | Full step-grouped transcript / compaction placement / streaming-tail isolation | Projection/UI | **Spec needed** | Frontend plan, Archived memory spec | 12.2 | Wants a typed event/transcript model instead of ad hoc chat card stacking. |
+
+**Cross-system note:** `12.23` (human feedback out of model context) and `12.25` (telemetry / observability
+contracts) are operator-side rows and are listed **only** in the Runtime, Config & Operator Control Plane.
+The event/transcript schema defined here must stay aligned with `12.25`, and feedback must remain a sidecar
+projection per `12.23` — not model-visible conversation text.
 
 ---
 
 # 2) Knowledge Ingress & Retrieval System
+
+> **Execution plan:** _pending._
+> **What the plan must decide:** the evidence-staging contract shared by web/read/search/upload/spill sources (`11.1`, `11.4`, `12.6`); how LSP results enter that same path (`12.5`); the content-addressing migration for attachments (`12.19`) that `11.19` and `12.28.13` depend on.
 
 ## System intent
 
@@ -236,11 +298,15 @@ These rows are different ingest/retrieval surfaces over the same knowledge syste
 | 12.5 | LSP seam | Substrate | **Ready** | Roadmap synthesis, Comparison matrix | — | Fits here because it is a knowledge/analysis source as much as an execution aid. |
 | 12.6 | Tool-output spill to disk | Substrate | **Partial** | Frontend plan, Code | — | Should become one of the standard ingestable evidence forms. |
 | 12.19 | Content-addressed attachments | Substrate | **Ready** | Roadmap synthesis, Frontend plan | — | Strong backend cleanup for uploads, images, and future evidence references. |
-| 12.28.12 | Deliverables, references, message feedback | Projection/UI | **Ready** | Frontend plan, Mockup | 11.4 helps | This belongs here because deliverables and references are evidence surfaces, even though their UI sits in the shell system. |
+| 12.28.12 | Deliverables, references, message feedback | Projection/UI | **Ready** | Frontend plan, Mockup | 11.4 helps | This belongs here because deliverables and references are evidence surfaces, even though their UI sits in the shell system. **Deliberate cross-listing** with Shell & Interaction, which owns the rendering surface. |
 
 ---
 
 # 3) Task & Background Work System
+
+> **Execution plan:** [`docs/TASK_BACKGROUND_WORK_EXECUTION_PLAN.md`](./TASK_BACKGROUND_WORK_EXECUTION_PLAN.md) · 8 phases (A–H) · 6 slices
+> **Decisions already made by the plan:** the queue becomes host-owned and the browser becomes a projection (`11.2`); one task state machine covers jobs, goals and schedules (`queued` → `admitted` → `running` → `waiting_user` / `waiting_dependency` → terminal); the v1 job store is session-local rather than a daemon (`11.7`); schedules use claim-before-run with interrupted-claim recovery (`12.21`).
+> **Honest coverage:** `11.2`, `11.3`, `11.7`, `11.11`, `12.8`, `12.21` are core phases; `11.8`, `12.9`, `12.11`, `14.5` are referenced through Phase E; `12.7`, `11.12`, `13.6`, `14.8` land as Phase H projections; `10.2B`, `11.10`, `12.10`, `12.12`, `12.13` are claimed rows with no body text yet.
 
 ## System intent
 
@@ -285,6 +351,7 @@ That makes this one of the strongest consolidation candidates in the roadmap.
 | 12.11 | Structured sub-agent output | Integration | **Ready** | Subagent plan, Roadmap synthesis | — | Makes task receipts and downstream composition more reliable. |
 | 12.12 | Per-agent tool scoping & personas | Policy | **Ready** | Roadmap synthesis, current agent runtime | — | Most truthful once roles and task contexts are unified. |
 | 12.13 | Per-session agent presets | Operator | **Ready** | Roadmap synthesis | — | Better seen as session-scoped task runtime configuration. |
+| 12.21 | Scheduled / mission runs | Integration | **Blocked** | Task execution plan, Roadmap synthesis | 11.7 | Scheduled work is a durable-job family, not a second async system; needs claim-before-run semantics and interrupted-claim recovery. Row was missing from the roadmap after the reorg while the execution plan already claimed it. |
 | 13.6 | Plan mode + goal mode + progress rows | Projection/UI | **Blocked** | Frontend plan, Mockup | 12.7, 12.8, 11.7 | Integration layer over task state, not a separate substrate. |
 | 14.5 | Subagents as data files | Substrate | **Ready** | Subagent plan, Roadmap synthesis | — | Strong fit for unifying named sub-agent roles and packaged definitions. |
 | 14.8 | Background agents, task roster, queued command semantics | Projection/UI | **Blocked** | Frontend plan, Roadmap synthesis | 11.2, 11.7 | UI/operator surface over the same task substrate. |
@@ -292,6 +359,9 @@ That makes this one of the strongest consolidation candidates in the roadmap.
 ---
 
 # 4) Capabilities & Extensions System
+
+> **Execution plan:** _pending._
+> **What the plan must decide:** the capability manifest and scope model (`12.14`); the trust/install/update lifecycle for extensions (`11.13C`, `13.4B`); the seam between this capability registry and the policy engine's trust decisions.
 
 ## System intent
 
@@ -335,6 +405,9 @@ This should not become three separate mini-platforms for templates, skills, and 
 
 # 5) Policy & Hooks Engine
 
+> **Execution plan:** _pending._
+> **What the plan must decide:** the hook bus contract and trust review (`12.3`, `13.3`, `14.3`); approval and execpolicy semantics (`12.16`, `13.7`, `14.2`); the capability-seam enforcement points (`12.1`). This is roadmap **Gap B** and it gates approvals, hooks, permissions and sandbox behaviour in three other systems.
+
 ## System intent
 
 This system owns:
@@ -375,6 +448,9 @@ They should instead form one **host policy engine**.
 
 # 6) Execution & Review System
 
+> **Execution plan:** _pending._
+> **What the plan must decide:** PTY / persistent execution identity and who owns it (`12.4`, `13.9`); validation-loop ownership (`11.10`); worktree and branch isolation semantics (`14.6`, roadmap **Gap C**); the Code Mode runtime and safety contract (`12.20`).
+
 ## System intent
 
 This system owns:
@@ -413,6 +489,9 @@ They are different faces of one execution system, not isolated features.
 
 # 7) MCP Runtime Expansion
 
+> **Execution plan:** _pending._
+> **What the plan must decide:** the staged transport/auth rollout (`13.8`); prompts and resources surfacing; and elicitation's dependency on the task system's `waiting_user` state (`11.11`) — which is why this system lands after the task substrate rather than beside it.
+
 ## System intent
 
 This system owns:
@@ -438,6 +517,9 @@ The next two rows are just a staged runtime expansion of the same subsystem.
 
 # 8) Runtime, Config & Operator Control Plane
 
+> **Execution plan:** _pending._
+> **What the plan must decide:** config layering and merge precedence (`14.1`, `12.15`); the headless / JSONL schema contract (`13.1`); the RPC seam's dependence on the event substrate (`13.2`); and merging `13.10` + `14.10` into a single operator surface instead of two polish lists.
+
 ## System intent
 
 This system owns:
@@ -458,7 +540,8 @@ They should be treated as one operator/runtime program instead of miscellaneous 
 | ID | Item | Role | Status | Related docs | Depends on | Missing decisions / notes |
 |---|---|---|---|---|---|---|
 | 12.15 | Profiles & bundles as layered patchable config | Substrate | **Spec needed** | Roadmap synthesis | 14.1 helps | Needs merge semantics, precedence, and file format rules. |
-| 12.25 | Telemetry / observability contracts | Operator | **Ready** | Research ledger, Comparison matrix, Code | — | Also linked to the event/memory system, but operationally belongs here. |
+| 12.23 | Human feedback out of model context | Operator | **Ready** | Roadmap synthesis, Archived memory spec | — | Sidecar/projection on session state; must not enter model-visible conversation text. Moved here from the memory system to keep one row in one system. |
+| 12.25 | Telemetry / observability contracts | Operator | **Ready** | Research ledger, Comparison matrix, Code | — | This system owns the observability contract; the Session Event & Memory System owns the event schema it reads. Cross-referenced there instead of duplicated. |
 | 12.26 | Headless / RPC / SDK modes | Integration | **Subsumed** | Roadmap synthesis | 13.1, 13.2 | Do not implement separately. |
 | 13.1 | Headless non-interactive runner + JSONL + schema output | Operator | **Ready** | Roadmap synthesis, Comparison matrix | — | Strategically important and cleanly scoped. |
 | 13.2 | App-server / RPC seam | Substrate | **Blocked** | Roadmap synthesis, Comparison matrix | 12.2 recommended | Narrow v1 possible sooner, but the clean version wants better event/log substrate. |
@@ -469,6 +552,9 @@ They should be treated as one operator/runtime program instead of miscellaneous 
 ---
 
 # 9) Shell & Interaction System
+
+> **Execution plan:** _pending._
+> **What the plan must decide:** the slot/region contract (`12.28.1`, `12.29.2`); the typed transcript model consumed from the memory system (`12.29.7`, `12.28.2`); and which rows are pure projection versus shell-owned state (`12.29.10`, `12.29.13`). This is the largest system in the roadmap and the one most likely to be mistaken for many separate features.
 
 ## System intent
 
@@ -511,7 +597,7 @@ They are one shell/interactions program with shared DOM/state contracts.
 | 12.28.9 | Workspace/session sidebar with grouped searchable rows | Projection/UI | **Ready** | Frontend plan, Mockup | 12.18 for full content search | Strong first pass now; full-text search can layer in later. |
 | 12.28.10 | Settings as plugin cards with live model testing | Projection/UI | **Ready** | Frontend plan, current provider UI | revisioned settings write contract later | Good incremental UI/control-plane improvement. |
 | 12.28.11 | First-class theme system | Projection/UI | **Ready** | Frontend plan, Mockup | — | Foundation exists. |
-| 12.28.12 | Message feedback / deliverables / references | Projection/UI | **Ready** | Frontend plan, Mockup | 11.4 helps | Also linked to Knowledge Ingress & Retrieval. |
+| 12.28.12 | Message feedback / deliverables / references | Projection/UI | **Ready** | Frontend plan, Mockup | 11.4 helps | **Deliberate cross-listing:** Knowledge Ingress & Retrieval owns the staged evidence; this system owns the rendering surface. Feedback routing is operator-side (`12.23`). |
 | 12.28.13 | Drag-and-drop attachments | Projection/UI | **Ready** | Frontend plan | 12.19 improves backend | Strong v1 UI. |
 | 12.28.14 | Empty/hero state and block reasons | Projection/UI | **Partial** | Frontend plan, Mockup | — | Truthfulness pattern exists; keep broadening it. |
 | 12.28.15 | Reliability details worth copying | Projection/UI | **Ready as checklist** | Frontend plan | attach to related rows | Not a standalone milestone; use as acceptance criteria. |
