@@ -5,29 +5,31 @@ coverage actually is. `gap` means the row is claimed but not yet written into th
 
 | Roadmap row | Phase | Coverage |
 |---|---|---|
-| `10.2B` Wait First / Race | Phase E | **gap** — no body text yet |
+| `10.2B` Wait First / Race | Phase E (deliverable 5) | **core** — completion modes specified, incl. loser cancellation |
 | `11.2` Message queue while agent is running | Phase A | **core** |
 | `11.3` Cancel vs abort distinction | Phase B (+ §5.3 state semantics) | **core** |
 | `11.7` Durable / background sub-agent jobs | Phase C | **core** |
 | `11.8` Named sub-agent roles & packaged workflows | Phase E | **reference** |
-| `11.10` Automatic build/lint/typecheck feedback loop | Phase C | **gap** — the recurring validation loop is not yet written into the body |
+| `11.10` Automatic build/lint/typecheck feedback loop | Phase C (deliverable 5), Slice 4 | **core** — validation job kind with bounded retry |
 | `11.11` Model-initiated Q&A interludes | Phase D | **core** |
 | `11.12` Persistent TODO/plan overlay | Phase H | **partial** — projection only |
 | `12.7` Plan mode as logged collaboration state | Phase F / Phase H boundary | **partial** — the logged collaboration state is not specified beyond its projection |
 | `12.8` Goals with autonomous round-driving | Phase F | **core** |
 | `12.9` Dynamic workflows over sub-agents | Phase E | **reference** |
-| `12.10` Multiple sub-agent providers | Phase A / Phase C | **gap** — no body text yet |
+| `12.10` Multiple sub-agent providers | Phase A (deliverable 4) | **core** — per-task profile reference, resolved at admission |
 | `12.11` Structured sub-agent output | Phase E (receipts) | **reference** |
-| `12.12` Per-agent tool scoping & personas | Phase E | **gap** — no body text yet |
-| `12.13` Per-session agent presets | Phase A | **gap** — no body text yet |
+| `12.12` Per-agent tool scoping & personas | Phase E (deliverable 6) | **core** — scope recorded on the task; enforcement deferred to `12.1` |
+| `12.13` Per-session agent presets | Phase A (deliverable 5) | **core** — session-scoped defaults resolved at admission |
 | `12.21` Scheduled / mission runs | Phase G | **core** |
 | `13.6` Plan mode + goal mode + progress rows | Phase H | **partial** — projection only |
 | `14.5` Subagents as data files | Phase E | **reference** |
 | `14.8` Background agents, task roster, queued command semantics | Phase H | **reference** |
 
-The next revision of this plan should fold the five `gap` rows into their phases: `12.10` and `12.13`
-into Phase A (per-provider and per-session job configuration), `10.2B`, `11.10` and `12.12` into
-Phase E (sub-agent work as a job family).
+**Folded in the current revision.** All five `gap` rows now have a phase home: `12.10` and `12.13` into
+Phase A, `10.2B` and `12.12` into Phase E, and `11.10` into **Phase C** as the first non-sub-agent job
+kind. `11.10` moved from the earlier Phase E suggestion because the validation loop is a job-lifecycle
+concern (bounded retry, receipts, failure classification) rather than a sub-agent concern — the earlier
+note also contradicted the coverage table above, which is now consistent.
 
 > **Status:** Execution plan
 > **System:** Task & Background Work System
@@ -317,6 +319,19 @@ Replace browser-only queue truth with backend-owned session action state.
    - clear
    - admit next
 
+4. **Per-task provider binding** — roadmap row `12.10`
+   - task records carry an optional connection-profile reference
+   - admission resolves it through the existing profile path (`ResolveAPIConfig`, `Agent.ProfileName` in
+     `src/agent_runtime.go`), so background work can target a different provider than the foreground turn
+   - per-profile throttling (`throttleKey` / `acquireThrottle`) then applies to background work for free,
+     which is what keeps a fan-out of cheap-profile jobs from tripping a provider's concurrency limit
+
+5. **Session task presets** — roadmap row `12.13`
+   - session-scoped defaults for background work: default profile, default tool scope, depth cap
+   - stored alongside session meta (`createSessionMeta`) so a session can be "cheap profile, read-only, no
+     recursion" without repeating that on every spawn
+   - resolved once at admission and recorded on the task record; never re-resolved mid-run
+
 ## Proposed new Go files
 - `src/session_actions.go`
 - `src/session_action_store.go`
@@ -375,6 +390,15 @@ Represent long-running async work as first-class durable jobs.
 2. **Session-local job store**
 3. **Crash/interruption recovery rules**
 4. **Task receipts / result summary contract**
+5. **Validation job kind** — roadmap row `11.10`
+   - the first non-sub-agent job kind: run build / lint / typecheck, classify the failure, retry within a
+     budget, stop when clean
+   - job state carries attempt count, last failure class, and the exact command that produced it
+   - ownership split: **this system owns the loop, its state and its receipts**; actually running the
+     command belongs to the Execution & Review System's persistent execution surface (`12.4`, `13.9`)
+   - must not become an implicit retry storm: retries are bounded, and every attempt appends a receipt
+   - this is deliberately a job *kind*, not a special case, so goals and schedules can request validation
+     without new machinery
 
 ## Proposed new Go files
 - `src/jobs.go`
@@ -426,6 +450,22 @@ Unify sub-agent execution with the durable task model.
 2. **structured child result records**
 3. **task-family metadata**
 4. **roster/progress API**
+5. **Fan-out completion modes** — roadmap row `10.2B`
+   - `wait_all` — today's shipped behaviour: `spawn_sub_agent`'s description already promises
+     "call it several times in one response to run independent tasks concurrently; results return together"
+   - `wait_first` — return on the first child terminal state; siblings keep running and stay visible as
+     tasks rather than being silently dropped
+   - `race` — return on the first terminal state and cancel/abort the losers through the `11.3` states, so
+     losers emit terminal receipts instead of leaking
+   - the chosen mode is recorded on the parent task so the UI can explain *why* children were cancelled
+6. **Per-task capability scope** — roadmap row `12.12`
+   - `tools` (tool classes: read / search / execute / write) plus an optional role/persona on the sub-agent
+     spec
+   - `docs/SUBAGENT_PARALLELISM_PLAN.md` §4.1 already designed `model` and `tools` fields for
+     `spawn_sub_agent`; the shipped spec reduced to `{task, context, expect, description}`, so this
+     **restores the planned shape** rather than inventing a new one
+   - scope is resolved at admission and recorded on the child task; *enforcement* stays with the policy
+     engine's future capability seams (`12.1`), not with ad-hoc checks in the task runtime
 
 ## GoHarness files likely touched
 - `src/subagent.go`
@@ -580,7 +620,21 @@ Long-running sub-agent work can outlive the immediate foreground turn and still 
 
 ---
 
-## Slice 4 — Goal state machine
+## Slice 4 — Validation loop jobs
+
+### Add
+- validation job kind (build / lint / typecheck)
+- bounded retry with failure classification
+- one receipt per attempt
+- job-family linkage so a validation job reports against the task that requested it
+
+### Success criterion
+An agent can request a check, watch it fail, fix, and re-check — with every attempt visible as a durable
+record instead of one opaque command result.
+
+---
+
+## Slice 5 — Goal state machine
 
 ### Add
 - goal records
@@ -592,7 +646,7 @@ Goal mode becomes host-owned and resumable instead of purely prompt-shaped behav
 
 ---
 
-## Slice 5 — Scheduled jobs
+## Slice 6 — Scheduled jobs
 
 ### Add
 - schedule persistence
@@ -604,7 +658,7 @@ Scheduled prompts/jobs are durable and do not replay uncertain actions after int
 
 ---
 
-## Slice 6 — Task roster and progress projections
+## Slice 7 — Task roster and progress projections
 
 ### Add
 - task roster endpoint
@@ -638,6 +692,8 @@ without inventing its own representation.
 - durable background job lifecycle
 - crash/interruption recovery
 - no duplicate completion emission
+- validation loop stops at its retry budget instead of looping forever
+- every validation attempt produces its own receipt
 
 ## 9.4 Goal tests
 
@@ -651,6 +707,15 @@ without inventing its own representation.
 - due calculation
 - recurring/one-shot semantics
 - interrupted claim cleanup
+
+---
+
+## 9.6 Fan-out completion-mode tests
+
+- `wait_all` still returns every child result (regression guard for shipped behaviour)
+- `wait_first` returns on the first terminal child and leaves siblings running as visible tasks
+- `race` cancels losers, and every loser emits a terminal receipt (no leaked children)
+- a cancelled loser cannot still be writing to the workspace after cancellation returns
 
 ---
 
@@ -669,6 +734,8 @@ without inventing its own representation.
 2. do not make the browser the source of truth for queued work
 3. do not ship goal/schedule UI before the host state machine exists
 4. do not let sub-agent durability fork into a separate architecture from the task system
+5. do not ship `wait_first` / `race` without explicit cancellation semantics — a leaked child that keeps
+   writing to the workspace is worse than waiting
 
 ---
 
@@ -677,9 +744,10 @@ without inventing its own representation.
 1. **Slice 1** — Durable session queue
 2. **Slice 2** — Runtime waiting states
 3. **Slice 3** — Background sub-agent jobs
-4. **Slice 4** — Goal state machine
-5. **Slice 5** — Scheduled jobs
-6. **Slice 6** — UI/operator roster projections
+4. **Slice 4** — Validation loop jobs
+5. **Slice 5** — Goal state machine
+6. **Slice 6** — Scheduled jobs
+7. **Slice 7** — UI/operator roster projections
 
 That order gives us visible value early while preserving one coherent system.
 

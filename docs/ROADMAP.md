@@ -112,9 +112,9 @@ Each of the nine systems gets **exactly one** execution plan. The split of respo
 
 | # | System | Execution plan | Plan status | Plan shape |
 |---|---|---|---|---|
-| 1 | Session Event & Memory | [`docs/SESSION_EVENT_MEMORY_EXECUTION_PLAN.md`](./SESSION_EVENT_MEMORY_EXECUTION_PLAN.md) | **Written** | 6 phases (A–F) · 5 slices |
+| 1 | Session Event & Memory | [`docs/SESSION_EVENT_MEMORY_EXECUTION_PLAN.md`](./SESSION_EVENT_MEMORY_EXECUTION_PLAN.md) | **Written** | 6 phases (A–F) · 6 slices |
 | 2 | Knowledge Ingress & Retrieval | _pending_ | **Next up** (Wave 1) | — |
-| 3 | Task & Background Work | [`docs/TASK_BACKGROUND_WORK_EXECUTION_PLAN.md`](./TASK_BACKGROUND_WORK_EXECUTION_PLAN.md) | **Written** | 8 phases (A–H) · 6 slices |
+| 3 | Task & Background Work | [`docs/TASK_BACKGROUND_WORK_EXECUTION_PLAN.md`](./TASK_BACKGROUND_WORK_EXECUTION_PLAN.md) | **Written** | 8 phases (A–H) · 7 slices |
 | 4 | Capabilities & Extensions | _pending_ | Wave 4 | — |
 | 5 | Policy & Hooks Engine | _pending_ | Wave 3 | — |
 | 6 | Execution & Review | _pending_ | Wave 1 + Wave 3 | — |
@@ -220,9 +220,9 @@ The **Shell & Interaction System** should consume stable projections from the ot
 
 # 1) Session Event & Memory System
 
-> **Execution plan:** [`docs/SESSION_EVENT_MEMORY_EXECUTION_PLAN.md`](./SESSION_EVENT_MEMORY_EXECUTION_PLAN.md) · 6 phases (A–F) · 5 slices
+> **Execution plan:** [`docs/SESSION_EVENT_MEMORY_EXECUTION_PLAN.md`](./SESSION_EVENT_MEMORY_EXECUTION_PLAN.md) · 6 phases (A–F) · 6 slices
 > **Decisions already made by the plan:** the file-backed derived projection ships first (`9.3` via phases B–D) instead of waiting on the canonical event log; compaction writes epoch manifests; recall is always provenance-labelled; the plan explicitly refuses "infinite context" framing and markets bounded frontier retrieval instead.
-> **Honest coverage:** `11.9`, `11.6`, `9.3` are core to the plan; `9.1`, `9.2`, `12.2` and `12.29.7` are partial (substrate, API, or projection only); `12.18` is not yet addressed in the plan body.
+> **Honest coverage:** after the gap-fill pass every claimed row has a phase home. Core: `9.3`, `11.6`, `11.9`. Partial — substrate, API or projection only: `9.1`, `9.2`, `12.2`, `12.29.7`, and `12.18` (artifact-granular query projection; event-granular filtering waits for Phase F).
 > **Open decision:** whether Phase F / Slice 5 also satisfies this roadmap's requested *session event log + migration spec*, or whether a separate spec is still owed.
 
 ## System intent
@@ -304,9 +304,9 @@ These rows are different ingest/retrieval surfaces over the same knowledge syste
 
 # 3) Task & Background Work System
 
-> **Execution plan:** [`docs/TASK_BACKGROUND_WORK_EXECUTION_PLAN.md`](./TASK_BACKGROUND_WORK_EXECUTION_PLAN.md) · 8 phases (A–H) · 6 slices
+> **Execution plan:** [`docs/TASK_BACKGROUND_WORK_EXECUTION_PLAN.md`](./TASK_BACKGROUND_WORK_EXECUTION_PLAN.md) · 8 phases (A–H) · 7 slices
 > **Decisions already made by the plan:** the queue becomes host-owned and the browser becomes a projection (`11.2`); one task state machine covers jobs, goals and schedules (`queued` → `admitted` → `running` → `waiting_user` / `waiting_dependency` → terminal); the v1 job store is session-local rather than a daemon (`11.7`); schedules use claim-before-run with interrupted-claim recovery (`12.21`).
-> **Honest coverage:** `11.2`, `11.3`, `11.7`, `11.11`, `12.8`, `12.21` are core phases; `11.8`, `12.9`, `12.11`, `14.5` are referenced through Phase E; `12.7`, `11.12`, `13.6`, `14.8` land as Phase H projections; `10.2B`, `11.10`, `12.10`, `12.12`, `12.13` are claimed rows with no body text yet.
+> **Honest coverage:** after the gap-fill pass every claimed row has a phase home. Core phases or deliverables: `11.2`, `11.3`, `11.7`, `11.11`, `12.8`, `12.21`, `12.10`, `12.13`, `11.10`, `12.12`, `10.2B`. Referenced through Phase E: `11.8`, `12.9`, `12.11`, `14.5`. Phase H projections: `12.7`, `11.12`, `13.6`, `14.8`.
 
 ## System intent
 

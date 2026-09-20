@@ -6,15 +6,15 @@ coverage actually is. `gap` means the row is claimed but not yet written into th
 | Roadmap row | Phase | Coverage |
 |---|---|---|
 | `9.1` O(1) range loader + hierarchical memory decay | Phase A (identity/epoch substrate), Phase B (epoch manifests) | **partial** — specifies the substrate the loader needs; the loader itself is not designed here |
-| `9.2` Visual memory map dashboard | Slice 4 (provenance API) | **partial** — API only; the dashboard surface is out of scope |
+| `9.2` Visual memory map dashboard | Slice 5 (provenance API) | **partial** — API only; the dashboard surface is out of scope |
 | `9.3` Hierarchical archived-memory retrieval | Phases B–D | **core** |
 | `11.6` Session tree / time-travel navigator | Phase E | **core** (projection over current storage) |
 | `11.9` Cross-session memory | Phase C stage 1, Slice 3 | **core** |
-| `12.2` Session event log as source of truth | Phase F, Slice 5 | **partial** — draft substrate only; no migration spec yet |
-| `12.18` Session query with FTS | — | **gap** — not addressed in the plan body |
+| `12.2` Session event log as source of truth | Phase F, Slice 6 | **partial** — draft substrate only; no migration spec yet |
+| `12.18` Session query with FTS | Phase C (deliverable 5), Slice 4 | **partial** — specified as an artifact-granular query/index projection over the file-backed substrate; event-granular filtering waits for Phase F |
 | `12.29.7` Step-grouped transcript / compaction placement / streaming-tail isolation | Phase E | **partial** — transcript projection only |
 
-Open decision carried from the roadmap: whether Phase F / Slice 5 satisfies the roadmap's requested
+Open decision carried from the roadmap: whether Phase F / Slice 6 satisfies the roadmap's requested
 *session event log + migration spec*, or whether a separate spec is still owed.
 
 > **Status:** Execution plan
@@ -323,6 +323,18 @@ Retrieve relevant cold memory under a strict budget.
 2. **Coarse narrowing over epochs/groups**
 3. **Leaf retrieval over memory units**
 4. **Prompt assembly formatter**
+5. **Session query projection (FTS)** — roadmap row `12.18`
+   - derive a queryable index over session artifacts: turns, `compacted_summary_up_to_turn_%03d.json`
+     summaries, uploads, deliverables
+   - reuse the existing lexical engine in `src/bm25.go` (`BM25Engine.AddDocument` / `Search`) instead of
+     adding a dependency; today `executeBM25Search` (`src/agent.go`) builds a throwaway index per call and
+     only indexes the session uploads folder
+   - return provenance fields with every hit: `session_id`, `branch_id`, `epoch`, turn range, artifact kind
+   - scope filtering: this session / this workspace / all known workspaces
+   - this is a **user/UI query surface** (sidebar full-content search), distinct from the cold-memory
+     retrieval above, which exists to feed prompts
+   - explicit limitation: results are **artifact-granular**, not event-granular. Filters like "only
+     approvals" or "only tool X" require the Phase F substrate and are not promised here.
 
 ## Proposed new Go files
 - `src/memory_query.go`
@@ -513,7 +525,25 @@ Cross-session recall works within one workspace without requiring embeddings.
 
 ---
 
-## Slice 4 — Memory provenance UI support
+## Slice 4 — Session query projection (FTS)
+
+### Add
+- derived session index (turns + summaries + uploads + deliverables)
+- query API returning provenance-labelled hits
+- scope filter (session / workspace)
+- query endpoint consumed by the sidebar
+
+### Success criterion
+A user can search archived content across a workspace and get hits that point at a specific session,
+epoch and turn range — without waiting for the canonical event log.
+
+### Explicit limitation
+Artifact-granular only. Event-granular filters (tool, approval, step kind) are Phase F work and are not
+claimed by this slice.
+
+---
+
+## Slice 5 — Memory provenance UI support
 
 ### Add
 - API endpoints for retrieval metadata
@@ -524,7 +554,7 @@ Frontend can show what memory was searched/selected.
 
 ---
 
-## Slice 5 — Event-log draft substrate
+## Slice 6 — Event-log draft substrate
 
 ### Add
 - draft event schema
@@ -550,6 +580,9 @@ The project can start migrating transcript/tree/memory projections onto one cano
 - cross-session retrieval respects workspace scope
 - retrieval deduplicates overlapping units
 - retrieval obeys budget
+- session query index derivation is deterministic and scope-filtered
+- every session query hit carries full provenance (session, epoch, turn range, artifact kind)
+- session-scoped queries never return artifacts from another workspace
 
 ## 8.3 Prompt assembly tests
 
@@ -602,8 +635,9 @@ The backend system should ship before their UI gets too clever.
 1. **Slice 1** — epoch manifests + memory-unit derivation on compaction
 2. **Slice 2** — session-local archived retrieval API
 3. **Slice 3** — workspace-scoped archived recall
-4. **Slice 4** — provenance API for UI
-5. **Slice 5** — canonical event-log draft substrate
+4. **Slice 4** — session query projection (FTS)
+5. **Slice 5** — provenance API for UI
+6. **Slice 6** — canonical event-log draft substrate
 
 That sequence keeps the system useful early while still pointing toward the cleaner long-term architecture.
 
