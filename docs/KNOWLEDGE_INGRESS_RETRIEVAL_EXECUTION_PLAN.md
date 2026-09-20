@@ -426,7 +426,7 @@ engine keeps its BM25 math; the *catalog* layer adds provenance by resolving ids
 
 # 6. Execution phases
 
-## Phase A — Evidence substrate
+# Phase A — Evidence substrate
 
 ### Goal
 One record type, one address scheme, one catalog, used by everything that follows.
@@ -455,7 +455,7 @@ notions of "a thing the agent looked at".
 
 ---
 
-## Phase B — Content-addressed attachments (`12.19`)
+# Phase B — Content-addressed attachments (`12.19`)
 
 ### Goal
 Generalize the spill addressing scheme to all uploaded/attached material.
@@ -478,7 +478,7 @@ paste would mean migrating three formats at once.
 
 ---
 
-## Phase C — Spill integration (`12.6`)
+# Phase C — Spill integration (`12.6`)
 
 ### Goal
 Close the "Partial" status on `12.6`: spilled output becomes first-class evidence.
@@ -500,7 +500,7 @@ invisible to search. This is the cheapest large retrieval win in the system.
 
 ---
 
-## Phase D — Retrieval over the catalog
+# Phase D — Retrieval over the catalog
 
 ### Goal
 Make retrieval provenance-aware and cheap enough to call often.
@@ -526,7 +526,7 @@ surfaces.
 
 ---
 
-## Phase E — File mentions (`11.4`)
+# Phase E — File mentions (`11.4`)
 
 ### Goal
 `@` in the composer resolves to workspace files and stages them deliberately.
@@ -549,7 +549,7 @@ surfaces.
 
 ---
 
-## Phase F — Parent-directory context walking and overrides (`11.16`)
+# Phase F — Parent-directory context walking and overrides (`11.16`)
 
 ### Goal
 Faithful port of the Codex `agents_md` semantics, adapted to GoHarness's existing target list.
@@ -575,7 +575,7 @@ It is self-contained, high-value in monorepos, and touches `LoadLocalInstruction
 
 ---
 
-## Phase G — Image ingress (`11.19`)
+# Phase G — Image ingress (`11.19`)
 
 ### Goal
 Paste/drag/store images as evidence; make model visibility explicit and provider-honest.
@@ -600,7 +600,7 @@ The storage half depends on Phase B; the tool half is independent and small.
 
 ---
 
-## Phase H — Web search and fetch (`11.1`)
+# Phase H — Web search and fetch (`11.1`)
 
 ### Goal
 Network ingress with typed actions, content-addressed snapshots, and an egress policy that is not an
@@ -632,7 +632,7 @@ evidence and policy shapes landing first.
 
 ---
 
-## Phase I — LSP seam (`12.5`)
+# Phase I — LSP seam (`12.5`)
 
 ### Goal
 Code intelligence as a knowledge source, staged behind a capability seam.
