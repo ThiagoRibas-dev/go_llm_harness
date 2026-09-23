@@ -1,242 +1,154 @@
 # ⚙️ Task & Background Work System — Execution Plan
 
-**Row coverage map** — for each roadmap row this plan claims, which phase owns it and how deep that
-coverage actually is. `gap` means the row is claimed but not yet written into the plan body.
-
-| Roadmap row | Phase | Coverage |
-|---|---|---|
-| `10.2B` Wait First / Race | Phase E (deliverable 5) | **core** — completion modes specified, incl. loser cancellation |
-| `11.2` Message queue while agent is running | Phase A | **core** |
-| `11.3` Cancel vs abort distinction | Phase B (+ §5.3 state semantics) | **core** |
-| `11.7` Durable / background sub-agent jobs | Phase C | **core** |
-| `11.8` Named sub-agent roles & packaged workflows | Phase E | **reference** |
-| `11.10` Automatic build/lint/typecheck feedback loop | Phase C (deliverable 5), Slice 4 | **core** — validation job kind with bounded retry |
-| `11.11` Model-initiated Q&A interludes | Phase D | **core** |
-| `11.12` Persistent TODO/plan overlay | Phase H | **partial** — projection only |
-| `12.7` Plan mode as logged collaboration state | Phase F / Phase H boundary | **partial** — the logged collaboration state is not specified beyond its projection |
-| `12.8` Goals with autonomous round-driving | Phase F | **core** |
-| `12.9` Dynamic workflows over sub-agents | Phase E | **reference** |
-| `12.10` Multiple sub-agent providers | Phase A (deliverable 4) | **core** — per-task profile reference, resolved at admission |
-| `12.11` Structured sub-agent output | Phase E (receipts) | **reference** |
-| `12.12` Per-agent tool scoping & personas | Phase E (deliverable 6) | **core** — scope recorded on the task; enforcement deferred to `12.1` |
-| `12.13` Per-session agent presets | Phase A (deliverable 5) | **core** — session-scoped defaults resolved at admission |
-| `12.21` Scheduled / mission runs | Phase G | **core** |
-| `13.6` Plan mode + goal mode + progress rows | Phase H | **partial** — projection only |
-| `14.5` Subagents as data files | Phase E | **reference** |
-| `14.8` Background agents, task roster, queued command semantics | Phase H | **reference** |
-
-**Folded in the current revision.** All five `gap` rows now have a phase home: `12.10` and `12.13` into
-Phase A, `10.2B` and `12.12` into Phase E, and `11.10` into **Phase C** as the first non-sub-agent job
-kind. `11.10` moved from the earlier Phase E suggestion because the validation loop is a job-lifecycle
-concern (bounded retry, receipts, failure classification) rather than a sub-agent concern — the earlier
-note also contradicted the coverage table above, which is now consistent.
-
 > **Status:** Execution plan
 > **System:** Task & Background Work System
 > **Primary roadmap rows:** `10.2B`, `11.2`, `11.3`, `11.7`, `11.8`, `11.10`, `11.11`, `11.12`, `12.7`, `12.8`, `12.9`, `12.10`, `12.11`, `12.12`, `12.13`, `12.21`, `13.6`, `14.5`, `14.8`
 
-This document defines the implementation program for GoHarness's **queued work, background work, waiting states, and long-running autonomous task model**.
+This document defines the program of work for queued work, background work, waiting states, and the long-running task model in GoHarness.
 
-The core belief behind this system is:
+The belief that shapes the whole design is this:
 
-> queueing, blocked-state recovery, background jobs, plans, goals, schedules, and sub-agent orchestration are not separate features — they are all projections over the same task/runtime state machine.
+> Queueing, recovery from a blocked state, background jobs, plans, goals, schedules, and sub-agent orchestration are not separate features. They are all different views onto one task state machine.
+
+If we build them as separate features, each one will grow its own version of "a thing that is running", and we will spend the following months reconciling them.
+
+## Row coverage map
+
+For each roadmap row this plan claims, here is the phase that owns it and how complete that coverage actually is.
+
+| Roadmap row | Phase | Coverage |
+|---|---|---|
+| `10.2B` Wait First / Race | Phase E, deliverable 5 | **core.** The three completion modes are specified, including what happens to the children that lose. |
+| `11.2` Message queue while the agent is running | Phase A | **core.** |
+| `11.3` Cancel versus abort | Phase B, plus the state semantics in section 5.3 | **core.** |
+| `11.7` Durable background sub-agent jobs | Phase C | **core.** |
+| `11.8` Named sub-agent roles and packaged workflows | Phase E | **reference.** The plan treats these as metadata on a task rather than a separate feature. |
+| `11.10` Automatic build, lint, and typecheck feedback loop | Phase C, deliverable 5, and Slice 4 | **core.** Defined as a validation job kind with a bounded number of retries. |
+| `11.11` Model-initiated questions to the user | Phase D | **core.** |
+| `11.12` Persistent TODO and plan overlay | Phase H | **partial.** Covered as a projection only. |
+| `12.7` Plan mode as logged collaboration state | Phase F and Phase H together | **partial.** The projection is specified, but the underlying logged state is not described in detail. |
+| `12.8` Goals with autonomous round-driving | Phase F | **core.** |
+| `12.9` Dynamic workflows over sub-agents | Phase E | **reference.** |
+| `12.10` Multiple sub-agent providers | Phase A, deliverable 4 | **core.** A task can name the connection profile it should run on, resolved when the task is admitted. |
+| `12.11` Structured sub-agent output | Phase E, through receipts | **reference.** |
+| `12.12` Per-agent tool scoping and personas | Phase E, deliverable 6 | **core.** The plan records the scope on the task. Enforcement is deferred to the policy engine at row `12.1`. |
+| `12.13` Per-session agent presets | Phase A, deliverable 5 | **core.** Session-scoped defaults, resolved when the task is admitted. |
+| `12.21` Scheduled and mission runs | Phase G | **core.** |
+| `13.6` Plan mode, goal mode, and progress rows | Phase H | **partial.** Covered as a projection only. |
+| `14.5` Sub-agents as data files | Phase E | **reference.** |
+| `14.8` Background agents, task roster, queued command semantics | Phase H | **reference.** |
+
+This table was revised once, and it is worth recording why. Five rows previously had no home in the plan body. They were folded in as follows: `12.10` and `12.13` into Phase A, `10.2B` and `12.12` into Phase E, and `11.10` into Phase C. Row `11.10` had earlier been suggested for Phase E, but the validation loop is really about job lifecycle, meaning retries, receipts, and classifying failures, rather than about sub-agents. That earlier note also contradicted this table, and both are now consistent.
 
 ---
 
 # 1. System scope
 
-This system owns:
+This system owns work that is waiting to happen or already happening without the user watching it. Concretely: queued work from the user, pending work local to a session, background agent jobs that survive beyond a single turn, states where the system is waiting on a person, the receipts and outputs a task produces, the runtime state behind plans, goals, and schedules, and the rosters and progress rows that display all of it.
 
-- queued user work,
-- session-local pending work,
-- background/durable agent jobs,
-- blocked/waiting-for-user states,
-- task receipts and outputs,
-- future plan/goal/schedule runtime state,
-- and UI rosters/progress projections over that state.
-
-It does **not** own:
-
-- shell chrome itself,
-- archived memory retrieval,
-- permission/hook policy,
-- execution isolation mechanics,
-- or MCP transport logic.
-
-Those systems will consume task state, but should not each invent their own queue/job model.
+It does not own the shell itself, retrieval from archived memory, permission and hook policy, the mechanics of execution isolation, or MCP transport. Those systems will read task state, but they should not each invent their own queue or job model.
 
 ---
 
-# 2. Source inputs and what they contribute
+# 2. Where the design comes from
 
-## 2.1 GoHarness source already relevant
+## 2.1 What the existing GoHarness source already provides
 
 ### `src/web/js/composer.js`
-Current useful substrate:
-- session-local queued steering/follow-up logic in browser state
-- busy/blocked-state composer semantics
-- `/compact`, `/workflow`, `/new`, `/settings` routing patterns
 
-This proves the **interaction contract** users want, but not yet a durable backend queue.
+The composer already queues steering and follow-up messages, though it does so entirely in browser memory. It also already understands a busy or blocked state, and it routes commands such as `/compact`, `/workflow`, `/new`, and `/settings`.
+
+The useful part is that this proves the interaction users actually want. The limit is that none of it survives a page reload, because the state lives in the tab.
 
 ### `src/subagent.go`
-Current useful substrate:
-- child session creation
-- sub-agent lifecycle events
-- depth limiting
-- process-wide write lock for file mutations
 
-This is the first slice of durable work delegation.
+This gives us child sessions, lifecycle events for sub-agents, a depth limit, and a process-wide lock that serialises file writes.
 
-### `src/agent_runtime.go` + `src/agent_run.go`
-Current useful substrate:
-- explicit per-agent runtime identity
-- retry/wait state around provider issues
-- session persistence and root/sub-agent distinction
+This is the first real piece of delegated, durable-ish work in the codebase, and it is the natural starting point for the wider task model.
 
-This gives us a strong base for moving from ephemeral queue semantics to host-owned queued work semantics.
+### `src/agent_runtime.go` and `src/agent_run.go`
+
+Between them these provide an explicit identity for each agent at runtime, retry and wait behaviour around provider failures, session persistence, and a clear distinction between the root agent and a sub-agent.
+
+This is a solid base for moving from queue semantics that live in a browser tab to queue semantics the host owns.
 
 ### `src/workflow.go`
-Current useful substrate:
-- typed concurrent workflow execution
-- node lifecycle states
-- terminal/failure boundaries
 
-This is relevant because background or scheduled work may later be expressed as workflows, but the task system must exist independently of the DAG engine.
+Workflows already execute concurrently, track the lifecycle of each node, and distinguish terminal states from failures.
+
+This matters because background and scheduled work may eventually be expressed as workflows. It also sets a boundary: the task system has to work on its own, independently of the workflow engine, rather than being a thin wrapper around it.
 
 ---
 
-## 2.2 Reference source inspection and lessons
+## 2.2 What we learned by reading reference implementations
 
-## A. `Prime Agent` queue/admission/runtime model
-Inspected sources:
-- `packages/coding-agent/src/core/agent-session.ts`
-- `packages/coding-agent/src/core/cron-jobs.ts`
-- `packages/coding-agent/src/core/goals.ts`
-- `packages/coding-agent/src/core/session-manager.ts`
-- `packages/coding-agent/docs/daemon.md`
-- `packages/coding-agent/test/suite/agent-session-queue.test.ts`
+### A. `Prime Agent`, specifically its queue, scheduling, and goal model
 
-Important source-level lessons:
+We read `packages/coding-agent/src/core/agent-session.ts`, `packages/coding-agent/src/core/cron-jobs.ts`, `packages/coding-agent/src/core/goals.ts`, `packages/coding-agent/src/core/session-manager.ts`, `packages/coding-agent/docs/daemon.md`, and `packages/coding-agent/test/suite/agent-session-queue.test.ts`.
 
-### 1. Queue/admission semantics are host-owned
-The queue tests and `agent-session.ts` show a strong model where:
-- prompts/actions are admitted deliberately,
-- queued work is visible as structured state,
-- pause/abort/restart semantics are explicit,
-- and queued actions are not just "messages sitting around".
+Four lessons came out of it.
 
-This is crucial for GoHarness: queueing should move from a **browser convenience** to a **backend-owned session action system**.
+**Queue and admission are owned by the host.** The queue tests and `agent-session.ts` together describe a model where prompts and actions are admitted deliberately, where queued work appears as structured state rather than as text, and where pausing, aborting, and restarting are explicit transitions. Queued items are not simply messages that happen to be sitting somewhere.
 
-### 2. Scheduled jobs are persisted per session, not just globally
-In `cron-jobs.ts`, Prime Agent persists scheduled jobs with:
-- IDs,
-- session ownership,
-- status,
-- next run time,
-- run counts,
-- delivery behavior,
-- interruption recovery.
+For GoHarness the implication is direct: queueing should move from a browser convenience to a backend-owned session action system.
 
-The key lesson is not to copy the exact implementation, but to copy the principle:
+**Scheduled jobs are persisted per session.** `cron-jobs.ts` stores each scheduled job with an identifier, the session that owns it, its status, the next time it should run, how many times it has run, what to do with its output, and how to recover if it was interrupted.
 
-> scheduled/background work should be represented as durable records with explicit lifecycle, not as ad hoc timers.
+The lesson is not to copy that implementation. It is to copy the principle:
 
-### 3. Goal state is a real state machine
-In `goals.ts`, goal state includes:
-- active/paused/complete/error/budget-limited states,
-- accounting,
-- continuation counts,
-- timestamps,
-- and explicit host responses.
+> Scheduled and background work should be durable records with an explicit lifecycle, not timers that exist only in memory.
 
-This is exactly the sort of thing that should not be implemented as a loose prompt convention in GoHarness.
+**Goal state is a real state machine.** `goals.ts` tracks goals as active, paused, complete, errored, or limited by budget. It accounts for what was spent, counts how many times it has continued, records timestamps, and returns explicit responses to the host.
 
-### 4. Daemon architecture separates clients from durable workers
-In `docs/daemon.md`, Prime Agent makes a strong architectural distinction between:
-- clients,
-- supervisor,
-- workers,
-- schedulers,
-- session ownership.
+This is exactly the kind of thing that should not be implemented in GoHarness as a loose convention inside a prompt.
 
-GoHarness does not need to become a daemon tomorrow, but the lesson is important:
+**The daemon architecture keeps clients separate from durable workers.** `docs/daemon.md` draws a clear line between clients, a supervisor, workers, schedulers, and whoever owns a session.
 
-> durable work should not be modeled as a UI-only phenomenon.
+GoHarness does not need to become a daemon, now or soon. But the underlying lesson applies:
 
-## B. `Pi` / related execution philosophy
-While Pi's top-level README is broader, the practical relevant takeaway is the same:
-- session/runtime control and work continuation should be host-owned,
-- not just inferred from chat turns.
+> Durable work should not be modelled as something that only exists while a user interface is open.
 
-## C. Existing GoHarness sub-agent plan
-`docs/SUBAGENT_PARALLELISM_PLAN.md` already establishes:
-- child runtime boundaries,
-- recursion limits,
-- structured sub-agent handling,
-- and the importance of explicit lifecycle events.
+### B. `Pi` and the wider execution philosophy
 
-This is the strongest internal bridge into a fuller task system.
+The top-level documentation is broader than what this plan needs, but the practical takeaway matches the previous section. Session and runtime control, and the continuation of work, should be owned by the host rather than inferred from chat turns.
+
+### C. GoHarness's own sub-agent plan
+
+`docs/SUBAGENT_PARALLELISM_PLAN.md` already establishes child runtime boundaries, recursion limits, structured handling of sub-agents, and the importance of explicit lifecycle events. It is the strongest internal bridge from what exists today into a fuller task system.
 
 ---
 
-# 3. Current GoHarness baseline and gap analysis
+# 3. Where GoHarness stands today
 
 ## 3.1 What already exists
 
-GoHarness already has:
-- browser-side queued steering/follow-up messages,
-- root vs sub-agent runtime identity,
-- child sessions,
-- SSE lifecycle events,
-- workflow concurrency,
-- retry semantics around model/provider failures,
-- basic blocked-state UI.
+Queued steering and follow-up messages exist on the browser side. The runtime distinguishes the root agent from a sub-agent. Child sessions exist. Lifecycle events are broadcast over SSE. Workflows run concurrently. There are retry semantics around provider and model failures. The interface already has basic support for a blocked state.
 
 ## 3.2 What is missing
 
-It still lacks:
-- a **backend-owned queue model**,
-- durable task records,
-- a unified state machine for waiting/running/cancelled/aborted work,
-- job receipts,
-- schedules/goals as host state,
-- a truthful roster of background work,
-- and a shared substrate for future plan/goal/async systems.
+There is no backend-owned queue model, so nothing about queued work is true outside one browser tab. There are no durable task records. There is no single state machine covering waiting, running, cancelled, and aborted work. There are no job receipts. Schedules and goals are not host state. There is no truthful roster of background work. And there is no shared substrate for the plan, goal, and async work that later phases will need.
 
 ---
 
 # 4. Program strategy
 
-This system should be built in **three layers**.
+The system is built in three layers.
 
-## Layer 1 — backend session action queue
-Move current queue semantics from browser-only state into backend-owned state.
+**Layer 1 is the backend session action queue.** This moves the queue semantics that exist today in the browser into state the host owns.
 
-## Layer 2 — durable jobs and waiting states
-Represent asynchronous work and human-waiting states as explicit session-local records.
+**Layer 2 is durable jobs and waiting states.** This turns asynchronous work and states that wait on a person into explicit records scoped to a session.
 
-## Layer 3 — goals, schedules, and orchestration projections
-Build plan/goal/schedule/fleet UI and operator surfaces on top of the same task substrate.
+**Layer 3 is goals, schedules, and orchestration projections.** This builds the plan, goal, schedule, and fleet interfaces on top of the same task substrate, so they display state rather than defining it.
 
 ---
 
-# 5. Core task model
+# 5. The core task model
 
-## 5.1 Task identity
+## 5.1 What identifies a task
 
-Every queued/background work item should have:
+Every queued or background piece of work should carry an identifier, the session that owns it, where it came from, its current state, timestamps, the request that created it, a summary of its result or error, and optional references to whatever it produced.
 
-- task ID
-- session ownership
-- source kind
-- state
-- timestamps
-- prompt/request payload
-- result/error summary
-- optional linkage to sub-agent/workflow/artifact outputs
-
-### Proposed schema
+A task record looks like this:
 
 ```json
 {
@@ -257,9 +169,9 @@ Every queued/background work item should have:
 }
 ```
 
-## 5.2 State machine
+## 5.2 The state machine
 
-Minimum shared states:
+The states a task can be in are:
 
 - `queued`
 - `admitted`
@@ -271,495 +183,403 @@ Minimum shared states:
 - `cancelled`
 - `aborted`
 
-## 5.3 State semantics
+## 5.3 What the states mean
 
-### `cancelled`
-User/system removed a task before completion and before it produced a terminal result.
+**`cancelled`** means the user or the system removed the task before it finished and before it produced a result.
 
-### `aborted`
-A currently running task was forcefully interrupted.
+**`aborted`** means a task that was already running was interrupted by force.
 
-### `waiting_user`
-Task cannot proceed until explicit human input arrives.
+**`waiting_user`** means the task cannot continue until a person answers something.
 
-### `waiting_dependency`
-Task is paused until some other task/sub-agent/workflow result completes.
+**`waiting_dependency`** means the task is paused until another task, sub-agent, or workflow finishes.
 
-This distinction matters because these are not just labels; they drive:
-- UI affordances,
-- retry behavior,
-- scheduling,
-- and future policy/hook decisions.
+These distinctions are not decoration. They drive which controls the interface offers, whether a task should be retried, how scheduling treats it, and what the policy engine will eventually decide about it.
 
 ---
 
 # 6. Execution phases
 
-# Phase A — Introduce backend-owned session action queue
+# Phase A — A session action queue owned by the backend
 
 ## Goal
-Replace browser-only queue truth with backend-owned session action state.
+
+Replace the current situation, where the browser holds the only truth about queued work, with queue state the host owns.
 
 ## Deliverables
 
-1. **Session action schema**
-   - queued prompt/action representation
-   - stable action IDs
-   - delivery policy (`steer`, `follow_up`, etc.)
+1. **A session action schema.** A queued prompt or action needs a representation, a stable identifier, and a stated delivery policy such as `steer` or `follow_up`.
 
-2. **Persistence model**
-   - store queued actions in the session area
-   - file-backed JSON is fine for v1
+2. **A persistence model.** Queued actions are stored in the session area. For version one, plain JSON files on disk are sufficient.
 
-3. **Queue mutation API**
-   - enqueue
-   - list
-   - remove
-   - edit
-   - clear
-   - admit next
+3. **An API for changing the queue.** This covers enqueueing an action, listing what is queued, removing one, editing one, clearing the queue, and admitting the next item.
 
-4. **Per-task provider binding** — roadmap row `12.10`
-   - task records carry an optional connection-profile reference
-   - admission resolves it through the existing profile path (`ResolveAPIConfig`, `Agent.ProfileName` in
-     `src/agent_runtime.go`), so background work can target a different provider than the foreground turn
-   - per-profile throttling (`throttleKey` / `acquireThrottle`) then applies to background work for free,
-     which is what keeps a fan-out of cheap-profile jobs from tripping a provider's concurrency limit
+4. **A provider binding per task**, which is roadmap row `12.10`. A task record can name the connection profile it should run on. That reference is resolved when the task is admitted, using the path that already exists: `ResolveAPIConfig` and `Agent.ProfileName` in `src/agent_runtime.go`. The practical effect is that background work can target a different provider than the foreground conversation. It also means the per-profile throttling that already exists, through `throttleKey` and `acquireThrottle`, applies to background work without any new mechanism. This matters because a fan-out of jobs onto a cheap profile should not trip that provider's concurrency limit.
 
-5. **Session task presets** — roadmap row `12.13`
-   - session-scoped defaults for background work: default profile, default tool scope, depth cap
-   - stored alongside session meta (`createSessionMeta`) so a session can be "cheap profile, read-only, no
-     recursion" without repeating that on every spawn
-   - resolved once at admission and recorded on the task record; never re-resolved mid-run
+5. **Session task presets**, which is roadmap row `12.13`. These are the defaults a session applies to background work: which profile to use, which tools are in scope, and how deep recursion may go. They are stored alongside the session metadata created by `createSessionMeta`, so a session can be configured once as "cheap profile, read-only, no recursion" instead of repeating that on every spawn. Presets are resolved once, when a task is admitted, and recorded on the task. They are never re-resolved partway through a run, because a task that changes provider or permissions mid-flight is very hard to reason about.
 
-## Proposed new Go files
-- `src/session_actions.go`
-- `src/session_action_store.go`
-- `src/session_action_api.go`
+## Proposed new files
 
-## GoHarness files likely touched
-- `src/web.go`
-- `src/agent_runtime.go`
-- `src/agent_run.go`
-- `src/web/js/composer.js`
+`src/session_actions.go`, `src/session_action_store.go`, `src/session_action_api.go`.
 
-## Why now
-This is the minimal substrate needed so queue semantics are truthful outside the current browser tab.
+## Files likely to change
+
+`src/web.go`, `src/agent_runtime.go`, `src/agent_run.go`, and `src/web/js/composer.js`.
+
+## Why this comes first
+
+It is the smallest amount of substrate that makes queue semantics true outside one browser tab. Everything else in this plan assumes that queue state is real.
 
 ---
 
-# Phase B — Unify busy/blocked/waiting semantics in runtime
+# Phase B — Unify busy, blocked, and waiting states
 
 ## Goal
-Turn current ad hoc busy/blocked logic into a shared host state model.
+
+Turn the current ad hoc handling of busy and blocked states into one shared model of what the host is doing.
 
 ## Deliverables
 
-1. **Session runtime state struct**
-   - running
-   - blocked
-   - waiting_user
-   - waiting_dependency
-   - retrying
+1. **A session runtime state structure** covering running, blocked, `waiting_user`, `waiting_dependency`, and retrying.
 
-2. **SSE/event emission contract**
-   - queue updates
-   - wait-state updates
-   - completion/failure transitions
+2. **A contract for what gets emitted**, covering queue changes, changes in wait state, and transitions to completion or failure.
 
-3. **UI config endpoint integration**
-   - expose current truthful state to web shell
+3. **Integration with the configuration endpoint the interface already reads**, so the current state of a session is visible to the web shell rather than inferred by it.
 
-## Proposed new Go files
-- `src/session_runtime_state.go`
-- `src/session_runtime_events.go`
+## Proposed new files
 
-## Why now
-It aligns the backend with what the composer/UI is already trying to express.
+`src/session_runtime_state.go`, `src/session_runtime_events.go`.
+
+## Why this comes first in its layer
+
+The composer already tries to express a busy or blocked state, but it is guessing. This phase gives it something true to read.
 
 ---
 
 # Phase C — Durable background jobs
 
 ## Goal
-Represent long-running async work as first-class durable jobs.
+
+Represent long-running asynchronous work as first-class jobs rather than as a call that happens to take a while.
 
 ## Deliverables
 
-1. **Job record model**
-2. **Session-local job store**
-3. **Crash/interruption recovery rules**
-4. **Task receipts / result summary contract**
-5. **Validation job kind** — roadmap row `11.10`
-   - the first non-sub-agent job kind: run build / lint / typecheck, classify the failure, retry within a
-     budget, stop when clean
-   - job state carries attempt count, last failure class, and the exact command that produced it
-   - ownership split: **this system owns the loop, its state and its receipts**; actually running the
-     command belongs to the Execution & Review System's persistent execution surface (`12.4`, `13.9`)
-   - must not become an implicit retry storm: retries are bounded, and every attempt appends a receipt
-   - this is deliberately a job *kind*, not a special case, so goals and schedules can request validation
-     without new machinery
+1. **A job record model.**
 
-## Proposed new Go files
-- `src/jobs.go`
-- `src/job_store.go`
-- `src/job_recovery.go`
+2. **A job store scoped to the session.**
+
+3. **Rules for recovering from a crash or an interruption.**
+
+4. **A contract for task receipts**, meaning a consistent summary of what a job produced.
+
+5. **A validation job kind**, which is roadmap row `11.10`. This is the first job kind that is not a sub-agent. It runs a build, lint, or typecheck, classifies the failure, retries within a budget, and stops when the check passes. The job record carries how many attempts have been made, what class of failure the last one was, and the exact command that produced it.
+
+   Ownership of this needs stating precisely, because two systems are involved. This system owns the loop, its state, and its receipts. Actually running the command belongs to the Execution & Review System, through the persistent execution surface described by rows `12.4` and `13.9`.
+
+   One risk to guard against: this must not become an implicit retry storm. Retries are bounded, and every attempt appends its own receipt, so a summary of "we tried eleven times" is visible rather than hidden.
+
+   The reason this is a job kind rather than a special case is that goals and schedules will want to request validation too, and they should not need new machinery to do it.
+
+## Proposed new files
+
+`src/jobs.go`, `src/job_store.go`, `src/job_recovery.go`.
 
 ## Design rules
 
-- session-local first
-- no daemon required in v1
-- no hidden replays of uncertain side effects
-- clear resumed/interrupted semantics
+Jobs are local to a session first. No daemon is required for version one. The system must not silently replay side effects it is not certain about. And resumed or interrupted jobs need semantics that are stated clearly rather than inferred from what happens to be on disk.
 
-## Reference grounding
-This phase is strongly informed by Prime Agent's `cron-jobs.ts` and daemon/session ownership model, but should be implemented in a GoHarness-native, lighter-weight way.
+## Where this design comes from
+
+Prime Agent's `cron-jobs.ts` and its daemon and session ownership model informed this phase. The idea is borrowed; the implementation should be lighter and native to GoHarness rather than a port.
 
 ---
 
-# Phase D — Waiting-user / ask-user runtime integration
+# Phase D — Waiting on the user as a first-class state
 
 ## Goal
-Make user questions and clarifications a task-system concern, not just a frontend prompt.
+
+Make a question to the user a concern of the task system rather than only of the interface.
 
 ## Deliverables
 
-1. **waiting_user task state**
-2. **pending question record**
-3. **resume semantics on answer**
-4. **UI takeover/projection support**
+1. **The `waiting_user` task state.**
 
-## GoHarness files likely touched
-- `src/web.go`
-- `src/agent_run.go`
-- frontend shell/composer modules
+2. **A record of the pending question**, so the system knows what it is waiting for.
+
+3. **Defined semantics for resuming** when the answer arrives.
+
+4. **Support for the interface to take over the composer** while the question is outstanding, which is a projection of this state rather than its source.
+
+## Files likely to change
+
+`src/web.go`, `src/agent_run.go`, and the frontend shell and composer modules.
 
 ## Why now
-This is the clean bridge from `11.11` into the broader task substrate.
+
+This is the clean bridge from row `11.11` into the wider task substrate. Approvals and blocked work will use the same waiting state later, so getting it right here avoids a second waiting mechanism appearing.
 
 ---
 
-# Phase E — Sub-agent work as durable job family
+# Phase E — Sub-agent work as a job family
 
 ## Goal
-Unify sub-agent execution with the durable task model.
+
+Bring sub-agent execution into the durable task model instead of leaving it as a parallel mechanism.
 
 ## Deliverables
 
-1. **parent task ↔ child task linkage**
-2. **structured child result records**
-3. **task-family metadata**
-4. **roster/progress API**
-5. **Fan-out completion modes** — roadmap row `10.2B`
-   - `wait_all` — today's shipped behaviour: `spawn_sub_agent`'s description already promises
-     "call it several times in one response to run independent tasks concurrently; results return together"
-   - `wait_first` — return on the first child terminal state; siblings keep running and stay visible as
-     tasks rather than being silently dropped
-   - `race` — return on the first terminal state and cancel/abort the losers through the `11.3` states, so
-     losers emit terminal receipts instead of leaking
-   - the chosen mode is recorded on the parent task so the UI can explain *why* children were cancelled
-6. **Per-task capability scope** — roadmap row `12.12`
-   - `tools` (tool classes: read / search / execute / write) plus an optional role/persona on the sub-agent
-     spec
-   - `docs/SUBAGENT_PARALLELISM_PLAN.md` §4.1 already designed `model` and `tools` fields for
-     `spawn_sub_agent`; the shipped spec reduced to `{task, context, expect, description}`, so this
-     **restores the planned shape** rather than inventing a new one
-   - scope is resolved at admission and recorded on the child task; *enforcement* stays with the policy
-     engine's future capability seams (`12.1`), not with ad-hoc checks in the task runtime
+1. **A link from a parent task to its child tasks.**
 
-## GoHarness files likely touched
-- `src/subagent.go`
-- `src/agent_runtime.go`
-- `src/web.go`
+2. **Structured records for a child's result**, so the parent does not have to parse prose.
+
+3. **Metadata describing a task family**, so a group of related tasks can be understood together.
+
+4. **An API for the roster and for progress.**
+
+5. **Completion modes for fan-out**, which is roadmap row `10.2B`. There are three, and the differences between them matter:
+
+   - `wait_all` is what ships today. The description of `spawn_sub_agent` already promises that calling it several times in one response runs the tasks concurrently and returns the results together, so this mode is existing behaviour rather than something new.
+   - `wait_first` returns as soon as the first child reaches a terminal state. The siblings keep running and remain visible as tasks. They are not silently dropped.
+   - `race` also returns at the first terminal state, but it cancels the losers, using the `cancelled` and `aborted` states from row `11.3`. Each loser emits a terminal receipt, so nothing is left running without a record.
+
+   Whichever mode was used is recorded on the parent task, so the interface can explain why some children were cancelled instead of leaving the user to guess.
+
+6. **Capability scope per task**, which is roadmap row `12.12`. This means the sub-agent specification accepts a set of tool classes (read, search, execute, write) and an optional role or persona.
+
+   This is a restoration rather than an invention. Section 4.1 of `docs/SUBAGENT_PARALLELISM_PLAN.md` already designed `model` and `tools` fields for `spawn_sub_agent`. The specification that shipped was reduced to `{task, context, expect, description}`, which dropped both.
+
+   The scope is resolved when the task is admitted and recorded on the child task. Enforcement stays where it belongs, with the capability seams the policy engine will provide under row `12.1`, rather than being implemented as ad hoc checks inside the task runtime.
+
+## Files likely to change
+
+`src/subagent.go`, `src/agent_runtime.go`, `src/web.go`.
 
 ## Why this matters
-This is how `11.7`, `11.8`, `12.9`, `12.11`, and `14.5` stop being separate features and become one durable work graph.
+
+This is how rows `11.7`, `11.8`, `12.9`, `12.11`, and `14.5` stop being separate features and become one record of durable work with a shape.
 
 ---
 
 # Phase F — Goal runtime
 
 ## Goal
-Make goals a first-class host-owned runtime state instead of just prompt convention.
+
+Make goals real runtime state owned by the host, rather than a convention expressed in a prompt.
 
 ## Deliverables
 
-1. **Goal state record**
-2. **goal status transitions**
-3. **budget/time accounting**
-4. **continuation counter / stop conditions**
-5. **goal-context prompt injection contract**
+1. **A record for goal state.**
 
-## Proposed new Go files
-- `src/goals.go`
-- `src/goal_accounting.go`
-- `src/goal_runtime.go`
+2. **Defined transitions between goal statuses.**
 
-## Reference grounding
-Prime Agent's `goals.ts` demonstrates why this needs to be a real state machine.
-GoHarness should borrow the idea, not the TS implementation.
+3. **Accounting for budget and time.**
+
+4. **A counter for continuations and the conditions that stop the goal.**
+
+5. **A contract for how goal context is injected into a prompt.**
+
+## Proposed new files
+
+`src/goals.go`, `src/goal_accounting.go`, `src/goal_runtime.go`.
+
+## Where this design comes from
+
+Prime Agent's `goals.ts` is the reason this needs to be a real state machine with accounting rather than a prompt convention. The idea is worth borrowing. The TypeScript implementation is not something to port.
 
 ---
 
-# Phase G — Schedule / mission jobs
+# Phase G — Scheduled and mission jobs
 
 ## Goal
-Build scheduled work on top of durable jobs rather than inventing a second async system.
+
+Build scheduled work on top of durable jobs, rather than inventing a second asynchronous system beside them.
 
 ## Deliverables
 
-1. **session-local schedule records**
-2. **next-run computation**
-3. **claim-before-run semantics**
-4. **interrupted-claim recovery**
+1. **Schedule records scoped to a session.**
 
-## Proposed new Go files
-- `src/schedules.go`
-- `src/scheduler.go`
+2. **A computation of when a schedule should next run.**
+
+3. **Claim-before-run semantics**, so a job is marked as claimed before it starts and a crash mid-run does not cause it to fire twice.
+
+4. **Recovery for interrupted claims.**
+
+## Proposed new files
+
+`src/schedules.go`, `src/scheduler.go`.
 
 ## Why this matters
-This is where `12.21` and parts of `14.8` should land.
 
-The system should not build scheduling before durable jobs exist.
+This is where row `12.21` and parts of `14.8` should land. It is also the clearest case of a rule that applies across the whole plan: scheduling must not be built before durable jobs exist, because otherwise the schedule becomes its own job store.
 
 ---
 
 # Phase H — Task roster, plan chips, and progress rows
 
 ## Goal
-Expose the task system through truthful UI/operator projections.
+
+Expose the task system through projections that are truthful, for both the interface and operators.
 
 ## Deliverables
 
-1. **task roster endpoint**
-2. **active/pending counts**
-3. **progress rows / chips**
-4. **goal/plan/schedule badges**
+1. **An endpoint for the task roster.**
 
-## This phase is projection-only
-Do not invent separate state here.
-All data must come from the task/job/goal substrate.
+2. **Counts of active and pending work.**
 
----
+3. **Progress rows and chips.**
 
-# 7. Reference-project implementation lessons to apply directly
+4. **Badges for goals, plans, and schedules.**
 
-## 7.1 From Prime Agent queue semantics
+## A boundary worth stating
 
-Useful lesson:
-- admission and queue state are host-owned
-- queued work is structured, not merely chat text
-- interrupts, pause, and clear are explicit lifecycle transitions
-
-Apply in GoHarness:
-- move queue truth into backend state
-- keep frontend as a projection
-
-## 7.2 From Prime Agent cron jobs
-
-Useful lesson:
-- scheduled jobs are session-local durable records
-- due work is claimed and advanced before prompt delivery
-- interrupted work is recoverable without replaying uncertain side effects
-
-Apply in GoHarness:
-- jobs/schedules should be file-backed state, not naked timers
-
-## 7.3 From Prime Agent goals
-
-Useful lesson:
-- goals are not just a prompt string
-- they have status, budget, timestamps, counters, and host responses
-
-Apply in GoHarness:
-- if we implement goal mode, it must be a real host-owned state machine
-
-## 7.4 From GoHarness's own subagent runtime
-
-Useful lesson:
-- child sessions and explicit lifecycle events are already valuable
-- the next step is not inventing a new background model, but making this durable and queryable
+This phase is projection only. It must not introduce state of its own. Everything it displays has to come from the task, job, and goal records underneath, because a roster that keeps its own tally will eventually disagree with reality.
 
 ---
 
-# 8. Concrete GoHarness implementation slices
+# 7. Lessons from reference projects, applied directly
 
-## Slice 1 — Durable session queue
+## 7.1 Queue semantics, from Prime Agent
 
-### Add
-- persisted session action records
-- queue mutation API
-- backend admission rules
+The lesson is that admission and queue state belong to the host, that queued work is structured rather than being chat text, and that interrupts, pauses, and clearing are explicit transitions rather than side effects.
 
-### Success criterion
-A queued follow-up survives browser refresh and remains visible/truthful across clients.
+Applied here: move the truth about the queue into backend state and keep the frontend as a view of it.
+
+## 7.2 Scheduled jobs, from Prime Agent
+
+The lesson is that scheduled jobs are durable records owned by a session, that due work is claimed and advanced before any prompt is delivered, and that interrupted work can be recovered without replaying side effects we are unsure about.
+
+Applied here: jobs and schedules are file-backed state, not bare timers.
+
+## 7.3 Goals, from Prime Agent
+
+The lesson is that a goal is not a string in a prompt. It has a status, a budget, timestamps, counters, and explicit responses from the host.
+
+Applied here: if we implement goal mode, it has to be a genuine state machine owned by the host.
+
+## 7.4 Sub-agents, from GoHarness's own runtime
+
+The lesson is that child sessions and explicit lifecycle events are already valuable, and that the next step is not to invent a new background model but to make what exists durable and queryable.
+
+---
+
+# 8. Concrete slices of work
+
+## Slice 1 — A durable session queue
+
+**What it adds.** Persisted session action records, an API for changing the queue, and admission rules owned by the backend.
+
+**How we know it worked.** A queued follow-up survives a browser refresh, and it looks the same to every client watching that session.
 
 ---
 
 ## Slice 2 — Runtime waiting states
 
-### Add
-- waiting_user / waiting_dependency / retrying states
-- SSE updates
-- truthful UI exposure
+**What it adds.** The `waiting_user`, `waiting_dependency`, and retrying states, updates over SSE, and truthful exposure to the interface.
 
-### Success criterion
-Blocked-state UI is backend-truthful, not merely inferred in JS.
+**How we know it worked.** The blocked-state interface reflects backend state rather than something JavaScript guessed.
 
 ---
 
 ## Slice 3 — Background sub-agent jobs
 
-### Add
-- sub-agent task records
-- durable child receipts
-- progress/result API
+**What it adds.** Task records for sub-agents, receipts that survive the turn, and an API for progress and results.
 
-### Success criterion
-Long-running sub-agent work can outlive the immediate foreground turn and still be inspectable.
+**How we know it worked.** Long-running sub-agent work can outlive the foreground turn and still be inspected afterwards.
 
 ---
 
 ## Slice 4 — Validation loop jobs
 
-### Add
-- validation job kind (build / lint / typecheck)
-- bounded retry with failure classification
-- one receipt per attempt
-- job-family linkage so a validation job reports against the task that requested it
+**What it adds.** The validation job kind for build, lint, and typecheck; bounded retry with failure classification; one receipt per attempt; and the family link so a validation job reports against whichever task asked for it.
 
-### Success criterion
-An agent can request a check, watch it fail, fix, and re-check — with every attempt visible as a durable
-record instead of one opaque command result.
+**How we know it worked.** An agent can ask for a check, watch it fail, fix the problem, and check again, with every attempt visible as its own record instead of one opaque command result.
 
 ---
 
 ## Slice 5 — Goal state machine
 
-### Add
-- goal records
-- accounting
-- completion/error/pause states
+**What it adds.** Goal records, accounting, and the completion, error, and pause states.
 
-### Success criterion
-Goal mode becomes host-owned and resumable instead of purely prompt-shaped behavior.
+**How we know it worked.** Goal mode becomes state the host owns and can resume, rather than behaviour that exists only in the shape of a prompt.
 
 ---
 
 ## Slice 6 — Scheduled jobs
 
-### Add
-- schedule persistence
-- claim-before-run behavior
-- interrupted claim recovery
+**What it adds.** Persistence for schedules, claim-before-run behaviour, and recovery for a claim that was interrupted.
 
-### Success criterion
-Scheduled prompts/jobs are durable and do not replay uncertain actions after interruption.
+**How we know it worked.** Scheduled work is durable, and an interruption does not cause an uncertain action to be repeated.
 
 ---
 
 ## Slice 7 — Task roster and progress projections
 
-### Add
-- task roster endpoint
-- active / pending counts
-- progress rows and chips consumed by the shell
-- goal / plan / schedule badges
+**What it adds.** The roster endpoint, active and pending counts, progress rows and chips for the shell, and badges for goals, plans, and schedules.
 
-### Success criterion
-The shell can render queued, running, waiting and finished work directly from task-system state,
-without inventing its own representation.
+**How we know it worked.** The shell can display queued, running, waiting, and finished work directly from task state, without maintaining its own version of that information.
 
 ---
 
 # 9. Testing plan
 
-## 9.1 Queue tests
+## 9.1 The queue
 
-- enqueue/edit/remove/clear
-- browser refresh and reload persistence
-- multiple clients observing same queue state
-- ordering and priority semantics
+Tests cover enqueueing, editing, removing, and clearing. They check that the queue survives a browser refresh and reload. They check that several clients observing one session see the same queue. They check ordering and priority.
 
-## 9.2 Runtime state tests
+## 9.2 Runtime state
 
-- cancel vs abort
-- busy vs waiting_user vs waiting_dependency
-- retry transitions
+Tests cover the difference between cancelling and aborting. They cover the difference between busy, `waiting_user`, and `waiting_dependency`, which are easy to confuse and expensive to confuse. They cover the transitions into and out of retrying.
 
-## 9.3 Job tests
+## 9.3 Jobs
 
-- durable background job lifecycle
-- crash/interruption recovery
-- no duplicate completion emission
-- validation loop stops at its retry budget instead of looping forever
-- every validation attempt produces its own receipt
+Tests cover the full lifecycle of a durable background job, recovery from a crash or interruption, and the absence of duplicate completion events. They also check that a validation loop stops at its retry budget instead of looping indefinitely, and that every validation attempt produces its own receipt.
 
-## 9.4 Goal tests
+## 9.4 Goals
 
-- budget accounting
-- pause/resume
-- completion correctness
-- error transitions
+Tests cover budget accounting, pausing and resuming, correct completion, and transitions into error states.
 
-## 9.5 Schedule tests
+## 9.5 Schedules
 
-- due calculation
-- recurring/one-shot semantics
-- interrupted claim cleanup
+Tests cover the calculation of due times, the difference between recurring and one-shot schedules, and the cleanup of an interrupted claim.
+
+## 9.6 Fan-out completion modes
+
+Tests cover all three modes. `wait_all` still returns every child result, which guards the behaviour that already ships. `wait_first` returns at the first terminal child while leaving siblings running and visible. `race` cancels the losers, and every loser emits a terminal receipt, so no child is left unaccounted for. One further test matters more than it looks: a cancelled loser must not still be writing to the workspace after the cancellation call returns.
 
 ---
 
-## 9.6 Fan-out completion-mode tests
-
-- `wait_all` still returns every child result (regression guard for shipped behaviour)
-- `wait_first` returns on the first terminal child and leaves siblings running as visible tasks
-- `race` cancels losers, and every loser emits a terminal receipt (no leaked children)
-- a cancelled loser cannot still be writing to the workspace after cancellation returns
-
----
-
-# 10. Risks and anti-goals
+# 10. Risks and things we are deliberately not doing
 
 ## Risks
 
-1. implementing frontend queue polish without backend truth first
-2. creating one runtime state model for goals and another for jobs
-3. allowing scheduled/background work to mutate state without durable receipts
-4. mixing policy concerns into the task substrate too early
+1. **Polishing the queue in the interface before the backend is true.** A beautiful queue that exists only in a tab is worse than an honest one.
+2. **Ending up with two state models**, one for goals and another for jobs. They describe the same kind of thing and must not diverge.
+3. **Letting scheduled or background work change state without leaving a receipt.** If it happened, there should be a record of it.
+4. **Mixing policy concerns into the task substrate too early.** What a task may do is the policy engine's question. Whether it is running is this system's question.
 
 ## Anti-goals
 
-1. do not build a daemon-only solution first
-2. do not make the browser the source of truth for queued work
-3. do not ship goal/schedule UI before the host state machine exists
-4. do not let sub-agent durability fork into a separate architecture from the task system
-5. do not ship `wait_first` / `race` without explicit cancellation semantics — a leaked child that keeps
-   writing to the workspace is worse than waiting
+1. Do not start by building a daemon.
+2. Do not let the browser remain the source of truth for queued work.
+3. Do not ship goal or schedule interfaces before the host state machine behind them exists.
+4. Do not let sub-agent durability become a separate architecture from the rest of the task system.
+5. Do not ship `wait_first` or `race` without explicit cancellation semantics. A child that keeps writing to the workspace after we believe it stopped is worse than simply waiting for it.
 
 ---
 
-# 11. Recommended first implementation order
+# 11. Recommended order of implementation
 
-1. **Slice 1** — Durable session queue
-2. **Slice 2** — Runtime waiting states
-3. **Slice 3** — Background sub-agent jobs
-4. **Slice 4** — Validation loop jobs
-5. **Slice 5** — Goal state machine
-6. **Slice 6** — Scheduled jobs
-7. **Slice 7** — UI/operator roster projections
+1. **Slice 1** — the durable session queue
+2. **Slice 2** — runtime waiting states
+3. **Slice 3** — background sub-agent jobs
+4. **Slice 4** — validation loop jobs
+5. **Slice 5** — the goal state machine
+6. **Slice 6** — scheduled jobs
+7. **Slice 7** — roster and progress projections
 
-That order gives us visible value early while preserving one coherent system.
+This order produces something visible early while keeping the system coherent. Each slice is useful on its own, so the sequence can pause without leaving anything half-built.
 
 ---
 
-# 12. Success definition
+# 12. What success looks like
 
-This system is succeeding when GoHarness can truthfully say:
-
-- queued work is durable,
-- blocked work is classified correctly,
-- background jobs are explicit and inspectable,
-- goals and schedules are host-owned state machines,
-- sub-agents fit into the same lifecycle,
-- and the UI is only projecting runtime truth instead of inventing it.
+This system is working when GoHarness can honestly say the following. Queued work is durable. Blocked work is classified correctly rather than guessed at. Background jobs are explicit and can be inspected. Goals and schedules are state machines the host owns. Sub-agents belong to the same lifecycle as everything else. And the interface only displays runtime truth, instead of inventing a version of its own.
