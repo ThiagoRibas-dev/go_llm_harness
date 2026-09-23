@@ -113,7 +113,7 @@ The lesson for GoHarness is that row `11.16` should port these semantics faithfu
 
 ### B. Codex CLI: `view_image`, in `core/src/tools/handlers/view_image_spec.rs`
 
-The tool takes a local path to an image file and returns an image as a data URL. It offers a detail setting with two values, `high` for the default resized rendering and `original` to preserve exact resolution. Its description explains that it is for images already available on disk when visual inspection is needed.
+The tool takes a local path to an image file and returns an image as a data URL in an `image_url` field, along with the `detail` value it actually used. It offers a detail setting with two values, `high` for the default resized rendering and `original` to preserve exact resolution. Its description explains that it is for images already available on disk when visual inspection is needed.
 
 Three lessons follow.
 
@@ -125,7 +125,7 @@ And inspecting an image is a tool the model chooses to call, not something that 
 
 ### C. Codex CLI: web search as typed actions, in `core/src/web_search.rs`
 
-The interesting part of this file is the action type. It enumerates four cases: searching with one query or several, opening a page by URL, finding a pattern within a page, and an "other" case. The rendering function converts each of those into a short human-readable string, such as a pattern and the URL it was found in.
+The interesting part of this file is the action type, `WebSearchAction`. It enumerates four cases: `Search`, which takes one query or several; `OpenPage`, which takes a URL; `FindInPage`, which takes a pattern and a URL; and `Other`. The rendering function converts each of those into a short human-readable string, such as a pattern and the URL it was found in.
 
 The lesson is that search, opening, and finding are the three primitives, and that every representation in the interface is derived from a typed action record rather than from the raw text of a page. Results are attributed rather than dumped.
 
@@ -133,9 +133,9 @@ For GoHarness this means network knowledge should be modelled as typed actions o
 
 ### D. Codex CLI: fuzzy file search, in `app-server/src/fuzzy_file_search.rs`
 
-Matches carry a score, the character indices that matched, and a match type. Results are sorted by score descending and then by path ascending, so ties are broken deterministically. A match limit bounds the result set.
+Matches carry a `score`, the character `indices` that matched, and a `match_type`. Results are sorted by score descending and then by path ascending, so ties are broken deterministically. A `MATCH_LIMIT` bounds the result set.
 
-There is also an incremental session protocol. A session starts, the query is updated, snapshots arrive as matches change, and a completion event ends it. Snapshots are ignored when they belong to a query the client has already moved past, which prevents a slow response for an earlier query from overwriting the results of a later one.
+There is also an incremental session protocol: `start_fuzzy_file_search_session`, then `update_query`, then snapshots delivered through `on_update` and a final `on_complete`. Snapshots are ignored when they belong to a query the client has already moved past, which prevents a slow response for an earlier query from overwriting the results of a later one.
 
 The lesson for the `@` trigger is that a typeahead needs a stream with a stale-query guard rather than a request per keystroke, and that highlighting needs character indices. The cheap half of that is the dropdown. The expensive half is what happens when the user commits a mention, which is what the staging model in section 5.3 exists to handle.
 
@@ -143,13 +143,13 @@ The lesson for the `@` trigger is that a typeahead needs a stream with a stale-q
 
 The repository map is a PageRank computation over a graph of definitions and references, with personalization derived from the files and identifiers already in play in the conversation. The personalization value starts at `100 / len(fnames)` and is boosted when a path component matches an identifier that has been mentioned.
 
-The budget comes from the model's context window, scaled by a factor when the conversation is empty, with a padding reserve of 4096 tokens.
+The budget comes from the model's context window, scaled by `map_mul_no_files` when the conversation is empty, with a padding reserve of 4096 tokens.
 
 Tags are cached using modification-time keys, and the refresh mode `auto` re-indexes only what changed.
 
-The renderer emits only the lines of interest plus surrounding context, cached by relative filename, that set of lines, and the modification time. It sends structure, not whole files.
+Its `render_tree` emits only the lines of interest plus surrounding context, cached by relative filename, that set of lines, and the modification time. It sends structure, not whole files.
 
-And it degrades gracefully. When a recursion error occurs, the map is disabled with a message that the repository may be too large, rather than hanging.
+And it degrades gracefully. On a `RecursionError` the map is disabled with a message that the repository may be too large, rather than hanging.
 
 Four lessons apply to GoHarness. Ranking is the right way to bundle evidence under a budget, and relevance should be personalized by what is already in play rather than being a flat top-N. Caching by modification time avoids re-tokenizing unchanged files, which is exactly the problem described in section 2.1. Sending structure and lines of interest is better than sending file bodies when the goal is orientation. And a retrieval feature should degrade visibly rather than hang.
 
@@ -313,7 +313,7 @@ One record type, one addressing scheme, and one catalog, used by everything that
 
 3. **A session evidence index** in `evidence-index.jsonl`, append-only, recording references with timestamps.
 
-4. **A catalog API** covering registration, resolution, listing by session or workspace, and derivation of a new record from an existing one.
+4. **A catalog API** covering `Register`, `Resolve`, and `List` by session or workspace, plus `Derive` for creating a new record from an existing one.
 
 5. **Structured reporting of produced paths.** Tools should report the files they wrote through the channel that already exists in `tool_message_meta.go`. The regular expressions in `src/artifacts.go` are demoted to a fallback that logs when it fires, which keeps any un-migrated tool visible instead of silently carrying the whole feature.
 
@@ -345,7 +345,7 @@ Generalize the addressing scheme that spills already use so that it covers every
 
 3. **Reference semantics.** Several sessions in one workspace share a blob. Removing one session's reference does not delete a blob that another session still refers to.
 
-4. **A split size policy.** One setting governs the largest thing that may be placed into a prompt, and a separate setting governs the largest thing that may be stored at all. A 50 MB PDF becomes storable and referenceable while only extracted or selected portions are ever injectable.
+4. **A split size policy.** Two settings replace the single 10 MB limit: `ingest_max_inject_bytes` governs the largest thing that may be placed into a prompt, and `store_max_bytes` governs the largest thing that may be stored at all. A 50 MB PDF becomes storable and referenceable while only extracted or selected portions are ever injectable.
 
 5. **A traversal guard that does not rely on substring matching.** The correct check resolves the target path and confirms containment, using something like `filepath.Rel` over cleaned absolute paths, rather than asking whether the string contains `.goharness`.
 
@@ -511,11 +511,11 @@ Make code intelligence available as a knowledge source, staged behind a capabili
 
 1. **Transport.** A JSON-RPC client over stdio, talking to a language server process per workspace, with a managed lifecycle covering spawn, initialize, shutdown, and restart with backoff after a crash.
 
-2. **Document synchronization.** Open and change notifications driven by the existing read and write paths, so the server's view tracks what the agent actually touched rather than preloading the whole project.
+2. **Document synchronization.** `didOpen` and `didChange` notifications driven by the existing read and write paths, so the server's view tracks what the agent actually touched rather than preloading the whole project. The lifecycle methods `initialize` and shutdown are handled alongside these.
 
 3. **Capability gating.** Only the capabilities a server advertises are exposed. Something the server does not offer is not a surface the user can see.
 
-4. **A first version of the surface.** Diagnostics and document symbols become evidence records with the kind `lsp_diagnostic` and the trust value `workspace`, each carrying a file path, a range, a severity, and the server that produced it.
+4. **A first version of the surface.** `diagnostics` and `document_symbols` become evidence records with the kind `lsp_diagnostic` and the trust value `workspace`, each carrying a file path, a range, a severity, and the server that produced it.
 
 5. **Timeouts everywhere.** A language server is a third-party process and can hang. Every request is bounded, and a failure is a normal reported outcome rather than a stall.
 
