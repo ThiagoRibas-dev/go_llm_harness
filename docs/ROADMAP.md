@@ -1,17 +1,18 @@
 # 🧭 GoHarness Roadmap
 
-This document is the **execution-grade roadmap** for GoHarness. It is the **sole roadmap file** and is meant to be both comprehensive and implementation-aware.
+This document is the execution-grade roadmap for GoHarness, and it is the only roadmap file in the project. It is meant to be both complete and aware of what implementation actually requires.
 
-It consolidates:
-- product intent
-- competitive lessons
-- adjacent reference-app lessons
-- implementation readiness
-- dependency chains
-- known spec gaps
-- and now, a **system-oriented delivery model** instead of a flat bag of feature rows
+It brings together the information that used to be scattered across separate notes:
 
-Supporting documents remain useful, but they are **reference material**, not parallel roadmap sources.
+- what the product is trying to do,
+- what we learned from competing and adjacent tools,
+- how ready each piece of work really is,
+- which pieces depend on which other pieces,
+- which areas still need a written specification,
+- how the work groups into systems rather than a flat list of features,
+- and which research or specification document justifies each item.
+
+Other documents under `docs/` remain useful, but they are reference material. They are not competing sources of roadmap truth.
 
 ---
 
@@ -71,16 +72,9 @@ The roadmap now explicitly tracks how items relate to research/spec documents.
 
 ## Why the roadmap is organized this way now
 
-The older roadmap structure was useful for discovery, but too many rows were really:
+The older roadmap was useful while we were still discovering the shape of the work, but many of its rows described the same underlying thing. A typical row was really three or four projects sharing one name: some storage or runtime primitive, plus a layer of policy, plus a user-facing surface, plus a surface for operators and maintenance.
 
-- one backend substrate,
-- plus one policy layer,
-- plus one UI projection,
-- plus one operator surface.
-
-If we implement those rows one-by-one as isolated features, we will repeatedly rebuild the same state models.
-
-So this roadmap now follows a **system-oriented model**.
+If we build those rows one at a time as independent features, we will keep rebuilding the same state models, and then spend later effort reconciling them. So this roadmap is organized by implementation system instead of by feature idea.
 
 ### The nine implementation systems
 
@@ -94,21 +88,19 @@ So this roadmap now follows a **system-oriented model**.
 8. **Runtime, Config & Operator Control Plane**
 9. **Shell & Interaction System**
 
-This is a refinement of the earlier consolidation model: two areas that were previously implicit are now called out explicitly because they are large enough to deserve their own implementation systems:
+This is a refinement of an earlier consolidation pass. Two areas that used to be folded into other systems are now listed separately, because each is large enough to justify its own program of work:
 
-- **Knowledge Ingress & Retrieval**
-- **Runtime, Config & Operator Control Plane**
+- **Knowledge Ingress & Retrieval** covers everything about getting knowledge from outside the session into the session, and making it findable again.
+- **Runtime, Config & Operator Control Plane** covers how configuration layers together and how operators interact with the tool.
 
 ---
 
 ## System execution plans
 
-Each of the nine systems gets **exactly one** execution plan. The split of responsibilities is:
+Each of the nine systems gets exactly one execution plan. The two kinds of document have different jobs:
 
-- this roadmap is the **map** — what a system owns, which rows belong to it, what blocks what, and which
-  research/spec document justifies each row;
-- the execution plan is the **program** — source inputs (including reference-project source inspection),
-  phases, concrete slices, testing, risks, and the success definition.
+- This roadmap is the map. It says what a system owns, which rows belong to it, what blocks what, and which research or specification document justifies each row.
+- The execution plan is the program. It records where the design came from, including which reference projects were read at source level. It then lays out phases, concrete slices of work, tests, risks, and a definition of what success looks like.
 
 | # | System | Execution plan | Plan status | Plan shape |
 |---|---|---|---|---|
@@ -122,38 +114,25 @@ Each of the nine systems gets **exactly one** execution plan. The split of respo
 | 8 | Runtime, Config & Operator Control Plane | _pending_ | Wave 1 | — |
 | 9 | Shell & Interaction | _pending_ | Wave 1 (largest system) | — |
 
-**Plan status** is `Written` or `Pending`. A pending plan is not a roadmap gap: it means the system has
-enough specification to keep its `Ready` rows actionable, but the program document (phases, slices,
-tests) has not been produced yet.
+A plan's status is either **Written** or **Pending**. A pending plan is not a gap in the roadmap. It means the system is specified well enough that its `Ready` rows can still be worked on, but nobody has written the program document yet.
 
-**Row coverage.** Every plan carries a **row coverage map** near its header stating, for each roadmap row
-it claims, which phase owns it and how deep that coverage is (`core` / `partial` / `reference` / `gap`).
-That map is the authoritative trace from a roadmap row to a phase, and it is deliberately allowed to say
-`gap` — a claimed-but-unwritten row is more useful to know about than a silently implied one.
+**Row coverage.** Each plan begins with a coverage map. For every roadmap row the plan claims, the map names the phase that owns it and states how deep the coverage actually is. The possible values are `core`, `partial`, `reference`, and `gap`. This map is the authoritative trace from a roadmap row to a phase, and it is allowed to say `gap`. Knowing that a row was claimed but never written up is more useful than assuming it was handled.
 
-**Deliberate cross-listings.** One row is intentionally shared, because it spans two systems and
-splitting it would lose information:
+**Deliberate cross-listings.** One row appears in two systems on purpose, because splitting it would lose information. Row `12.28.12` covers deliverables, references, and message feedback. Knowledge Ingress & Retrieval owns the staged evidence, which is what a deliverable or reference becomes once it has been ingested. Shell & Interaction owns the surface that renders it. Both table entries say this explicitly.
 
-- `12.28.12` (deliverables / references / message feedback) — **Knowledge Ingress & Retrieval** owns the
-  staged evidence (what a deliverable or reference *is* once ingested) and **Shell & Interaction** owns
-  its rendering surface. Both table entries say so explicitly.
+Every other row appears in exactly one system. If you find a row in two systems without a note like the one above, that is a defect in this roadmap rather than a deliberate overlap.
 
-Every other row appears in exactly one system. If a row turns up in two systems without a note like the
-above, that is a defect in this roadmap, not a deliberate overlap.
+**How to read a system section**
 
-**How to read a system section below**
-
-- The **Items** table is the master backlog for that system: row, role, status, related docs, dependencies.
-- The **Execution plan** blockquote is the program document, the decisions the plan has already made, and
-  the honest notes about what it does not yet cover.
-- Rows marked **Subsumed** are historical: they are implemented through the newer item named in the table,
-  never as a parallel project.
+- The **Items** table is that system's master backlog. Each row records its role, its status, the documents it relates to, and what it depends on.
+- The **Execution plan** blockquote points at the program document. It repeats the decisions the plan has already made and the honest notes about what the plan does not yet cover.
+- Rows marked **Subsumed** are historical. They are implemented through the newer item named in the table, never as a separate project.
 
 ---
 
 ## Current shipped baseline
 
-These are the most important foundations already landed and **should not be re-specified as open work**:
+These foundations have already landed. They should not be re-specified as open work:
 
 - Visual DAG workflow editor
 - Every active workflow routed through the DAG executor
@@ -221,9 +200,9 @@ The **Shell & Interaction System** should consume stable projections from the ot
 # 1) Session Event & Memory System
 
 > **Execution plan:** [`docs/SESSION_EVENT_MEMORY_EXECUTION_PLAN.md`](./SESSION_EVENT_MEMORY_EXECUTION_PLAN.md) · 6 phases (A–F) · 6 slices
-> **Decisions already made by the plan:** the file-backed derived projection ships first (`9.3` via phases B–D) instead of waiting on the canonical event log; compaction writes epoch manifests; recall is always provenance-labelled; the plan explicitly refuses "infinite context" framing and markets bounded frontier retrieval instead.
-> **Honest coverage:** after the gap-fill pass every claimed row has a phase home. Core: `9.3`, `11.6`, `11.9`. Partial — substrate, API or projection only: `9.1`, `9.2`, `12.2`, `12.29.7`, and `12.18` (artifact-granular query projection; event-granular filtering waits for Phase F).
-> **Open decision:** whether Phase F / Slice 5 also satisfies this roadmap's requested *session event log + migration spec*, or whether a separate spec is still owed.
+> **Decisions the plan has already made:** the file-backed derived projection ships first, through phases B to D, rather than waiting for the canonical event log to exist. Compaction writes epoch manifests. Recalled memory always carries provenance. The plan also refuses the phrase "infinite context" and describes what it actually does instead, which is bounded frontier retrieval.
+> **Honest coverage:** every row the plan claims now has a phase that owns it. Rows `9.3`, `11.6`, and `11.9` are covered in full. Rows `9.1`, `9.2`, `12.2`, `12.29.7`, and `12.18` are covered only partly: the plan defines the storage or the API, but not the user-facing surface. Row `12.18` is specified only at the level of whole artifacts, so filtering by event still has to wait for Phase F.
+> **Open decision:** whether Phase F and Slice 6 also satisfy this roadmap's request for a *session event log and migration spec*, or whether that document is still owed separately.
 
 ## System intent
 
@@ -268,9 +247,9 @@ projection per `12.23` — not model-visible conversation text.
 # 2) Knowledge Ingress & Retrieval System
 
 > **Execution plan:** [`docs/KNOWLEDGE_INGRESS_RETRIEVAL_EXECUTION_PLAN.md`](./KNOWLEDGE_INGRESS_RETRIEVAL_EXECUTION_PLAN.md) · 9 phases (A–I) · 8 slices
-> **Decisions already made by the plan:** one `EvidenceRecord` (provenance + content address + `trust`) backs every source, so ingress surfaces differ but the substrate does not; `12.19` **generalizes the sha256 addressing `src/spill.go` already ships** rather than introducing a new storage era; staged ≠ injected — nothing enters the prompt implicitly, and injected evidence is delimited and attributed; `untrusted_external` content (fetched pages) can never take instruction position; retrieval returns provenance, offsets and trust instead of `{path, score}`, with mtime-invalidated index caching (Aider's lesson) replacing today's full re-walk per call; `11.16` ports Codex's `agents_md` semantics (walk to a project-root marker, concatenate root→cwd, override file, byte budget, never past the root); images are addressed by path and delivered as renderings with an explicit detail budget, with per-profile transport honesty.
-> **Honest coverage:** `11.1`, `11.4`, `11.16`, `12.19`, `12.6` are core phases; `12.5` is core but **staged** (largest item in the system, sequenced last so nothing waits on it); `11.19` is core for ingress with model visibility gated per provider; `12.28.12` is partial — this plan owns the structured record, the shell owns rendering.
-> **Open decisions recorded in the plan:** web-search backend choice (`11.1`), PDF/office extraction scope for uploads, and where injected instructions are surfaced in the shell.
+> **Decisions the plan has already made:** every source produces the same kind of record, an `EvidenceRecord` that carries where the content came from, its content hash, and how far it should be trusted. This means the surfaces that bring knowledge in can differ, while the storage underneath stays the same. Row `12.19` generalizes the sha256 addressing that `src/spill.go` already uses, rather than introducing a second way of storing things. Staging and injection are separate states: nothing reaches the prompt unless something explicitly puts it there, and injected evidence is delimited and attributed. Content fetched from the internet is marked `untrusted_external` and can never take the position of an instruction. Retrieval returns provenance, offsets, and trust instead of just a path and a score, and the search index is cached and invalidated by modification time, replacing today's full re-walk on every call. Row `11.16` ports the instruction-discovery behaviour from Codex: walk up to a project-root marker, read files from the root down to the working directory, honour an override file, respect a byte budget, and never walk past the root. Images are addressed by their path on disk and delivered to the model as renderings, with an explicit detail setting.
+> **Honest coverage:** rows `11.1`, `11.4`, `11.16`, `12.19`, and `12.6` are covered by core phases. Row `12.5` is also core but deliberately sequenced last, because it is the largest item and nothing else waits on it. Row `11.19` is fully covered for getting images in, while the model's ability to see them is gated honestly per provider. Row `12.28.12` is partly covered: this plan owns the structured record, and the shell owns the rendering.
+> **Open decisions recorded in the plan:** which web-search backend to use for `11.1`, whether uploaded PDFs and office documents get their text extracted, and where in the interface injected instructions are shown.
 
 ## System intent
 
@@ -307,8 +286,8 @@ These rows are different ingest/retrieval surfaces over the same knowledge syste
 # 3) Task & Background Work System
 
 > **Execution plan:** [`docs/TASK_BACKGROUND_WORK_EXECUTION_PLAN.md`](./TASK_BACKGROUND_WORK_EXECUTION_PLAN.md) · 8 phases (A–H) · 7 slices
-> **Decisions already made by the plan:** the queue becomes host-owned and the browser becomes a projection (`11.2`); one task state machine covers jobs, goals and schedules (`queued` → `admitted` → `running` → `waiting_user` / `waiting_dependency` → terminal); the v1 job store is session-local rather than a daemon (`11.7`); schedules use claim-before-run with interrupted-claim recovery (`12.21`).
-> **Honest coverage:** after the gap-fill pass every claimed row has a phase home. Core phases or deliverables: `11.2`, `11.3`, `11.7`, `11.11`, `12.8`, `12.21`, `12.10`, `12.13`, `11.10`, `12.12`, `10.2B`. Referenced through Phase E: `11.8`, `12.9`, `12.11`, `14.5`. Phase H projections: `12.7`, `11.12`, `13.6`, `14.8`.
+> **Decisions the plan has already made:** the queue becomes owned by the host, and the browser becomes a view onto it rather than the place where queued work actually lives. A single task state machine covers jobs, goals, and schedules, with states running from `queued` through `admitted` and `running` to `waiting_user` or `waiting_dependency`, and finally to a terminal state. For version one the job store is local to the session rather than a separate daemon. Scheduled work claims its slot before running and recovers properly if it is interrupted mid-claim.
+> **Honest coverage:** every row the plan claims now has a phase that owns it. Rows `11.2`, `11.3`, `11.7`, `11.11`, `12.8`, `12.21`, `12.10`, `12.13`, `11.10`, `12.12`, and `10.2B` are covered by core phases or deliverables. Rows `11.8`, `12.9`, `12.11`, and `14.5` are referenced through Phase E. Rows `12.7`, `11.12`, `13.6`, and `14.8` land in Phase H as user-facing projections of the state underneath.
 
 ## System intent
 
@@ -363,7 +342,7 @@ That makes this one of the strongest consolidation candidates in the roadmap.
 # 4) Capabilities & Extensions System
 
 > **Execution plan:** _pending._
-> **What the plan must decide:** the capability manifest and scope model (`12.14`); the trust/install/update lifecycle for extensions (`11.13C`, `13.4B`); the seam between this capability registry and the policy engine's trust decisions.
+> **What the plan still has to decide:** what a capability manifest contains and how scopes work, which covers row `12.14`. How an extension is trusted, installed, and updated, which covers rows `11.13C` and `13.4B`. And where the boundary sits between this capability registry and the trust decisions made by the policy engine.
 
 ## System intent
 
@@ -408,7 +387,7 @@ This should not become three separate mini-platforms for templates, skills, and 
 # 5) Policy & Hooks Engine
 
 > **Execution plan:** _pending._
-> **What the plan must decide:** the hook bus contract and trust review (`12.3`, `13.3`, `14.3`); approval and execpolicy semantics (`12.16`, `13.7`, `14.2`); the capability-seam enforcement points (`12.1`). This is roadmap **Gap B** and it gates approvals, hooks, permissions and sandbox behaviour in three other systems.
+> **What the plan still has to decide:** the contract for the hook bus and how hook trust is reviewed, covering rows `12.3`, `13.3`, and `14.3`. What approval and execution policy actually mean in practice, covering rows `12.16`, `13.7`, and `14.2`. And where enforcement happens when a capability seam is crossed, which is row `12.1`. This is Gap B in this roadmap, and it gates approvals, hooks, permissions, and sandbox behaviour in three other systems.
 
 ## System intent
 
@@ -451,7 +430,7 @@ They should instead form one **host policy engine**.
 # 6) Execution & Review System
 
 > **Execution plan:** _pending._
-> **What the plan must decide:** PTY / persistent execution identity and who owns it (`12.4`, `13.9`); validation-loop ownership (`11.10`); worktree and branch isolation semantics (`14.6`, roadmap **Gap C**); the Code Mode runtime and safety contract (`12.20`).
+> **What the plan still has to decide:** what a persistent execution session is, and whether ownership of it sits with a PTY layer or somewhere else. This covers rows `12.4` and `13.9`. Which system owns the validation loop is another open question, though the Task system has already claimed the loop and its state while leaving the actual command execution here. Worktree and branch isolation is row `14.6`, and it is Gap C in this roadmap. Finally, the Code Mode runtime and its safety contract is row `12.20`.
 
 ## System intent
 
@@ -492,7 +471,7 @@ They are different faces of one execution system, not isolated features.
 # 7) MCP Runtime Expansion
 
 > **Execution plan:** _pending._
-> **What the plan must decide:** the staged transport/auth rollout (`13.8`); prompts and resources surfacing; and elicitation's dependency on the task system's `waiting_user` state (`11.11`) — which is why this system lands after the task substrate rather than beside it.
+> **What the plan still has to decide:** how the transport and authentication work roll out in stages, which is row `13.8`, and how prompts and resources from an MCP server are exposed to the user. Elicitation also depends on the task system's `waiting_user` state, which is row `11.11`, and that dependency is the reason this system lands after the task substrate rather than alongside it.
 
 ## System intent
 
@@ -520,7 +499,7 @@ The next two rows are just a staged runtime expansion of the same subsystem.
 # 8) Runtime, Config & Operator Control Plane
 
 > **Execution plan:** _pending._
-> **What the plan must decide:** config layering and merge precedence (`14.1`, `12.15`); the headless / JSONL schema contract (`13.1`); the RPC seam's dependence on the event substrate (`13.2`); and merging `13.10` + `14.10` into a single operator surface instead of two polish lists.
+> **What the plan still has to decide:** how configuration layers and which layer wins when they disagree, covering rows `14.1` and `12.15`. What the headless mode and its JSONL output schema look like, which is row `13.1`. How the RPC seam depends on the session event substrate, which is row `13.2`. And how rows `13.10` and `14.10` merge into one operator surface instead of staying two separate lists of polish.
 
 ## System intent
 
@@ -556,7 +535,7 @@ They should be treated as one operator/runtime program instead of miscellaneous 
 # 9) Shell & Interaction System
 
 > **Execution plan:** _pending._
-> **What the plan must decide:** the slot/region contract (`12.28.1`, `12.29.2`); the typed transcript model consumed from the memory system (`12.29.7`, `12.28.2`); and which rows are pure projection versus shell-owned state (`12.29.10`, `12.29.13`). This is the largest system in the roadmap and the one most likely to be mistaken for many separate features.
+> **What the plan still has to decide:** the contract for slots and regions in the interface, covering rows `12.28.1` and `12.29.2`, and the typed transcript model that this system consumes from the memory system, covering rows `12.29.7` and `12.28.2`. It also has to sort its rows into two groups: those that only display state owned elsewhere, and those where the shell genuinely owns the state. Rows `12.29.10` and `12.29.13` are the ones in question. This is the largest system in the roadmap, and the one most likely to be mistaken for a long list of separate features.
 
 ## System intent
 
@@ -636,110 +615,74 @@ These items should be treated as **implementation inputs to newer systems**, not
 
 ## Recommended delivery waves (system-first)
 
-## Wave 1 — highest leverage systems with ready slices
+The waves below are ordered by leverage rather than by row number. A wave can start before the previous one finishes, but the ordering matters where a later system depends on an earlier one.
 
-1. **Knowledge Ingress & Retrieval System**
-   - `11.1`, `11.4`, `11.16`, `11.19`, `12.19`
-2. **Task & Background Work System**
-   - `11.2`, `11.3`, `11.7`, `11.11`, `11.12`
-3. **Execution & Review System**
-   - `11.5`, `11.10`, `13.5`, `14.7`
-4. **Runtime, Config & Operator Control Plane**
-   - `13.1`, `13.10`, `14.1`, `14.10`
-5. **Shell & Interaction System**
-   - continue implementing the already-specified shell/composer/browser work from the frontend plan
+### Wave 1 — systems whose first slices are already specified
 
-## Wave 2 — file-backed archived memory v1
+1. **Knowledge Ingress & Retrieval System**, beginning with rows `11.1`, `11.4`, `11.16`, `11.19`, and `12.19`.
+2. **Task & Background Work System**, beginning with rows `11.2`, `11.3`, `11.7`, `11.11`, and `11.12`.
+3. **Execution & Review System**, beginning with rows `11.5`, `11.10`, `13.5`, and `14.7`.
+4. **Runtime, Config & Operator Control Plane**, beginning with rows `13.1`, `13.10`, `14.1`, and `14.10`.
+5. **Shell & Interaction System**, by continuing the shell, composer, and browser work that the frontend refactor plan already specifies.
 
-1. **Session Event & Memory System**
-   - implement `9.3` first as the file-backed v1 defined in `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md`
-   - do not wait for full event-log migration before landing useful cold-memory retrieval
-2. Cross-link that retrieval into the Knowledge and Shell systems
+### Wave 2 — file-backed archived memory, version one
 
-## Wave 3 — policy backbone and richer execution
+The first item is row `9.3`, built the way `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md` describes it. We should not wait for the full event-log migration before shipping useful cold-memory retrieval. Once retrieval works, it should be cross-linked into the Knowledge and Shell systems so that recalled memory shows up where knowledge already appears.
 
-1. **Policy & Hooks Engine**
-   - `12.1`, `12.3`, `13.7`, `14.2`
-2. **Execution & Review System**
-   - `12.4`, `13.9`, `14.6`
-3. **MCP Runtime Expansion**
-   - `13.8` staged transport/auth expansion
+### Wave 3 — the policy backbone and richer execution
 
-## Wave 4 — long-term canonical substrate work
+1. **Policy & Hooks Engine**, beginning with rows `12.1`, `12.3`, `13.7`, and `14.2`. This is the backbone the rest of the wave depends on.
+2. **Execution & Review System**, beginning with rows `12.4`, `13.9`, and `14.6`.
+3. **MCP Runtime Expansion**, beginning with row `13.8` and its staged expansion of transports and authentication.
 
-1. **Session Event & Memory System**
-   - `11.6`, `12.2`, `12.18`, `12.29.7`, `9.1`, `9.2`
-2. **Capabilities & Extensions System**
-   - `11.13C`, `13.4B`
-3. **Policy & Hooks Engine**
-   - `12.16`, `12.17`, `13.3`, `14.3`
+### Wave 4 — long-term substrate work
+
+1. **Session Event & Memory System**, covering rows `11.6`, `12.2`, `12.18`, `12.29.7`, `9.1`, and `9.2`. These are the pieces that need the canonical event log to exist.
+2. **Capabilities & Extensions System**, covering rows `11.13C` and `13.4B`.
+3. **Policy & Hooks Engine**, covering rows `12.16`, `12.17`, `13.3`, and `14.3`.
 
 ---
 
 ## The biggest remaining design gaps
 
-### Gap A — canonical session/event storage
-Needed primarily by:
-- Session Event & Memory System
-- advanced Shell transcript projections
-- clean RPC/control-plane seams
+### Gap A — canonical session and event storage
 
-### Gap B — unified host policy engine
-Needed by:
-- approvals
-- execpolicy
-- hooks bridge
-- matcher hooks
-- trust review
-- capability restrictions
+There is still no agreed storage model for a session as an append-only log of events. Three areas need it: the Session Event & Memory System itself, the richer transcript projections planned for the Shell system, and a clean seam for RPC and the control plane. Until it exists, each of those areas will invent its own read model, and they will drift apart.
+
+### Gap B — a unified host policy engine
+
+Several features need one place that decides what is allowed: approvals, execution policy, the hooks bridge, matcher hooks, trust review, and restrictions on capabilities. Today there is no such place, which is why every one of those features would otherwise grow its own partial version of the same authority.
 
 ### Gap C — execution isolation semantics
-Needed by:
-- worktree-aware isolation
-- review/fix flows
-- persistent validation workflows
-- background experimental execution
+
+We have not decided what isolation means for a piece of execution. Four features wait on that answer: worktree-aware isolation, review-and-fix flows, persistent validation workflows, and background experimental runs. Without a shared answer, each will define isolation slightly differently.
 
 ### Gap D — extension packaging lifecycle
-Needed by:
-- install/update/trust model for skills/plugins
-- scope/lifetime semantics
-- dynamic context/capability loading
+
+There is no lifecycle for extensions yet. That covers how a skill or plugin is installed, updated, and trusted, how its scope and lifetime work, and how it loads dynamic context or capabilities. Skills and plugins cannot ship safely until these rules exist, because the rules are most of what makes them safe.
 
 ---
 
 ## Practical rules for implementation
 
-1. **Build substrates once.**
-   If multiple rows want the same state machine or storage model, that means there is one system, not many features.
+1. **Build each substrate once.** When several rows want the same state machine or the same storage model, that is a sign they belong to one system rather than several features. Build the shared piece first, then let the features sit on top of it.
 
-2. **Keep UI rows subordinate to backend truth.**
-   Shell features should project real state from the task/memory/policy systems, not invent their own parallel representations.
+2. **Keep user-facing rows subordinate to backend truth.** A shell feature should display state that the task, memory, or policy systems already own. It should not invent its own parallel version of that state, because the two will disagree.
 
-3. **Keep research/spec traceability explicit.**
-   Every major implementation should cite the research/spec document that defines or justifies it.
+3. **Keep the link to research and specification visible.** Every substantial implementation should say which research or specification document defines it or justifies the approach.
 
-4. **Do not surface fake controls.**
-   If a runtime knob or mode is not truly honored, keep it out of the UI/config surface.
+4. **Do not show controls that do nothing.** If a mode or setting is not genuinely honoured by the runtime, it should not appear in the interface or the configuration file. A switch that pretends to work is worse than a missing switch.
 
-5. **Prefer truthful local-first retrieval over magical memory claims.**
-   This is especially important for the archived-memory roadmap now that hierarchical retrieval is entering the plan.
+5. **Prefer honest local retrieval over claims about unlimited memory.** This matters most for the archived-memory work, now that hierarchical retrieval is a real part of the plan rather than an aspiration.
 
 ---
 
 ## Suggested immediate next document work
 
-The biggest roadmap ambiguity now sits in system-substrate specs. The next document work should therefore be:
+The remaining ambiguity in this roadmap sits in the specifications for the system substrates, not in the feature lists. Three documents would remove most of it:
 
-1. **Session event log + migration spec**
-   - to support the long-term Session Event & Memory System
-2. **Policy & hooks spec**
-   - to unify approvals, hooks, trust, and execpolicy
-3. **Execution isolation / worktree spec**
-   - to unblock the stronger review/runtime model
+1. **A session event log and migration specification.** This supports the long-term Session Event & Memory System, including how existing session files migrate to the new substrate.
+2. **A policy and hooks specification.** This would unify approvals, hooks, trust review, and execution policy into one design instead of four partial ones.
+3. **An execution isolation and worktree specification.** This unblocks the stronger review and runtime model described in the Execution & Review system.
 
-The archived-memory side now has both:
-- research grounding (`docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md`)
-- and an implementation spec (`docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md`)
-
-So it is no longer the most ambiguous area in the roadmap.
+The archived-memory area is no longer on this list. It has both research grounding in `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md` and an implementation spec in `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md`, so it is no longer the most uncertain part of the roadmap.
