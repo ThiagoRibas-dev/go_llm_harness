@@ -22,6 +22,10 @@ The proposal deliberately avoids a bespoke roleplay mode. Nothing here assumes c
 its own sake. The persona is one prompt element, the cards are documents, and the lorebook is a
 retrieval index.
 
+The harness also gains a way for a person to decide what the system prompt contains and in what
+order, which section 6 sets out. The persona is one of its blocks, and the block list is useful
+whether or not a card is ever imported.
+
 All three draw their material from one place. Cards, personas, and lorebooks are stored once for
 the installation, and a session imports the ones it wants to work with, which keeps the library
 shared and the choice of what to use local to the conversation.
@@ -53,9 +57,11 @@ So the design is an offline conversion step, and the harness consumes its output
 
 ```
 character.png  --(converter, offline)-->  <repository>/aria/
+                                            source/         the imported file, byte for byte
                                             card.json       the normalised V3 card
                                             character.md    the readable rendering
                                             lorebook.json   a standalone lorebook_v3 document
+                                            conversion.json which converter produced these, and from which hash
 ```
 
 The converter is the existing reference implementation. The harness never opens a PNG, never
@@ -68,6 +74,15 @@ This is not a compromise. It is the more useful arrangement, for three reasons.
 **The converted directory is inspectable.** A person can read `character.md`, edit
 `lorebook.json` in any text editor, and put the directory under version control. Memory that a
 human can review is memory a human can correct.
+
+**The imported file is kept rather than replaced.** A card that arrived as an image stays in the
+directory beside the files converted from it, because the conversion is a derivation and the
+original is the evidence. That choice costs a little disk space and buys three things. The
+conversion can be redone when the converter improves, which it will, since the guide is still
+finding bugs in how real cards are handled. The evidence record has the bytes the user actually
+imported rather than a rendering of them. And the portrait inside a card image remains available as
+an ordinary image asset, which matters because a PNG card is a picture of something as well as a
+document about it.
 
 **The conversion happens once instead of every run.** Decoding a PNG chunk per session would be
 work repeated for no benefit.
@@ -129,8 +144,10 @@ persona is one more source of that kind, with a defined position: after the hard
 before the environment block. It comes from the repository rather than from the workspace, and a
 session imports it, which section 3.1 describes.
 
-This remains a prompt-composition change, not a mode. No other behaviour depends on a persona being
-present, and an agent with no persona imported behaves exactly as it does today.
+This remains a prompt-composition change rather than a mode. The persona is one block in the
+system prompt, so a person who wants it somewhere else moves it rather than changing code, and
+section 6 describes the block list it joins. No other behaviour depends on a persona being present,
+and an agent with no persona imported behaves exactly as it does today.
 
 ### 4.2 A directory of cards as an information base
 
@@ -351,7 +368,89 @@ mitigation for each.
   the roadmap should not treat modes as policy. Where capability genuinely needs withholding, that
   is `12.16` (approval policy and sandbox as services), which is a separate mechanism.
 
-## 6. Why not invent a format instead
+## 6. The system prompt is a list of blocks the user orders
+
+The persona is one prompt element, which raises the question of who decides what the prompt
+contains and in what order. Today the answer is the source code, and the prompt is assembled in
+`src/agent_run.go` around line 49 from five parts in a fixed order:
+
+```
+systemBase                      the hardcoded description, or its sub-agent variant
+buildEnvironmentSystemPrompt()  the environment description
+instructions                    the files LoadLocalInstructions() found
+workspaceTree                   the workspace tree
+IMPORTANT SAFETY RESTRICTION    the literal line about protected paths
+```
+
+A sub-agent gets a different first part, chosen from its depth. A person who wants a different
+arrangement has no way to ask for one.
+
+**The proposal is a block list.** The system prompt becomes an ordered list of named blocks, and
+each block records where its content comes from, whether it is enabled, and where it sits. The
+default list reproduces today's prompt exactly, so nothing about the current behaviour changes
+until someone edits the list. This is the arrangement SillyTavern uses when it talks to a
+chat-completion endpoint, and the reason it earns its place there is the reason it will earn its
+place here: prompt assembly is the part of a harness people most often need to correct for their own
+model, and correcting it should not require a code change.
+
+**A block records six things.** They are small, and the point of naming them is that each one is
+something a user can see and change.
+
+| Field | Meaning |
+| --- | --- |
+| `id` | A stable name, so a saved order survives a new version of the harness. |
+| `label` | What the user sees in the interface. |
+| `source` | Where the content comes from: a file pattern, the environment description, an imported persona, or a computed value. |
+| `enabled` | Whether the block contributes to the prompt at all. |
+| `budget_bytes` | An optional ceiling on the block's contribution, with a visible note when content is cut. |
+| `required` | Whether the block may be disabled or moved. |
+
+**The blocks that exist on the first day are the five the prompt already has, plus two the card
+work needs.** The table below is also the migration plan, because the default order is the order
+the prompt uses today.
+
+| Block | Source | Default position | Required |
+| --- | --- | --- | --- |
+| `base` | The hardcoded description, or the sub-agent variant chosen from depth | First | Yes |
+| `persona` | The imported card, rendered as standing text | After `base` | No |
+| `environment` | `buildEnvironmentSystemPrompt()` | After the persona | No |
+| `instructions` | The files `LoadLocalInstructions()` reads, with the walk and the budget from row `11.16` | After the environment | No |
+| `workspace` | The workspace tree | After the instructions | No |
+| `mode` | The active mode statement from section 5 | Last of the editable blocks | Yes while a mode is active |
+| `safety` | The safety restriction line | Last | Yes |
+
+**Two blocks cannot be removed, because they describe facts rather than preferences.** The `safety`
+block carries the restriction the harness places on itself, and a prompt that quietly dropped it
+would misrepresent what the runtime does. The `base` block describes the runtime the model is
+working in, and a sub-agent that lost it would not know it is a sub-agent. Both may still be moved,
+which covers the legitimate reasons a person would have for moving them.
+
+**Budgets are what make this more than a reordering widget.** The instruction walk in row `11.16`
+already respects a byte budget, and a prompt assembled from seven sources has the same problem at a
+larger scale. Each block reports what it contributes and the composer reports the total, so a
+person can see which part is consuming the window instead of guessing. A block that exceeds its
+budget is cut with a note rather than failing, which is how the harness already treats an
+instruction file that is too large.
+
+**The list is configuration, so it layers like configuration.** Row `14.1` gives GoHarness
+repo-scoped configuration hierarchy, and row `12.15` gives profiles and bundles. A block order is a
+natural thing for both to carry, so a project can ship an order, a profile can override it, and the
+interface can edit the result. The interface work belongs to Shell & Interaction, and this design
+only fixes the model and the defaults.
+
+**One boundary worth stating, because the prompt has two halves.** The composer governs the system
+prompt. The archived context from a compacted session is appended today as a separate user message
+rather than as part of the system prompt, and moving it into the block list is a question for plan
+#1, which owns the session schema. The same applies to staged evidence, which plan #2 injects at a
+position of its own choosing. Neither is blocked by this work, and neither is settled by it.
+
+**Which system owns it.** A block list is a runtime and configuration concern rather than a
+knowledge concern, so it belongs to the Runtime, Config & Operator Control Plane as row `12.30.8`.
+The persona is the block that motivated the work and stays with plan #2. Keeping them apart is
+honest in both directions: the composer knows nothing about character cards, and the card work does
+not have to define prompt assembly in order to ship.
+
+## 7. Why not invent a format instead
 
 The honest counter-argument is that a JSON file of keyed facts is not hard to design, and adopting
 a format from a roleplay community for a coding harness is odd. Four reasons it is the better
@@ -376,7 +475,7 @@ fields distinguish "no" from "not stated", and the implementation preserves unkn
 than dropping them. Those are the details that make a format survive contact with real files
 written by other people.
 
-## 7. The security question, stated plainly
+## 8. The security question, stated plainly
 
 This is the part that needs a decision rather than a design.
 
@@ -407,7 +506,7 @@ mitigations follow, and the last two are the ones that matter:
 - Entries written by the agent are visible to the user, and removable, through the same directory
   listing that shows everything else.
 
-## 8. Where this attaches to the roadmap
+## 9. Where this attaches to the roadmap
 
 Three findings from reading the roadmap and the written plans.
 
@@ -423,6 +522,13 @@ every source becomes the same kind of record, so adding kinds is the intended ex
 lorebook retrieval layer is a new retrieval strategy in the same system, beside the lexical
 search that exists today.
 
+**The composer has no home yet, and that is worth saying plainly.** Row `14.1` gives
+repo-scoped configuration hierarchy and row `12.15` gives profiles and bundles, but neither exists
+yet and neither describes prompt assembly. The block list therefore goes into the Runtime, Config &
+Operator Control Plane as a new row rather than riding on an existing one, and the plan for that
+system is still pending. The persona does not have to wait for it, because the default order gives
+the persona a fixed position that works without any composer at all.
+
 **The whole feature is owned by plan #2, including the persona.** That is a decision that has
 been taken rather than a recommendation: a persona is treated as one more ingestion target rather
 than as a separate configuration concern, which keeps the whole feature inside one system and one
@@ -431,11 +537,12 @@ benefit is that the persona shares the evidence record, the trust vocabulary, an
 rules with everything else that gets ingested, instead of growing a parallel lifecycle in the
 operator surface.
 
-## 9. Proposed roadmap rows
+## 10. Proposed roadmap rows
 
-Here are seven proposed rows following the same standard that the roadmap already uses. **They
+Here are eight proposed rows following the same standard that the roadmap already uses. **They
 are written into the roadmap's item tables now**, under Knowledge for the first five, under Policy
-for the mode work, and under Shell for the workflow. The `12.30.x` band follows the precedent of
+for the mode work, under Runtime, Config & Operator Control Plane for the composer, and under Shell
+for the workflow. The `12.30.x` band follows the precedent of
 `12.28.x` and `12.29.x`, and renumbering the series is a find-and-replace if a different band is
 preferred later.
 
@@ -448,6 +555,7 @@ preferred later.
 | 12.30.5 | Agent-maintained memory, files plus an index | Retrieval | **Ready** | Knowledge | Read and write tools, every call logged, and an index over ordinary files. Depends on 12.30.4. |
 | 12.30.6 | Mode-scoped tool sets | Policy | **Ready** | Policy | Extends `12.12`. The mechanism, not the memory feature. Useful whether or not the memory work proceeds. |
 | 12.30.7 | Showcase workflow: persona, modes, lorebooks | Integration | **Ready** | Shell | A third workflow beside `linear_chat` and `enhanced_cognition`. |
+| 12.30.8 | System prompt composition blocks | Substrate | **Ready** | Runtime/Config | Order, enable, disable, and budget the blocks the prompt is built from. The persona is one of them. |
 
 Three notes on those.
 
@@ -460,13 +568,19 @@ stay as they are. The new workflow is where the persona node, a mode switch, and
 round-trip are demonstrated end to end, so the feature has one place where it is known to work
 rather than being spread across the existing graphs.
 
-**Nothing here needs a new plan document.** The Knowledge rows amend plan #2, which has not been
-revised yet. `12.30.6` is a `12.12` extension and belongs to whatever plan covers that row.
-`12.30.7` is a workflow, which is configuration rather than a system.
+**`12.30.8` is the other row with reach beyond the cards.** A prompt a person can inspect and
+reorder is useful before any card is imported, and it also makes the assembled prompt something the
+interface can show block by block. It is the widest item after the mode work.
 
-## 10. Decisions taken, and what remains open
+**Nothing here needs a new plan document.** The Knowledge rows are now written into plan #2 as
+phases J to N, so that plan grew from nine phases to fourteen. `12.30.6` is a `12.12` extension and
+belongs to whatever plan covers that row. `12.30.8` belongs to the Runtime, Config & Operator
+Control Plane, whose plan is still pending, and `12.30.7` is a workflow, which is configuration
+rather than a system.
 
-### 10.1 Decided
+## 11. Decisions taken, and what remains open
+
+### 11.1 Decided
 
 **The canonized material lives in `docs/character-cards/`.** The guide, the reference
 implementation, and the sources manifest are together, so the guide and the module map can be read
@@ -509,11 +623,21 @@ configuration key rather than a mode, because a mode is focus rather than a perm
 **The active mode is recorded in the session.** The mode belongs to the session rather than to the
 node, and each transition is written to the session event log.
 
+**The system prompt becomes an ordered list of blocks.** A person can enable, disable, reorder,
+and budget the blocks the prompt is built from. The default order reproduces the prompt the harness
+assembles today, so the change is invisible until someone edits the list, and two blocks that
+describe facts about the runtime rather than preferences cannot be removed.
+
+**The imported file is kept beside what was derived from it.** A card that arrived as an image
+stays in the character's directory, so the conversion can be redone when the converter improves,
+the evidence record points at the bytes the user actually imported, and the portrait inside the
+image remains available as an image asset.
+
 **Nothing is implemented yet.** This document is the design. The work it describes now sits in the
 roadmap's item tables as the `12.30.x` series, and it amends plan #2 when that plan is next
 revised.
 
-### 10.2 Still open, and who settles each one
+### 11.2 Still open, and who settles each one
 
 Nothing in this list is a design question any more. Each remaining item is an implementation detail
 with an owner, which is the state a design document should finish in.
@@ -527,6 +651,16 @@ session directory is the other candidate. Plan #1 owns the session schema, so it
 **The shape of the mode-transition event.** The session is now the decided location, and the exact
 event shape waits on the schema work already scheduled in plan #1.
 
+**Whether a budget is expressed in bytes or in tokens.** Bytes are proposed, because the
+instruction walk in row `11.16` already works in bytes and the harness has no token estimator
+beyond a rough division. Tokens are what actually fills a window, so the question is worth
+revisiting once something measures them honestly.
+
+**Whether a sub-agent carries the persona and the workspace tree.** The sub-agent variant of the
+`base` block is decided. Every other block's behaviour at depth is a question for the plan, and the
+honest default is that a sub-agent keeps the blocks it needs for its task and not the ones that
+describe the parent's situation.
+
 **The configuration key for book creation.** The switch is configuration, which is decided. The key
 name, its default, and whether it is per node or per session belong with the node properties that
 the plan amends.
@@ -535,7 +669,7 @@ the plan amends.
 before the environment block. How the card's fields are laid out inside it is a rendering detail
 that the plan settles against real cards.
 
-## 11. What this deliberately is not
+## 12. What this deliberately is not
 
 **Not a roleplay mode.** No conversational assumptions, no greeting flow, no character voice
 enforced at generation time. The card contributes text to one prompt element. A card also happens
@@ -552,6 +686,12 @@ small JSON reader and a matching function, and both are testable in Go against t
 implementation's behaviour. The dormant `ExtractPortablePythonRuntime` helper in `src/embed.go`
 stays dormant, which is where it belongs until something actually needs a Python runtime at
 execution time.
+
+**Not a prompt template language.** The block list is ordered sources with enable flags, not a
+templating system with conditionals, loops, and variables. A template language would be a second
+configuration language for a user to learn, and it would be a way to write a prompt that cannot be
+reviewed by reading it. The value here is that the existing assembly becomes visible and
+adjustable, not that it becomes programmable.
 
 **Not a rewrite of the retrieval plan.** Plans #2 and #8 are amended, not replaced. The amendment
 adds a repository, a persona source, two evidence kinds, one retrieval strategy, and a read and

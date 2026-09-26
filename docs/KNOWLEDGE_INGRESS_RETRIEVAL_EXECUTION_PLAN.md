@@ -2,7 +2,7 @@
 
 > **Status:** Execution plan
 > **System:** Knowledge Ingress & Retrieval System
-> **Primary roadmap rows:** `11.1`, `11.4`, `11.16`, `11.19`, `12.5`, `12.6`, `12.19`, `12.28.12`
+> **Primary roadmap rows:** `11.1`, `11.4`, `11.16`, `11.19`, `12.5`, `12.6`, `12.19`, `12.28.12`, `12.30.1`, `12.30.2`, `12.30.3`, `12.30.4`, `12.30.5`
 
 This document defines the program of work for how knowledge gets into GoHarness, how it is stored and addressed, how it becomes visible to the model, and how it can be found again later.
 
@@ -11,6 +11,8 @@ The belief that shapes the design is this:
 > Every source of knowledge is the same kind of thing. A web page, a file the user referenced, a pasted screenshot, an uploaded document, a large tool result that was spilled to disk, and a diagnostic from a language server are all evidence, and all of them need the same three things: provenance, an address, and an explicit budget for what reaches the model.
 
 The surfaces that bring knowledge in are genuinely different from each other. The storage underneath them should not be.
+
+The character-card series in phases J to N extends that belief to a source this plan did not originally consider. A character card is a document a user wrote or downloaded, and a lorebook is a set of entries with keys, positions, and a budget. Both are evidence by this plan's definition, and the second one arrives with an injection algorithm already specified by a public format. The design that puts them here is in [`CHARACTER_CARD_PERSONA_AND_MEMORY.md`](./CHARACTER_CARD_PERSONA_AND_MEMORY.md).
 
 ## Row coverage map
 
@@ -26,12 +28,19 @@ For each roadmap row this plan claims, here is the phase that owns it and how co
 | `12.6` Spilling large tool output to disk | Phase C | **core.** This phase closes out the partial status by making spilled output searchable and referenceable. |
 | `12.19` Content-addressed attachments | Phase B | **core.** This generalizes the addressing scheme that `src/spill.go` already uses. |
 | `12.28.12` Deliverables, references, and message feedback | Phase A for the record, Phase I for the projection | **partial.** This plan owns the structured record. Rendering belongs to Shell & Interaction, and feedback routing is operator-side under row `12.23`. |
+| `12.30.1` Card repository and per-session imports | Phase J | **core.** The repository layout, the offline converter seam, the manifest, the imported file retained in `source/`, and the per-session import list. |
+| `12.30.2` Character cards as a persona source | Phase K | **core.** The rendering, the block registration, the trust value, and the choice of one persona per session. The block model itself belongs to row `12.30.8` in the Runtime, Config & Operator Control Plane. |
+| `12.30.3` Cards and lorebooks as evidence kinds | Phase L | **core.** Two values added to the `kind` enumeration, the derivation lineage, and registration on import. This phase is blocked until Phase A lands. |
+| `12.30.4` Lorebook as a retrieval and injection layer | Phase M | **core.** The matcher, the scan window, the budget and its drop order, recursive scanning, and the diagnostics that make an injection explainable. |
+| `12.30.5` Agent-maintained memory, files plus an index | Phase N | **core.** The four memory tools, the logging, the configuration switch for creating a book, and the two storage shapes. |
 
 ---
 
 # 1. System scope
 
 This system owns evidence records and their provenance, content addressing for anything that gets ingested (row `12.19`), the catalog that holds evidence and the surface that searches it, everything that brings knowledge in from the composer such as file mentions (row `11.4`), images (row `11.19`), and attachments, the discovery of instructions and context across directories (row `11.16`), network ingress through web search and fetch (row `11.1`), code intelligence through the LSP seam (row `12.5`), the integration of spilled tool output into the same substrate (row `12.6`), and the structured record behind deliverables and references (row `12.28.12`).
+
+It owns the character-card series as well: the repository that holds converted cards, personas, and lorebooks (`12.30.1`), the persona as one prompt block (`12.30.2`), cards and lorebooks as evidence kinds (`12.30.3`), the lorebook as a retrieval and injection layer (`12.30.4`), and the read and write memory surface the agent curates (`12.30.5`). The ordering and enablement of the prompt blocks those items feed into belongs to the Runtime, Config & Operator Control Plane under row `12.30.8`, which is a separate system and a separate plan.
 
 It does not own the shell surfaces that render evidence, which belong to Shell & Interaction under row `12.29.9`. It does not own the mechanics of approval and egress policy, which belong to the Policy & Hooks Engine under rows `12.16` and `14.2`. It does not own the long-term event log or the session query projections, which belong to Session Event & Memory under rows `12.2` and `12.18`. It does not own scheduling slow fetches as jobs, which belongs to Task & Background Work under row `11.7`.
 
@@ -155,6 +164,36 @@ Four lessons apply to GoHarness. Ranking is the right way to bundle evidence und
 
 ---
 
+### F. Character Card V3: a public specification, a reference implementation, and three real corpora
+
+This plan's later phases rest on work that already exists in this repository, which is unusual enough
+to state plainly. [`docs/character-cards/`](./character-cards/) holds an implementation-agnostic
+guide to reading card files, a working reference implementation with 178 tests, and the
+specification text with attribution. The guide was written from the specification and from reading
+two implementations at source level, and it was then corrected against three collections of real
+cards, sixty, eight, and two of them, downloaded from the sites people actually get cards from.
+
+Three findings from that work shaped these phases.
+
+**The parsing is hard and the runtime is easy.** Card files arrive as PNG text chunks, as bare JSON,
+and inside a ZIP archive called CHARX, across three versions of the format, and real cards deviate
+from the specification in predictable ways. All of that work happens once, at import, and can run
+offline. What the harness needs at runtime is a reader for two JSON shapes, which is a small amount
+of Go rather than a runtime dependency on another language.
+
+**The lorebook format is a complete answer to a question this plan had left open.** The plan says
+injection always respects a budget, and it does not say what happens when the budget is exceeded.
+The format specifies a drop order: entries that opt out when the window is full go first, then the
+lowest `priority`, then the lowest `insertion_order`. It also specifies positions relative to the
+character, depths counted back from the newest message, and recursion that lets one entry's content
+trigger another. Phase M adopts the format's answers rather than inventing its own.
+
+**Metadata is where the specifications disagree, so the reader follows the ecosystem.** Three
+collections produced examples of creation timestamps in two different places, in two different
+units, and under three different key names, and all of them outside the specification. The reader
+accepts all of them and reports what it saw, which is the same posture this plan takes toward
+provider behaviour elsewhere.
+
 # 3. Where GoHarness stands today
 
 ## 3.1 What already exists
@@ -215,7 +254,7 @@ Every ingested thing is described by a record of this shape:
 ```json
 {
   "evidence_id": "sha256:9f2c…",
-  "kind": "web_page | file_mention | image | upload | spill | lsp_diagnostic | deliverable | instruction",
+  "kind": "web_page | file_mention | image | upload | spill | lsp_diagnostic | deliverable | instruction | character_card | lorebook",
   "origin": {
     "surface": "composer_drop | agent_tool | instruction_walk | session_upload",
     "uri": "https://example.com/spec",
@@ -240,6 +279,19 @@ The `evidence_id` is the sha256 of the content, which matches the scheme `hashSp
 
 The `origin` and `trust` fields together are what make recall honest later. The archived memory units in the Session Event & Memory System's row `9.3` are derived from these records, and that plan's requirement that recalled memory carries provenance can only be met if the provenance was captured when the content came in.
 
+Two kinds are added by the card series, and they behave like any other evidence once they are
+registered. `character_card` covers the converted document, which is searchable through its
+Markdown rendering, and `lorebook` covers a book, which may be a specification-shaped document or a
+files-plus-index pair. Both are `user_local`, both carry a `derived_from` pointing at the file the
+user imported, and neither is treated as instruction material even when it contains imperative
+sentences. A card's description is written in the second person, so it reads like an instruction,
+and it is a document about a character rather than a directive to the harness.
+
+One distinction belongs here rather than in a later section. A card that a session has imported as
+its persona is prompt material, and it is still evidence. The two relationships are separate: the
+persona block reads the document, and the evidence record makes it searchable and attributable.
+Nothing about the persona requires the substrate, which is why phase K can land before phase L.
+
 ## 5.2 Where things are stored
 
 ```
@@ -253,6 +305,28 @@ The `origin` and `trust` fields together are what make recall honest later. The 
     spill/<sha256>.json            # existing spill metadata, unchanged
     evidence-index.jsonl           # append-only list of what this session ingested
 ```
+
+The card repository sits outside both of those stores, because it is user-owned material rather
+than runtime state. The path is configurable, and it defaults to `~/.goharness/characters/`:
+
+```
+~/.goharness/characters/             # the repository, shared by every workspace
+  <name>/
+    source/                          # the imported file, byte for byte
+    card.json                        # the normalised card
+    character.md                     # the readable rendering, which is what search indexes
+    lorebook.json                    # a standalone book, when the card carried one
+    conversion.json                  # converter name and version, source hash, time, files written
+  <name>/memory/                     # optional: files the agent maintains, with an index over them
+    index.json                       # keys, position, priority, tags, and a path per entry
+    <entry>.md                       # the content, in files the tools already read and write
+```
+
+Two consequences are worth naming. A session imports characters rather than owning them, so a card
+converted once serves every workspace, and a session that imports nothing is indistinguishable from
+the harness as it exists today. And because the repository is outside the workspace, the traversal
+guard from phase B does not apply to it, which means reads from the repository are a deliberate
+exception in the sandbox rules rather than an accident.
 
 Blobs are scoped to the workspace so that two sessions referring to the same file share one copy rather than storing it twice. References remain local to a session, so the question "what did this session ingest" stays answerable without scanning the whole workspace.
 
@@ -527,6 +601,238 @@ This is the largest build in the system and the one with the most operational su
 
 ---
 
+# Phase J — The card repository and the converter seam
+
+## Goal
+
+A person converts a card once, inspecting the result, and a session then chooses which characters it
+is using.
+
+## Deliverables
+
+1. **The repository layout** described in section 5.2, at a configurable path that defaults to
+   `~/.goharness/characters/`. One directory per character, with `source/` holding the imported file
+   byte for byte, alongside the files converted from it.
+
+2. **A converter seam rather than a library dependency.** The harness never parses a card. It runs a
+   configured command with a documented contract: an input path, an output directory, and an exit
+   code. The reference implementation in `docs/character-cards/impl/` satisfies that contract
+   already, and anything else that writes the documented files works too. This keeps the parsing
+   offline, and it keeps a Python implementation out of the runtime of a Go program.
+
+3. **A manifest per character**, written as `conversion.json`, recording the converter and its
+   version, the source hash, the time of conversion, and the files produced. The manifest is what
+   lets the harness report that a directory was converted by an older version, and it is what makes
+   a re-conversion safe to offer.
+
+4. **Reading the converted shapes in Go.** A small reader for `card.json` and for the `lorebook_v3`
+   shape, covering the seventeen entry fields the guide tabulates. No PNG, no base64, no archive
+   handling at runtime, because none of that is in the converted output.
+
+5. **Per-session imports.** A record of which characters a session is using, with operations to add,
+   remove, and list them. A session with nothing imported behaves exactly as the harness does today,
+   which is the property that makes this safe to land early.
+
+6. **Retention of the imported file**, read back for two purposes: re-deriving the output when the
+   converter changes, and using the portrait inside an image card as an ordinary image asset.
+
+## Proposed new files
+
+`src/character_repository.go` for the layout, the manifest, and listing. `src/card.go` for the
+converted shapes and the reader. `src/session_characters.go` for the import list.
+
+## Files likely to change
+
+`config.example.json` gains the repository path and the converter command. The command surface gains
+`characters convert`, `characters list`, and `characters import`.
+
+## Why this comes first
+
+It is the only phase in the series with no dependency on the evidence substrate, so it can be built
+while phase A is still in progress. Everything after it needs a converted directory to work with,
+which means the persona has nothing to render and the lorebook layer has nothing to match without
+it. It is also where the offline-parsing decision is either kept or quietly abandoned, and keeping it
+is a property of the seam rather than a promise.
+
+---
+
+# Phase K — The persona block
+
+## Goal
+
+One imported card becomes standing text in the system prompt, in a position a person can change.
+
+## Deliverables
+
+1. **The rendering rule.** Card fields become one labelled block. `description`, `personality`,
+   `scenario`, and `system_prompt` contribute. `creator_notes` never contributes, because the
+   specification says it is for the human. `alternate_greetings` and `first_mes` are read and
+   preserved but never injected, because the harness has no opening message to greet with.
+   `mes_example` contributes only when a person enables it.
+
+2. **Registration as a block.** The persona joins the prompt assembly as a block whose default
+   position follows the hardcoded base and precedes the environment description. When row `12.30.8`
+   has landed, the block is editable and budgeted like any other. When it has not, the position is
+   fixed and documented, so this phase does not depend on that one.
+
+3. **A labelled prompt element.** The injected text identifies its source, so a reader of the prompt
+   can tell which part came from a card and which came from the workspace. The label carries the
+   character's name as the card gives it, falling back to the filename stem when the name is blank,
+   because real cards do carry blank and whitespace-only names.
+
+4. **One persona per session at most**, chosen from the imported characters. A second card is
+   evidence rather than identity, which keeps the merge question from arising.
+
+5. **A stated exception, written down rather than implied.** The persona is text a user chose, so it
+   is the one place where content that arrived from outside the workspace may read like an
+   instruction. That exception is recorded in the plan and in the code, together with the reasoning:
+   the document is local, the import is explicit, and the block is labelled.
+
+6. **Tests against real cards.** One V1 card, one V2 card, and one V3 card from the three collections
+   in `docs/character-cards/` each render to a block containing the description and none of the
+   excluded fields.
+
+## Files likely to change
+
+`src/agent_run.go`, at the point the system prompt is assembled. `src/agent.go` for instruction
+loading, since the persona is a source of standing text of the same kind.
+
+## Why this comes second
+
+It is the smallest end-to-end demonstration that the repository works: a card goes in, and what the
+agent receives changes. It is also the item a user is most likely to ask for by name.
+
+---
+
+# Phase L — Cards and lorebooks as evidence
+
+## Goal
+
+Every converted character, and every book that came with one, is in the catalog and searchable
+alongside everything else that has been ingested.
+
+## Deliverables
+
+1. **Two `kind` values**, `character_card` and `lorebook`, added to the enumeration in section 5.1.
+   Nothing else about the record changes.
+
+2. **The Markdown rendering is the indexed text**, and the converted JSON is the blob. A search hit
+   resolves to the document the user imported rather than to a summary of it, and the offsets point
+   into the rendering that a person can open and read.
+
+3. **Lineage that reads in one direction.** The source file, the converted card, and the lorebook
+   derived from it are three records connected by `derived_from`, so the question "where did this
+   entry come from" has an answer that terminates at the bytes the user imported.
+
+4. **Registration on import rather than on every run.** Importing a character registers its records
+   once, and re-importing compares the manifest so that unchanged characters do not produce new
+   records. This is the same modification-time discipline that phase D applies to the search index.
+
+5. **A trust value of `user_local`**, with the origin recording the repository path and the character
+   name. A card downloaded from a card site is still local material as far as this system is
+   concerned, because the user chose it, and that is a different statement from saying it is safe.
+
+## Why this phase is short, and why it waits
+
+The substrate does the work, so this phase is a set of producers rather than a new mechanism. It
+waits on phase A for the obvious reason that there is nothing to register into until the catalog
+exists, which is why the roadmap row is `Blocked` rather than merely ordered.
+
+---
+
+# Phase M — The lorebook as a retrieval and injection layer
+
+## Goal
+
+A book's entries reach the prompt under the format's own rules, with the budget and the drop order it
+specifies, and with an account of what was left out.
+
+## Deliverables
+
+1. **The matcher.** A scan window of recent messages is matched against each entry's `keys`, with
+   `secondary_keys` under `selective`, and with `case_sensitive`, `use_regex`, `constant`, and
+   `enabled` honoured. An absent `use_regex` reads as false, because the alternative turns literal
+   keys into patterns. The guide's entry table is the field reference.
+
+2. **The budget and the drop order.** `token_budget` caps the injected total. When it is exceeded,
+   entries carrying `@@ignore_on_max_context` go first, then the lowest `priority`, then the lowest
+   `insertion_order`. Every dropped entry is reported, because a silent drop is the failure mode that
+   makes a memory system untrustworthy.
+
+3. **Positions and depths.** `before_char` and `after_char`, with the `depth` family counted back
+   from the newest message, applied as an ordered injection list rather than as one block. This is
+   the part that does not fit the block model of row `12.30.8`, and the plan states that rather than
+   pretending otherwise.
+
+4. **Recursive scanning**, with the limits the reference implementation already settled on: four
+   passes of depth and a recursion limit of three, so a book whose entries reference each other
+   cannot loop forever.
+
+5. **Entries that point at evidence.** The format reserves `extensions` on every entry, so an entry
+   can carry the evidence identifier it came from, and a hit can be traced back to the document.
+
+6. **Two content shapes, one matcher.** An entry may carry its content inline, as the specification
+   does, or reference a file on disk through a path in the index. The matcher works on keys,
+   position, priority, and content, and it does not care where the content came from, which is what
+   makes the files-plus-index shape cheap rather than a second implementation.
+
+7. **A diagnostic command.** Given a book and a piece of text, print what would be injected, in
+   order, with token counts, and what was dropped and why. This is the artefact that makes the layer
+   reviewable, and it doubles as the acceptance test.
+
+## Proposed new files
+
+`src/lorebook.go` for the entry model and the reader. `src/lorebook_match.go` for keys, scan windows,
+and recursion. `src/lorebook_budget.go` for the budget and the drop order.
+
+## Why this is the centre of the series
+
+It answers the question the plan had left open: what is dropped when the window fills. It also turns
+the format from a file to read into an algorithm to reuse, which is the part of the card ecosystem
+that is worth taking.
+
+---
+
+# Phase N — Memory the agent maintains
+
+## Goal
+
+The agent can add to, read, retire, and list what it knows, and every one of those acts is
+attributable.
+
+## Deliverables
+
+1. **Four tools**, matching the surface the design settles: `memory_write`, `memory_read`,
+   `memory_list`, and `memory_disable`. They belong to a mode-scoped tool set rather than to every
+   turn, because a seven-tool prompt becomes an eleven-tool prompt otherwise.
+
+2. **A log entry for every call**, recording the session, the entry, the operation, and the trust
+   value `agent_written`. An agent-written fact is a different kind of claim from a fact a person
+   wrote, and the record should say which it is.
+
+3. **The files-plus-index storage shape**, where the index carries keys, position, priority, and tags,
+   and the content lives in files the tools already read and write. The specification shape remains
+   supported for books that arrived that way, through the same matcher.
+
+4. **A configuration switch for creating a new book**, defaulting to allowed. New books are new
+   injection surfaces with their own budgets, so the switch exists, and it is configuration rather
+   than a mode because a mode is focus rather than a permission boundary.
+
+5. **A budget for agent-written content**, so that memory cannot grow without limit and crowd out the
+   task. What happens when it is reached is one of the open decisions below.
+
+6. **Concurrency that is decided rather than assumed.** Two sessions may edit the same book. The
+   plan chooses locking with a re-read over silent last-writer-wins, because the alternative loses
+   work without saying so.
+
+## Why last, and why after the retrieval layer
+
+Writing is only safe once reading is honest about order and budget. An agent that adds entries
+without a way to see what they displace is guessing, and the retrieval layer is what turns that
+guess into a measurement.
+
+---
+
 # 7. Lessons from reference projects, applied directly
 
 ## 7.1 Instructions are hierarchical, ordered, and budgeted
@@ -621,6 +927,57 @@ From GoHarness's own `src/spill.go`: the project already addresses large output 
 
 ---
 
+## Slice 9 — The repository, the converter seam, and the persona
+
+**What it adds.** Phases J and K together. The repository layout and its manifest, the converter
+invocation with `characters convert`, `list`, and `import`, the reader for the converted shapes in
+Go, the per-session import list, and the persona rendered as a labelled block in the system prompt.
+The imported file is kept in `source/` from the beginning rather than retrofitted, because the
+conversion is the thing most likely to be redone.
+
+**How we know it worked.** A card image is converted once, the original stays byte-identical beside
+the output, importing it into a session adds one labelled block to the system prompt, removing it
+restores the prompt the harness sends today, and a second session in another workspace can import
+the same character without converting it again.
+
+---
+
+## Slice 10 — Cards and lorebooks in the catalog
+
+**What it adds.** Phase L. The two new evidence kinds, the Markdown rendering as the indexed text,
+the lineage that connects source, card, and book, and registration that follows the manifest rather
+than the clock.
+
+**How we know it worked.** A word that appears only inside a card's description, and a key that
+appears only inside its book, are both findable through search, each hit names the character it came
+from, and re-importing an unchanged character produces no new records.
+
+---
+
+## Slice 11 — The lorebook injection layer
+
+**What it adds.** Phase M. The matcher, the scan window, the budget with its specified drop order,
+positions and depths, recursion with limits, and the diagnostic command that prints the decided
+injection.
+
+**How we know it worked.** Run against the thirty-one-entry book from the third collection, the
+diagnostic prints the injected entries in order with token counts and the dropped entries with
+reasons, and the totals match the reference implementation's recorded figures for the same input.
+
+---
+
+## Slice 12 — Memory the agent maintains
+
+**What it adds.** Phase N. The four tools in a mode-scoped set, the log entries, the files-plus-index
+storage, the configuration switch for creating a book, the content budget, and locking.
+
+**How we know it worked.** In one session the agent writes a fact, the next session's prompt contains
+it without anything being pasted, the log shows who wrote it and when, disabling it removes it from
+the prompt while keeping the file, and two concurrent writers leave both entries present rather than
+one of them lost.
+
+---
+
 # 9. Testing plan
 
 ## 9.1 The substrate
@@ -645,6 +1002,34 @@ Tests check that a server crashing mid-request produces a reported failure rathe
 
 ---
 
+## 9.6 Cards, personas, and lorebooks
+
+Three kinds of test carry most of the weight here, and all three are cheap because the material
+already exists.
+
+**The converter seam is tested against all three card versions.** A V1 flat card, a V2 card, and a V3
+card from the collections described in `docs/character-cards/` are converted into a temporary
+directory. The assertions are that the layout matches, that `source/` is byte-identical to the input,
+and that the manifest records the hash it read rather than the hash of what it wrote.
+
+**The reader is tested against the guide rather than against intuition.** A V1 card and a V3 card
+each yield the same twenty-three `data` fields, the fields the guide tabulates as TypeScript-only
+are read when present and absent without error when not, and the optional fields distinguish an
+absent value from an explicit false. That last case is a real bug found while writing the reference
+implementation, and it is the kind of bug that only a round trip catches.
+
+**The matcher is tested with recorded numbers from a real book.** The thirty-one-entry book from the
+third collection is the fixture, and the expected result for one recorded input is sixteen entries
+injected, six dropped, and a total of four hundred tokens. A test that asserts a number recorded from
+a real object is worth more than a test that asserts a shape, because it fails when behaviour drifts
+rather than only when code breaks.
+
+Two smaller families round this out. The persona rendering is tested against three real cards, one
+per version, asserting that the description text is present and that `creator_notes`,
+`alternate_greetings`, and `first_mes` are absent. The memory tools are tested for the properties the
+logging is meant to guarantee, which are that every call produces a record and that a disabled entry
+survives on disk while leaving the prompt.
+
 # 10. Risks, anti-goals, and open decisions
 
 ## Risks
@@ -657,7 +1042,27 @@ Tests check that a server crashing mid-request produces a reported failure rathe
 
 4. **Index churn.** Caching by modification time can thrash on a workspace that builds produce output into. There needs to be a bounded amount of re-indexing per call.
 
-5. **Two retrieval systems drifting apart.** The session query projection in the memory plan's row `12.18` and the evidence search here could become separate engines. They should share both `BM25Engine` and the vocabulary of provenance.
+5. **A persona that carries instructions rather than a description.** A card is written in the
+   second person and reads like a directive, and a downloaded card is text a stranger wrote. The
+   mitigation is that importing is explicit, the persona is a labelled block, the document is local
+   and reviewable, and the exception is recorded rather than assumed. The residual risk is real and
+   belongs in the documentation a user reads before importing somebody else's card.
+
+6. **Agent-written memory outliving its truth.** A fact the agent wrote in one session is injected
+   into the next, and it may be wrong or superseded. The mitigation is that the log records who
+   wrote each entry and when, the trust value distinguishes an agent from a person, disabling is
+   cheap, and the content lives in files a person can read and correct.
+
+7. **Converter drift.** The repository is produced by a program that is not part of the harness, so
+   a directory can be older than the code that reads it, and a card converted badly stays bad. The
+   mitigation is the manifest, a doctor check that reports stale directories, and the retained
+   source file that makes re-conversion possible at any time.
+
+8. **Scope.** Five phases is a large addition to a plan that already carried nine. The mitigation is
+   that each phase is useful on its own, that phase J has no dependency on the substrate, and that
+   slice 9 alone delivers the persona, which is the item most likely to be wanted first.
+
+9. **Two retrieval systems drifting apart.** The session query projection in the memory plan's row `12.18` and the evidence search here could become separate engines. They should share both `BM25Engine` and the vocabulary of provenance.
 
 ## Anti-goals
 
@@ -679,7 +1084,16 @@ Tests check that a server crashing mid-request produces a reported failure rathe
 
 2. **How much to extract from PDFs and office documents.** Row `11.19` covers images, but uploads already accept PDFs. Whether version one extracts their text or stores them as opaque blobs is unresolved. An honest answer may be to store the file, render page images, and let the model read those where its provider supports images.
 
-3. **Where injected instructions are shown.** Whether injected instructions appear per turn in the shell or only in settings is a decision for Shell & Interaction. This system provides the records either way.
+3. **The default repository path, and whether a session records imports in session state or in a
+   file.** The design proposes `~/.goharness/characters/` and leaves both questions to this plan,
+   which settles them in phase J. They are small decisions with a wide blast radius, because moving
+   the repository later means moving every converted card with it.
+
+4. **What the memory content budget is, and what happens when it is reached.** A ceiling is agreed.
+   Whether the agent is refused, or told to retire something, or simply cannot write, is a decision
+   for the start of phase N once the retrieval layer can report what an entry costs.
+
+5. **Where injected instructions are shown.** Whether injected instructions appear per turn in the shell or only in settings is a decision for Shell & Interaction. This system provides the records either way.
 
 ---
 
@@ -694,6 +1108,21 @@ Tests check that a server crashing mid-request produces a reported failure rathe
 7. **Slice 7** — the LSP seam
 8. **Slice 8** — deliverables and references
 
+The card series runs last, as a second group, because none of it is needed for the ingestion work
+that already has a plan and a queue.
+
+9. **Slice 9** — the repository, the converter seam, and the persona
+10. **Slice 10** — cards and lorebooks in the catalog
+11. **Slice 11** — the lorebook injection layer
+12. **Slice 12** — memory the agent maintains
+
+Within that group the order is a dependency order rather than a value order. The repository comes
+first because nothing else can be tested without converted input, and it has no dependency on the
+evidence substrate, so it can be built in parallel with phase A. The persona follows because it is
+the smallest thing that demonstrates the repository working end to end. Registration in the catalog
+waits for the substrate. The injection layer follows, and the memory tools come last because writing
+is only safe once reading reports what it costs.
+
 Instruction walking is sequenced before file mentions because it is self-contained and closes a long-standing gap in how context is gathered, without depending on any of the composer work.
 
 ---
@@ -703,5 +1132,9 @@ Instruction walking is sequenced before file mentions because it is self-contain
 This system is working when GoHarness can honestly say the following.
 
 Every piece of knowledge, whether it came from the internet or from the user's own machine, has one record carrying where it came from and how to address it again. Identical bytes are stored once and referenced many times. Retrieval returns provenance, offsets, and a trust value rather than just a path and a score. Internet content is never treated as an instruction. An upload or a mention is staged until something explicitly injects it. Images, diagnostics, spills, and pages are all searchable through one surface. And no capability is presented to the user unless the transport behind it genuinely honours it.
+
+It can also say that a person chooses what the agent's prompt contains and in what order, that a
+card imported once serves every workspace, that the original file is kept beside what was derived
+from it, and that the agent's own memory is a set of files a person can read, correct, and retire.
 
 That adds up to a knowledge system rather than a collection of ingestion features. It is also the foundation that the archived memory units in the Session Event & Memory System and the typed evidence blocks in the Shell & Interaction System are both waiting on.
