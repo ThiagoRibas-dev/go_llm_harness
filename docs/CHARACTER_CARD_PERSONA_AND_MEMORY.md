@@ -553,5 +553,7 @@ implementation's behaviour. The dormant `ExtractPortablePythonRuntime` helper in
 stays dormant, which is where it belongs until something actually needs a Python runtime at
 execution time.
 
-**Not a rewrite of the retrieval plan.** Plans #2 and #8 are amended, not replaced. The two new
-evidence kinds and one new retrieval strategy are the whole of the change to plan #2.
+**Not a rewrite of the retrieval plan.** Plans #2 and #8 are amended, not replaced. The amendment
+adds a repository, a persona source, two evidence kinds, one retrieval strategy, and a read and
+write memory surface. None of it changes the shape of the plan, which already stores every source
+in one kind of record.
