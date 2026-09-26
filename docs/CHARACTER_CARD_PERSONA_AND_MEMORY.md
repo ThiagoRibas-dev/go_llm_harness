@@ -22,6 +22,10 @@ The proposal deliberately avoids a bespoke roleplay mode. Nothing here assumes c
 its own sake. The persona is one prompt element, the cards are documents, and the lorebook is a
 retrieval index.
 
+All three draw their material from one place. Cards, personas, and lorebooks are stored once for
+the installation, and a session imports the ones it wants to work with, which keeps the library
+shared and the choice of what to use local to the conversation.
+
 ## 2. What already exists
 
 The work in `docs/character-cards/` is a 1,215 line implementation guide and a reference
@@ -48,7 +52,7 @@ runs. That means the parsing does not have to happen at runtime at all.
 So the design is an offline conversion step, and the harness consumes its output:
 
 ```
-character.png  --(converter, offline)-->  characters/aria/
+character.png  --(converter, offline)-->  <repository>/aria/
                                             card.json       the normalised V3 card
                                             character.md    the readable rendering
                                             lorebook.json   a standalone lorebook_v3 document
@@ -71,6 +75,22 @@ work repeated for no benefit.
 **It matches what was proposed.** The request was to save cards as JSON or Markdown into a
 directory and have the agent use that as a base. This is that, with the reader as the thing that
 produces the directory.
+
+### 3.1 The repository is global, and a session imports from it
+
+The converted directory is not a workspace directory. There is one repository for the installation,
+and it holds cards, personas, and lorebooks together. A session then imports the ones it wants, and
+that import is what makes a card part of a particular conversation.
+
+This is the arrangement SillyTavern and Orb both use, where a card is a library item and a chat is
+the thing that uses it. The card is written once and is available to every workspace, and the
+session decides what it is working with. It also means a session can start with nothing imported,
+which keeps the behaviour of the harness unchanged for anyone who never opens the feature.
+
+The proposed default location is `~/.goharness/characters/<name>/`, beside the other node-level
+state, and it would be configurable. The plan settles the exact path and settles how a session
+records what it has imported. What the design fixes is the shape: one repository, and a per-session
+list of what came out of it.
 
 ## 4. The four pieces, one at a time
 
@@ -95,8 +115,22 @@ and before the environment block. The card fields map onto it directly:
 | `alternate_greetings`, `first_mes` | Nowhere in an agent context | Read, preserved, unused. |
 | `character_book` | The retrieval layer, section 4.3 | Not part of the persona text. |
 
-This is a prompt-composition change, not a mode. No other behaviour depends on a persona being
-present. An agent with no persona configured behaves exactly as it does today.
+**The persona is one card, and it is closer to a system prompt than to a character.** One card
+is the decision, because two personas have no merge rule, since the fields describe a single
+identity and do not compose. The useful way to think about the persona is that a card is a way to
+set a system prompt, in the same spirit as `AGENTS.md` and the other instruction files a workspace
+already carries. It is standing text that a person writes and reviews, not a runtime identity that
+the agent adopts.
+
+That framing keeps the change small. `LoadLocalInstructions()` in `src/agent.go` already reads
+`AGENTS.md`, `SKILLS.md`, `INSTRUCTIONS.md`, and `CLAUDE.md`, including files a session has pinned,
+so the harness already has a mechanism by which standing text enters the prompt by file. The
+persona is one more source of that kind, with a defined position: after the hardcoded base and
+before the environment block. It comes from the repository rather than from the workspace, and a
+session imports it, which section 3.1 describes.
+
+This remains a prompt-composition change, not a mode. No other behaviour depends on a persona being
+present, and an agent with no persona imported behaves exactly as it does today.
 
 ### 4.2 A directory of cards as an information base
 
@@ -215,6 +249,30 @@ carry a pointer to the evidence it came from:
 That keeps the property the knowledge plan asks for, that there is one place where ingested things
 live, while still letting the harness use a format that other tools understand.
 
+**A book does not have to be a specification-shaped lorebook.** The specification stores content
+and injection parameters together in one JSON document, and that is not the only arrangement worth
+supporting. The content can live in ordinary files that the tools already read and write, while a
+JSON index carries only the parameters: which files to inject, in what order, at what depth, and
+under which tags. An index entry then holds a path and a set of parameters instead of a copy of the
+text.
+
+That separation suits the harness better than a pure lorebook does, for two reasons. The tool layer
+already reads and writes files, so content stored this way needs no new tool to be useful and no
+conversion step to be inspectable. The index stays small enough to read in one sitting, because it
+holds parameters rather than prose.
+
+Both shapes stay valid, and a session may use both. A lorebook that someone else wrote is read as
+it stands, since the converter already produces that shape, and a book the agent maintains is
+written in whichever shape its node is configured for. The matching algorithm does not change
+either way, because it works on keys, position, priority, and content regardless of where the
+content itself is kept.
+
+**By default the agent may create a whole new book, and the switch is configuration.** Creating a
+book is how the layered memory model grows past what a person set up, so the default is yes. The
+switch belongs in the node's configuration rather than in a mode, because section 5.5 records that
+a mode is focus rather than a permission boundary, and an agent that can leave a mode is not being
+restrained by it. A limit that is meant to hold has to live somewhere the agent cannot reach.
+
 ## 5. Mode-scoped tool sets
 
 The memory tools are where the tool list would start to strain. The linear chat node already
@@ -258,9 +316,10 @@ Three rules keep it predictable.
 **The agent may only enter a mode the node declared.** A name that is not in the map is a failed
 tool call, so the reachable tool sets come from the workflow author rather than from the model.
 
-**Switching is announced and recorded.** The active mode is stated in the system prompt each
-turn, so the model always knows what it currently has, and the change is written to the session
-event log so a transcript shows when it happened.
+**Switching is announced, and the session holds the answer.** The active mode is stated in the
+system prompt each turn, so the model always knows what it currently has. The mode belongs to the
+session rather than to the node, and each transition is written to the session event log, so a
+transcript shows both what the mode is now and when it changed.
 
 **Every mode keeps the switching tools.** `enter_mode` and `exit_mode` are available in all of
 them, and `exit_mode` restores the node's default set. A mode is somewhere the agent can leave.
@@ -374,35 +433,36 @@ operator surface.
 
 ## 9. Proposed roadmap rows
 
-Here are six proposed rows following the same standard that the roadmap already uses. **The
-identifiers are proposed rather than assigned.**
-New groups in this roadmap have been added as sub-series before, which is what `12.28.x` and
-`12.29.x` are, so `12.30.x` follows that precedent. The band is the roadmap author's call and the
-proposal is easy to renumber.
+Here are seven proposed rows following the same standard that the roadmap already uses. **They
+are written into the roadmap's item tables now**, under Knowledge for the first five, under Policy
+for the mode work, and under Shell for the workflow. The `12.30.x` band follows the precedent of
+`12.28.x` and `12.29.x`, and renumbering the series is a find-and-replace if a different band is
+preferred later.
 
 | ID | Item | Role | Status | System | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 12.30.1 | Character cards as a persona source | Integration | **Ready** | Knowledge | Amends plan #2. The persona is an ingestion target, not a separate config surface. |
-| 12.30.2 | Cards and lorebooks as evidence kinds | Substrate | **Blocked** | Knowledge | Two values added to the existing kind enumeration. Waits on the evidence substrate in plan #2. |
-| 12.30.3 | Lorebook as a retrieval and injection layer | Retrieval | **Ready** | Knowledge | The matching algorithm, the scan window, and the token budget. The first thing worth building. |
-| 12.30.4 | Agent-maintained lorebook memory | Retrieval | **Ready** | Knowledge | Read and write tools, every call logged. Depends on 12.30.3. |
-| 12.30.5 | Mode-scoped tool sets | Policy | **Ready** | Policy | Extends `12.12`. The mechanism, not the lorebook feature. Useful whether or not the memory work proceeds. |
-| 12.30.6 | Showcase workflow: persona, modes, lorebooks | Integration | **Ready** | Shell | A third workflow beside `linear_chat` and `enhanced_cognition`. |
+| 12.30.1 | Card repository and per-session imports | Substrate | **Ready** | Knowledge | One repository for the installation and a session-level list of what it imported. Everything else here depends on it. |
+| 12.30.2 | Character cards as a persona source | Integration | **Ready** | Knowledge | One card, delivered as standing instructions of the same kind as `AGENTS.md`. |
+| 12.30.3 | Cards and lorebooks as evidence kinds | Substrate | **Blocked** | Knowledge | Two values added to the existing kind enumeration. Waits on the evidence substrate. |
+| 12.30.4 | Lorebook as a retrieval and injection layer | Retrieval | **Ready** | Knowledge | The matching algorithm, the scan window, and the token budget. The first part of the series worth building. |
+| 12.30.5 | Agent-maintained memory, files plus an index | Retrieval | **Ready** | Knowledge | Read and write tools, every call logged, and an index over ordinary files. Depends on 12.30.4. |
+| 12.30.6 | Mode-scoped tool sets | Policy | **Ready** | Policy | Extends `12.12`. The mechanism, not the memory feature. Useful whether or not the memory work proceeds. |
+| 12.30.7 | Showcase workflow: persona, modes, lorebooks | Integration | **Ready** | Shell | A third workflow beside `linear_chat` and `enhanced_cognition`. |
 
 Three notes on those.
 
-**`12.30.5` is the one with the widest reach.** It can land first and pay for itself before any
+**`12.30.6` is the one with the widest reach.** It can land first and pay for itself before any
 card is ever loaded, because it applies to every existing tool. Nothing in it depends on the
 lorebook work.
 
-**`12.30.6` adds a workflow rather than changing one.** `linear_chat` and `enhanced_cognition`
+**`12.30.7` adds a workflow rather than changing one.** `linear_chat` and `enhanced_cognition`
 stay as they are. The new workflow is where the persona node, a mode switch, and a lorebook
 round-trip are demonstrated end to end, so the feature has one place where it is known to work
 rather than being spread across the existing graphs.
 
-**Nothing here needs a new plan document.** The Knowledge rows amend plan #2. `12.30.5` is a
-`12.12` extension and belongs to whatever plan covers that row. `12.30.6` is a workflow, which is
-configuration rather than a system.
+**Nothing here needs a new plan document.** The Knowledge rows amend plan #2, which has not been
+revised yet. `12.30.6` is a `12.12` extension and belongs to whatever plan covers that row.
+`12.30.7` is a workflow, which is configuration rather than a system.
 
 ## 10. Decisions taken, and what remains open
 
@@ -428,25 +488,52 @@ per node, as section 5 describes.
 
 **The whole feature is owned by plan #2 (Knowledge Ingress & Retrieval)**, including the persona.
 
-**Nothing is implemented yet.** This document is the design; the work it describes becomes
-roadmap rows and then plan amendments.
+**The persona is one card.** Two personas have no merge rule, because the fields describe a
+single identity and do not compose. Any further cards a session wants are evidence rather than
+identity.
 
-### 10.2 Still open
+**The repository is global, and sessions import from it.** Cards, personas, and lorebooks are
+stored once for the installation, and a session imports the ones it uses. This is the same
+arrangement SillyTavern and Orb use, where a card is a library item and a conversation is the thing
+that draws on it.
 
-**Whether the persona is one card or several.** Recommendation: one card as the persona, and any
-number as cards for evidence. A persona assembled from several cards has no obvious merge rule and
-the fields do not compose.
+**Memory is files plus an index, and the index need not match the specification.** Content lives in
+ordinary files that the tools already read and write, and a JSON index carries the injection
+parameters: order, depth, tags, and priority. A specification-shaped lorebook stays one valid input
+rather than the required internal form.
 
-**How the converted directory is addressed.** Recommendation: a workspace-level `characters/`
-directory rather than `.goharness/`, so cards stay visible, versionable, and editable, and the
-runtime state directory keeps containing only state.
+**The agent may create new books by default, and the switch is configuration.** A new book is a new
+injection surface with its own budget, so the ability is worth being able to turn off. It is a
+configuration key rather than a mode, because a mode is focus rather than a permission boundary.
 
-**Whether the agent can create a whole new lorebook**, as opposed to entries within one. The
-distinction matters because a new book is a new injection surface with its own budget, and the
-first version may not need it.
+**The active mode is recorded in the session.** The mode belongs to the session rather than to the
+node, and each transition is written to the session event log.
 
-**Where the active mode is recorded.** The session event log is the obvious place, and the exact
-event shape depends on the schema work already scheduled in plan #1.
+**Nothing is implemented yet.** This document is the design. The work it describes now sits in the
+roadmap's item tables as the `12.30.x` series, and it amends plan #2 when that plan is next
+revised.
+
+### 10.2 Still open, and who settles each one
+
+Nothing in this list is a design question any more. Each remaining item is an implementation detail
+with an owner, which is the state a design document should finish in.
+
+**Where the repository lives by default.** The proposal is `~/.goharness/characters/`, beside the
+other node-level state. The plan settles the path and whether it is configurable.
+
+**How a session records its imports.** Session state is the obvious home, and a small file in the
+session directory is the other candidate. Plan #1 owns the session schema, so it settles this one.
+
+**The shape of the mode-transition event.** The session is now the decided location, and the exact
+event shape waits on the schema work already scheduled in plan #1.
+
+**The configuration key for book creation.** The switch is configuration, which is decided. The key
+name, its default, and whether it is per node or per session belong with the node properties that
+the plan amends.
+
+**The exact wording of the persona block.** The position is decided, after the hardcoded base and
+before the environment block. How the card's fields are laid out inside it is a rendering detail
+that the plan settles against real cards.
 
 ## 11. What this deliberately is not
 
@@ -456,8 +543,9 @@ to work for roleplay, which is what the format was designed for, but nothing in 
 branches on that.
 
 **Not a second memory store.** The evidence substrate stays the one place where ingested content
-lives. The lorebook is a format for a view over it, and its entries point back at evidence
-identifiers rather than duplicating blobs.
+lives. A book is a view over it, and its entries point back at evidence identifiers, or at ordinary
+files, rather than duplicating blobs. Because the index carries parameters and not prose, there is
+nothing in it that can drift out of step with the content it describes.
 
 **Not a reason to add a runtime dependency.** The converter runs offline. The harness gains a
 small JSON reader and a matching function, and both are testable in Go against the reference

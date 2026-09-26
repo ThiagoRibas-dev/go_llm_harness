@@ -48,6 +48,8 @@ The roadmap now explicitly tracks how items relate to research/spec documents.
 - **BM25 research** — `docs/BM25_SCALING_RESEARCH.md`
 - **Infinite-context memory research** — `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md`
 - **Archived memory spec** — `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md`
+- **Character card design** — `docs/CHARACTER_CARD_PERSONA_AND_MEMORY.md`
+- **Character card guide** — `docs/character-cards/IMPLEMENTATION_GUIDE.md`
 - **Subagent plan** — `docs/SUBAGENT_PARALLELISM_PLAN.md`
 - **V2 spec** — `docs/V2_SPECIFICATION.md`
 - **V2 visual editor** — `docs/V2_VISUAL_EDITOR.md`
@@ -252,6 +254,7 @@ projection per `12.23` — not model-visible conversation text.
 > **Decisions the plan has already made:** every source produces the same kind of record, an `EvidenceRecord` that carries where the content came from, its content hash, and how far it should be trusted. This means the surfaces that bring knowledge in can differ, while the storage underneath stays the same. Row `12.19` generalizes the sha256 addressing that `src/spill.go` already uses, rather than introducing a second way of storing things. Staging and injection are separate states: nothing reaches the prompt unless something explicitly puts it there, and injected evidence is delimited and attributed. Content fetched from the internet is marked `untrusted_external` and can never take the position of an instruction. Retrieval returns provenance, offsets, and trust instead of just a path and a score, and the search index is cached and invalidated by modification time, replacing today's full re-walk on every call. Row `11.16` ports the instruction-discovery behaviour from Codex: walk up to a project-root marker, read files from the root down to the working directory, honour an override file, respect a byte budget, and never walk past the root. Images are addressed by their path on disk and delivered to the model as renderings, with an explicit detail setting.
 > **Honest coverage:** rows `11.1`, `11.4`, `11.16`, `12.19`, and `12.6` are covered by core phases. Row `12.5` is also core but deliberately sequenced last, because it is the largest item and nothing else waits on it. Row `11.19` is fully covered for getting images in, while the model's ability to see them is gated honestly per provider. Row `12.28.12` is partly covered: this plan owns the structured record, and the shell owns the rendering.
 > **Open decisions recorded in the plan:** which web-search backend to use for `11.1`, whether uploaded PDFs and office documents get their text extracted, and where in the interface injected instructions are shown.
+> **Rows `12.30.1`–`12.30.5` come from the character-card design study** ([`docs/CHARACTER_CARD_PERSONA_AND_MEMORY.md`](./CHARACTER_CARD_PERSONA_AND_MEMORY.md)): a card repository, a persona source, two new evidence kinds, a lorebook retrieval layer, and agent-maintained memory. They amend this plan the next time it is revised, and the plan text does not describe them yet.
 
 ## System intent
 
@@ -282,6 +285,11 @@ These rows are different ingest/retrieval surfaces over the same knowledge syste
 | 12.6 | Tool-output spill to disk | Substrate | **Partial** | Frontend plan, Code | — | Should become one of the standard ingestable evidence forms. |
 | 12.19 | Content-addressed attachments | Substrate | **Ready** | Roadmap synthesis, Frontend plan | — | Strong backend cleanup for uploads, images, and future evidence references. |
 | 12.28.12 | Deliverables, references, message feedback | Projection/UI | **Ready** | Frontend plan, Mockup | 11.4 helps | This belongs here because deliverables and references are evidence surfaces, even though their UI sits in the shell system. **Deliberate cross-listing** with Shell & Interaction, which owns the rendering surface. |
+| 12.30.1 | Card repository and per-session imports | Substrate | **Ready** | Character card design | — | One repository for the installation, and a session-level list of what it imported. Everything else in the `12.30.x` series depends on it. |
+| 12.30.2 | Character cards as a persona source | Integration | **Ready** | Character card design, Character card guide | 12.30.1 | One card, delivered as standing instructions of the same kind as `AGENTS.md`. Amends this system's plan when it is next revised. |
+| 12.30.3 | Cards and lorebooks as evidence kinds | Substrate | **Blocked** | Character card design | Evidence substrate in this system's plan | Two values added to the existing kind enumeration. |
+| 12.30.4 | Lorebook as a retrieval and injection layer | Retrieval | **Ready** | Character card design, Character card guide | 12.30.1 | The matching algorithm, the scan window, and the token budget. The first part of the series worth building. |
+| 12.30.5 | Agent-maintained memory, files plus an index | Retrieval | **Ready** | Character card design | 12.30.4 | Read and write tools, every call logged. The content lives in ordinary files and a JSON index carries the injection parameters. |
 
 ---
 
@@ -422,6 +430,7 @@ They should instead form one **host policy engine**.
 | 12.16 | Approval policy & sandbox as services | Policy | **Blocked** | Roadmap synthesis, current sandbox code | 12.1, 12.3, 14.2 | Should not be built as isolated modal logic. |
 | 12.17 | Hooks bridge (`hooks.json`) | Operator | **Blocked** | Roadmap synthesis | 12.3 | Bridge surface over the hook bus. |
 | 12.22 | Guard / secret scanning | Policy | **Ready** | Roadmap synthesis, current guardrails | — | Good near-term policy interceptor. |
+| 12.30.6 | Mode-scoped tool sets | Policy | **Ready** | Character card design | — | Extends `12.12`. A node declares named modes, and the agent may enter one it declared, which swaps the tool list at runtime. A mechanism rather than a memory feature, and useful whether or not the memory work proceeds. |
 | 13.3 | Lifecycle hooks with trust review | Policy | **Blocked** | Roadmap synthesis, Comparison matrix | 12.3 | Hook trust/approval is the same engine, not a separate feature. |
 | 13.7 | Approval policy + sandbox presets + execpolicy | Policy | **Ready** | Roadmap synthesis, current sandbox code | — | One of the clearest policy/control-plane rows right now. |
 | 14.2 | Permission rules as first-class user contract | Policy | **Ready** | Roadmap synthesis, Comparison matrix | — | Strongly related to execpolicy and approvals. |
@@ -596,6 +605,7 @@ They are one shell/interactions program with shared DOM/state contracts.
 | 12.29.11 | Workspace/session browser details | Projection/UI | **Ready as checklist** | Frontend plan | 12.28.9 | Acceptance criteria, not a standalone initiative. |
 | 12.29.12 | Branding and theming mechanics | Projection/UI | **Partial** | Frontend plan, Mockup | — | Token foundation shipped; broader system still open. |
 | 12.29.13 | Boot/rendering lifecycle | Substrate | **Blocked** | Frontend plan | ESM/frontend split | Wait for further shell modularization maturity. |
+| 12.30.7 | Showcase workflow: persona, modes, lorebooks | Integration | **Ready** | Character card design, `workflows.json` | 12.30.4, 12.30.6 | A third workflow beside `linear_chat` and `enhanced_cognition`, both of which stay unchanged. It is where the feature is demonstrated end to end. |
 
 ---
 
