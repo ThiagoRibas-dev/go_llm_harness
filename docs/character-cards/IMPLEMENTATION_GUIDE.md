@@ -1121,7 +1121,7 @@ reading library, which treats a card as data rather than as something to run.
 | Assets | Read from `embeded://` inside the archive | Copied into a per-character folder on disk | Held as typed references |
 | Unknown fields | Ignore, and may preserve | Preserved wholesale | Ignored by the type layer |
 
-Three observations from that table, each of which should inform your choices.
+Three observations follow from that table, and each of them should inform your choices.
 
 **Decorators are implemented almost nowhere.** This is the single most useful finding for
 anyone relying on them. The mechanism is behaviour inside a `content` string, so it has no

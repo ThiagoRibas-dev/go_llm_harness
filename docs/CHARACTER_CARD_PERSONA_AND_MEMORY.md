@@ -1,7 +1,7 @@
 # Character Cards and Lorebooks in GoHarness
 
-A design proposal. This document works out how the Character Card V3 work could be used by the
-harness. It is a proposal rather than a plan, so it records options and open decisions instead of
+This document is a design proposal. It works out how the Character Card V3 work could be used
+by the harness. It is a proposal rather than a plan, so it records options and open decisions instead of
 phases and slices.
 
 ## 1. The short version
@@ -374,7 +374,8 @@ operator surface.
 
 ## 9. Proposed roadmap rows
 
-Six rows, in the shape the roadmap uses. **The identifiers are proposed rather than assigned.**
+Here are six proposed rows following the same standard that the roadmap already uses. **The
+identifiers are proposed rather than assigned.**
 New groups in this roadmap have been added as sub-series before, which is what `12.28.x` and
 `12.29.x` are, so `12.30.x` follows that precedent. The band is the roadmap author's call and the
 proposal is easy to renumber.
