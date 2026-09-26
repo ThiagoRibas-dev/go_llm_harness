@@ -67,6 +67,8 @@ The roadmap now explicitly tracks how items relate to research/spec documents.
 - `docs/SUBAGENT_PARALLELISM_PLAN.md` — concurrency design notes for the shipped sub-agent runtime
 - `docs/INFINITE_CONTEXT_MEMORY_RESEARCH.md` — source-level evaluation of `Lumi-node/infinite-context` and its applicability to GoHarness memory architecture
 - `docs/HIERARCHICAL_ARCHIVED_MEMORY_SPEC.md` — implementation spec for GoHarness cold-memory retrieval over archived turns, summaries, uploads, and deliverables
+- `docs/CHARACTER_CARD_PERSONA_AND_MEMORY.md` — design proposal for using Character Card V3 as a persona source, an evidence kind, and a lorebook-shaped retrieval and memory layer
+- `docs/character-cards/` — an implementation-agnostic guide to reading Character Card V1/V2/V3 files, and a working reference implementation of it
 
 ---
 
